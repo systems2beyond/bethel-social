@@ -1,0 +1,25 @@
+# Church Social Platform - Task List
+
+- [x] **Phase 1: Planning & Research**
+    - [x] Research existing open-source social media/church templates <!-- id: 0 -->
+    - [x] Define architecture and tech stack (Next.js, Firebase, AI) <!-- id: 1 -->
+    - [x] Create Implementation Plan <!-- id: 2 -->
+- [x] **Phase 2: Project Setup**
+    - [x] Initialize Next.js project <!-- id: 3 -->
+    - [x] Set up Firebase project (Auth, Firestore, Storage) <!-- id: 4 -->
+    - [/] Configure Netlify deployment (Ready for push) <!-- id: 5 -->
+- [/] **Phase 3: Core Features - Social Feed**
+    - [x] Implement manual post creation (Text, Photo, Video) <!-- id: 6 -->
+    - [x] Integrate Facebook Graph API for auto-posting <!-- id: 7 -->
+    - [x] **[NEW] Implement Facebook Webhook for real-time updates** <!-- id: 17 -->
+    - [x] Integrate YouTube Data API for live streams/videos <!-- id: 8 -->
+    - [ ] Implement Google Drive integration for photos <!-- id: 9 -->
+- [/] **Phase 4: AI Chatbot**
+    - [x] Set up RAG pipeline (Vector DB/Embeddings) <!-- id: 10 -->
+    - [x] Implement chat interface <!-- id: 11 -->
+    - [ ] Ingest Bible and Sermon data <!-- id: 12 -->
+    - [x] **[NEW] Implement Google Chat Handoff** <!-- id: 15 -->
+    - [x] **[NEW] Build Embeddable Widget (Wix support)** <!-- id: 16 -->
+- [x] **Phase 5: UI/UX Polish**
+    - [x] Apply "Instagram-like" styling <!-- id: 13 -->
+    - [x] Ensure mobile responsiveness <!-- id: 14 -->
