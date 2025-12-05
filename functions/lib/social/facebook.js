@@ -40,9 +40,9 @@ exports.facebookWebhook = exports.syncFacebookPosts = void 0;
 const logger = __importStar(require("firebase-functions/logger"));
 const admin = __importStar(require("firebase-admin"));
 const axios_1 = __importDefault(require("axios"));
-const syncFacebookPosts = async () => {
-    var _a, _b, _c;
-    logger.info('Starting Facebook sync...');
+const syncFacebookPosts = async (backfill = false) => {
+    var _a, _b, _c, _d, _e;
+    logger.info(`Starting Facebook sync (Backfill: ${backfill})...`);
     const PAGE_ID = process.env.FB_PAGE_ID;
     const ACCESS_TOKEN = process.env.FB_ACCESS_TOKEN;
     if (!PAGE_ID || !ACCESS_TOKEN) {
@@ -50,53 +50,102 @@ const syncFacebookPosts = async () => {
         return;
     }
     try {
-        // Fetch posts from Facebook Graph API
-        const response = await axios_1.default.get(`https://graph.facebook.com/v18.0/${PAGE_ID}/feed`, {
-            params: {
-                access_token: ACCESS_TOKEN,
-                fields: 'id,message,full_picture,created_time,permalink_url,attachments{media}',
-                limit: 10,
-            },
-        });
-        const fbPosts = response.data.data;
-        const db = admin.firestore();
-        const batch = db.batch();
-        for (const post of fbPosts) {
-            // Skip posts without content/media
-            if (!post.message && !post.full_picture)
-                continue;
-            const postRef = db.collection('posts').doc(`fb_${post.id}`);
-            // Check for video in attachments
-            let mediaUrl = post.full_picture;
-            if ((_c = (_b = (_a = post.attachments) === null || _a === void 0 ? void 0 : _a.data[0]) === null || _b === void 0 ? void 0 : _b.media) === null || _c === void 0 ? void 0 : _c.source) {
-                mediaUrl = post.attachments.data[0].media.source;
-            }
-            batch.set(postRef, {
-                type: 'facebook',
-                content: post.message || '',
-                mediaUrl: mediaUrl || null,
-                sourceId: post.id,
-                timestamp: new Date(post.created_time).getTime(),
-                pinned: false,
-                author: {
-                    name: 'Bethel Metropolitan',
-                    avatarUrl: null
-                },
-                externalUrl: post.permalink_url,
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            }, { merge: true });
+        let params = {
+            access_token: ACCESS_TOKEN,
+            fields: 'id,message,full_picture,created_time,permalink_url,attachments{media}',
+            limit: backfill ? 50 : 10,
+        };
+        if (backfill) {
+            // Use Unix timestamp in seconds for 'since'
+            params.since = Math.floor(new Date('2025-01-01').getTime() / 1000);
         }
-        await batch.commit();
-        logger.info(`Successfully synced ${fbPosts.length} Facebook posts.`);
+        let url = `https://graph.facebook.com/v18.0/${PAGE_ID}/feed`;
+        let hasNext = true;
+        let totalSynced = 0;
+        const db = admin.firestore();
+        // Debug info to write to Firestore
+        const debugInfo = {
+            startTime: new Date().toISOString(),
+            pages: [],
+            error: null
+        };
+        while (hasNext) {
+            const response = await axios_1.default.get(url, { params });
+            const fbPosts = response.data.data;
+            debugInfo.pages.push({
+                url: url,
+                postCount: fbPosts.length,
+                hasPaging: !!response.data.paging,
+                hasNext: !!((_a = response.data.paging) === null || _a === void 0 ? void 0 : _a.next)
+            });
+            if (fbPosts.length === 0) {
+                break;
+            }
+            const batch = db.batch();
+            let batchCount = 0;
+            for (const post of fbPosts) {
+                // Skip posts without content/media
+                if (!post.message && !post.full_picture)
+                    continue;
+                const postRef = db.collection('posts').doc(`fb_${post.id}`);
+                // Check for video in attachments
+                let mediaUrl = post.full_picture;
+                if ((_d = (_c = (_b = post.attachments) === null || _b === void 0 ? void 0 : _b.data[0]) === null || _c === void 0 ? void 0 : _c.media) === null || _d === void 0 ? void 0 : _d.source) {
+                    mediaUrl = post.attachments.data[0].media.source;
+                }
+                batch.set(postRef, {
+                    type: 'facebook',
+                    content: post.message || '',
+                    mediaUrl: mediaUrl || null,
+                    sourceId: post.id,
+                    timestamp: new Date(post.created_time).getTime(),
+                    pinned: false,
+                    author: {
+                        name: 'Bethel Metropolitan',
+                        avatarUrl: null
+                    },
+                    externalUrl: post.permalink_url,
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                }, { merge: true });
+                batchCount++;
+            }
+            if (batchCount > 0) {
+                await batch.commit();
+                totalSynced += batchCount;
+                logger.info(`Synced batch of ${batchCount} posts.`);
+            }
+            // Pagination logic
+            if (backfill && response.data.paging && response.data.paging.next) {
+                url = response.data.paging.next;
+                params = {}; // Params are included in the 'next' URL
+                logger.info(`Fetching next page...`);
+            }
+            else {
+                logger.info('No more pages or backfill disabled.', { backfill, paging: response.data.paging });
+                hasNext = false;
+            }
+        }
+        logger.info(`Successfully synced total ${totalSynced} Facebook posts.`);
+        // Save debug info
+        await db.collection('system').doc('facebook_sync_debug').set(debugInfo);
     }
     catch (error) {
         logger.error('Error syncing Facebook posts:', error);
+        if (error.response) {
+            logger.error('Facebook API Error Data:', error.response.data);
+        }
+        const db = admin.firestore();
+        await db.collection('system').doc('facebook_sync_debug').set({
+            error: error.message,
+            response: ((_e = error.response) === null || _e === void 0 ? void 0 : _e.data) || null,
+            timestamp: new Date().toISOString()
+        }, { merge: true });
     }
 };
 exports.syncFacebookPosts = syncFacebookPosts;
 const facebookWebhook = async (req, res) => {
     const VERIFY_TOKEN = process.env.FB_VERIFY_TOKEN;
-    const APP_SECRET = process.env.FB_APP_SECRET;
+    // const APP_SECRET = process.env.FB_APP_SECRET;
     // 1. Handle Verification Request (GET)
     if (req.method === 'GET') {
         const mode = req.query['hub.mode'];

@@ -5,6 +5,7 @@ export interface Post {
     type: PostType;
     content: string;
     mediaUrl?: string;
+    thumbnailUrl?: string;
     sourceId?: string;
     timestamp: number; // Unix timestamp
     pinned?: boolean;
@@ -14,4 +15,23 @@ export interface Post {
     };
     likes?: number;
     comments?: number;
+    externalUrl?: string;
+}
+
+export interface Event {
+    id: string;
+    title: string;
+    description: string;
+    date: { seconds: number; nanoseconds: number };
+    location: string;
+    imageUrl?: string;
+    sourcePostId: string;
+    extractedData?: {
+        isEvent: boolean;
+        title?: string;
+        date?: string;
+        time?: string;
+        location?: string;
+        description?: string;
+    };
 }

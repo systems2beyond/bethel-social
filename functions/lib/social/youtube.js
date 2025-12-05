@@ -39,15 +39,34 @@ const admin = __importStar(require("firebase-admin"));
 const googleapis_1 = require("googleapis");
 const youtube = googleapis_1.google.youtube('v3');
 const syncYoutubeContent = async () => {
-    var _a, _b, _c, _d, _e;
+    var _a, _b, _c, _d, _e, _f;
     logger.info('Starting YouTube sync...');
     const API_KEY = process.env.GOOGLE_AI_API_KEY; // Using the same key if it has YouTube Data API enabled
-    const CHANNEL_ID = process.env.YOUTUBE_CHANNEL_ID;
-    if (!API_KEY || !CHANNEL_ID) {
-        logger.error('Missing YouTube credentials (GOOGLE_AI_API_KEY or YOUTUBE_CHANNEL_ID)');
+    let CHANNEL_ID = process.env.YOUTUBE_CHANNEL_ID;
+    if (!API_KEY) {
+        logger.error('Missing YouTube credentials (GOOGLE_AI_API_KEY)');
         return;
     }
     try {
+        // 0. Resolve Channel ID if missing
+        if (!CHANNEL_ID) {
+            logger.info('Resolving channel ID for @BMBCFamily...');
+            const searchResponse = await youtube.search.list({
+                key: API_KEY,
+                q: '@BMBCFamily',
+                type: ['channel'],
+                part: ['id'],
+                maxResults: 1,
+            });
+            if (searchResponse.data.items && searchResponse.data.items.length > 0) {
+                CHANNEL_ID = ((_a = searchResponse.data.items[0].id) === null || _a === void 0 ? void 0 : _a.channelId) || undefined;
+                logger.info(`Resolved Channel ID: ${CHANNEL_ID}`);
+            }
+            else {
+                logger.error('Could not resolve channel ID for @BMBCFamily');
+                return;
+            }
+        }
         // 1. Fetch latest videos
         const response = await youtube.search.list({
             key: API_KEY,
@@ -61,13 +80,13 @@ const syncYoutubeContent = async () => {
         const db = admin.firestore();
         const batch = db.batch();
         for (const item of items) {
-            if (!item.snippet || !((_a = item.id) === null || _a === void 0 ? void 0 : _a.videoId))
+            if (!item.snippet || !((_b = item.id) === null || _b === void 0 ? void 0 : _b.videoId))
                 continue;
             const video = {
                 id: item.id.videoId,
                 title: item.snippet.title || 'Untitled Video',
                 description: item.snippet.description || '',
-                thumbnailUrl: ((_c = (_b = item.snippet.thumbnails) === null || _b === void 0 ? void 0 : _b.high) === null || _c === void 0 ? void 0 : _c.url) || ((_e = (_d = item.snippet.thumbnails) === null || _d === void 0 ? void 0 : _d.default) === null || _e === void 0 ? void 0 : _e.url) || '',
+                thumbnailUrl: ((_d = (_c = item.snippet.thumbnails) === null || _c === void 0 ? void 0 : _c.high) === null || _d === void 0 ? void 0 : _d.url) || ((_f = (_e = item.snippet.thumbnails) === null || _e === void 0 ? void 0 : _e.default) === null || _f === void 0 ? void 0 : _f.url) || '',
                 publishedAt: item.snippet.publishedAt || new Date().toISOString(),
                 videoId: item.id.videoId,
                 isLive: item.snippet.liveBroadcastContent === 'live',
@@ -75,7 +94,7 @@ const syncYoutubeContent = async () => {
             const postRef = db.collection('posts').doc(`yt_${video.id}`);
             batch.set(postRef, {
                 type: 'youtube',
-                content: video.title, // Use title as main content
+                content: `${video.title}\n\n${video.description}`, // Combine title and description
                 mediaUrl: `https://www.youtube.com/watch?v=${video.videoId}`,
                 thumbnailUrl: video.thumbnailUrl,
                 sourceId: video.id,

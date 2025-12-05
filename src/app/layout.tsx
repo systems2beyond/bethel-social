@@ -18,18 +18,41 @@ export const metadata: Metadata = {
   description: "Community Platform",
 };
 
+import { Providers } from "@/components/Providers";
+import { Sidebar } from "@/components/Layout/Sidebar";
+import { BottomBar } from "@/components/Layout/BottomBar";
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-white dark:bg-black`}
       >
-        {children}
-        <BibleBot />
+        <Providers>
+          <div className="flex h-screen overflow-hidden">
+            {/* Sidebar - Hidden on mobile, visible on desktop */}
+            <div className="hidden md:block">
+              <Sidebar />
+            </div>
+
+            {/* Main Content Area */}
+            <main className="flex-1 flex flex-col relative min-w-0 bg-white dark:bg-black transition-colors duration-300">
+              {/* Scrollable Feed Area */}
+              <div className="flex-1 overflow-y-auto scroll-smooth pb-24">
+                <div className="max-w-4xl mx-auto w-full">
+                  {children}
+                </div>
+              </div>
+
+              {/* Fixed Bottom Input Bar */}
+              <BottomBar />
+            </main>
+          </div>
+        </Providers>
       </body>
     </html>
   );

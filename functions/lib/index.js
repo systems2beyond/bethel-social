@@ -33,23 +33,109 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ingest = exports.chat = exports.syncYoutube = exports.fbWebhook = exports.syncFacebook = void 0;
+exports.backfillEvents = exports.extractEventFromPost = exports.ingest = exports.chat = exports.manualYoutubeSync = exports.syncYoutube = exports.fbWebhook = exports.syncFacebook = exports.ingestSocialPost = exports.scheduledWebsiteCrawl = exports.ingestContent = exports.debugPosts = exports.manualFacebookSync = void 0;
 const admin = __importStar(require("firebase-admin"));
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const https_1 = require("firebase-functions/v2/https");
+// import * as logger from 'firebase-functions/logger';
+const params_1 = require("firebase-functions/params");
+const googleApiKey = (0, params_1.defineSecret)('GOOGLE_API_KEY');
 admin.initializeApp();
 // Import social functions
 const facebook_1 = require("./social/facebook");
 const youtube_1 = require("./social/youtube");
+exports.manualFacebookSync = (0, https_1.onRequest)(async (req, res) => {
+    const backfill = req.query.backfill === 'true';
+    await (0, facebook_1.syncFacebookPosts)(backfill);
+    res.send(`Facebook sync executed (Backfill: ${backfill}).`);
+});
+exports.debugPosts = (0, https_1.onRequest)(async (req, res) => {
+    try {
+        const countSnapshot = await admin.firestore().collection('posts').count().get();
+        const count = countSnapshot.data().count;
+        const oldestSnapshot = await admin.firestore().collection('posts')
+            .orderBy('timestamp', 'asc')
+            .limit(1)
+            .get();
+        const newestSnapshot = await admin.firestore().collection('posts')
+            .orderBy('timestamp', 'desc')
+            .limit(1)
+            .get();
+        const oldest = oldestSnapshot.empty ? null : Object.assign({ id: oldestSnapshot.docs[0].id }, oldestSnapshot.docs[0].data());
+        const newest = newestSnapshot.empty ? null : Object.assign({ id: newestSnapshot.docs[0].id }, newestSnapshot.docs[0].data());
+        const debugDoc = await admin.firestore().collection('system').doc('facebook_sync_debug').get();
+        const debugInfo = debugDoc.exists ? debugDoc.data() : null;
+        // Check for posts around Oct 5th 2025 (approx 1759641600000)
+        const gapSnapshot = await admin.firestore().collection('posts')
+            .orderBy('timestamp', 'desc')
+            .where('timestamp', '<', 1760000000000) // Oct 9
+            .limit(10)
+            .get();
+        const gapPosts = gapSnapshot.docs.map(d => ({
+            id: d.id,
+            date: new Date(d.data().timestamp).toISOString(),
+            timestamp: d.data().timestamp
+        }));
+        // Simulation Logic
+        let simLastDoc = null;
+        const simulationLog = [];
+        let simPage = 1;
+        let keepGoing = true;
+        while (keepGoing && simPage <= 20) {
+            let query = admin.firestore().collection('posts')
+                .orderBy('timestamp', 'desc')
+                .orderBy('__name__', 'desc') // Secondary sort for stability
+                .limit(10);
+            if (simLastDoc) {
+                // Use explicit field cursor
+                query = query.startAfter(simLastDoc.data().timestamp, simLastDoc.id);
+            }
+            const snapshot = await query.get();
+            if (snapshot.empty) {
+                simulationLog.push(`Page ${simPage}: EMPTY (Stopped)`);
+                keepGoing = false;
+            }
+            else {
+                const first = snapshot.docs[0];
+                const last = snapshot.docs[snapshot.docs.length - 1];
+                simulationLog.push(`Page ${simPage}: Fetched ${snapshot.size}. Range: ${new Date(first.data().timestamp).toISOString()} -> ${new Date(last.data().timestamp).toISOString()}`);
+                simLastDoc = last;
+            }
+            simPage++;
+        }
+        res.json({
+            count,
+            oldest: oldest ? Object.assign({ date: new Date(oldest.timestamp).toISOString() }, oldest) : null,
+            newest: newest ? Object.assign({ date: new Date(newest.timestamp).toISOString() }, newest) : null,
+            debugInfo,
+            gapPosts,
+            simulationLog
+        });
+    }
+    catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
 // Import AI functions
 const chatbot_1 = require("./ai/chatbot");
+var knowledge_base_1 = require("./ai/knowledge_base");
+Object.defineProperty(exports, "ingestContent", { enumerable: true, get: function () { return knowledge_base_1.ingestContent; } });
+Object.defineProperty(exports, "scheduledWebsiteCrawl", { enumerable: true, get: function () { return knowledge_base_1.scheduledWebsiteCrawl; } });
+Object.defineProperty(exports, "ingestSocialPost", { enumerable: true, get: function () { return knowledge_base_1.ingestSocialPost; } });
 exports.syncFacebook = (0, scheduler_1.onSchedule)('every 60 minutes', async (event) => {
     await (0, facebook_1.syncFacebookPosts)();
 });
 exports.fbWebhook = (0, https_1.onRequest)(facebook_1.facebookWebhook);
-exports.syncYoutube = (0, scheduler_1.onSchedule)('every 60 minutes', async (event) => {
+exports.syncYoutube = (0, scheduler_1.onSchedule)({ schedule: 'every 60 minutes', secrets: [googleApiKey] }, async (event) => {
     await (0, youtube_1.syncYoutubeContent)();
 });
-exports.chat = (0, https_1.onCall)(chatbot_1.chatWithBibleBot);
-exports.ingest = (0, https_1.onCall)(chatbot_1.ingestSermon);
+exports.manualYoutubeSync = (0, https_1.onRequest)({ secrets: [googleApiKey] }, async (req, res) => {
+    await (0, youtube_1.syncYoutubeContent)();
+    res.send('YouTube sync executed.');
+});
+exports.chat = (0, https_1.onCall)({ secrets: [googleApiKey] }, chatbot_1.chatWithBibleBot);
+exports.ingest = (0, https_1.onCall)({ secrets: [googleApiKey] }, chatbot_1.ingestSermon);
+var events_1 = require("./ai/events");
+Object.defineProperty(exports, "extractEventFromPost", { enumerable: true, get: function () { return events_1.extractEventFromPost; } });
+Object.defineProperty(exports, "backfillEvents", { enumerable: true, get: function () { return events_1.backfillEvents; } });
 //# sourceMappingURL=index.js.map
