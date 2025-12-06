@@ -1,4 +1,4 @@
-export type PostType = 'manual' | 'facebook' | 'youtube';
+export type PostType = 'manual' | 'facebook' | 'youtube' | 'video';
 
 export interface Post {
     id: string;
@@ -34,4 +34,17 @@ export interface Event {
         location?: string;
         description?: string;
     };
+}
+
+export interface Comment {
+    id: string;
+    postId: string;
+    author: {
+        id: string;
+        name: string;
+        avatarUrl?: string;
+    };
+    content: string;
+    timestamp: number;
+    isAi?: boolean;
 }

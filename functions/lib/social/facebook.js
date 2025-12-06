@@ -90,13 +90,23 @@ const syncFacebookPosts = async (backfill = false) => {
                 const postRef = db.collection('posts').doc(`fb_${post.id}`);
                 // Check for video in attachments
                 let mediaUrl = post.full_picture;
+                let postType = 'facebook';
+                let thumbnailUrl = null;
                 if ((_d = (_c = (_b = post.attachments) === null || _b === void 0 ? void 0 : _b.data[0]) === null || _c === void 0 ? void 0 : _c.media) === null || _d === void 0 ? void 0 : _d.source) {
                     mediaUrl = post.attachments.data[0].media.source;
+                    if (mediaUrl && (mediaUrl.includes('youtube.com') || mediaUrl.includes('youtu.be'))) {
+                        postType = 'youtube';
+                    }
+                    else {
+                        postType = 'video';
+                    }
+                    thumbnailUrl = post.full_picture || null;
                 }
                 batch.set(postRef, {
-                    type: 'facebook',
+                    type: postType,
                     content: post.message || '',
                     mediaUrl: mediaUrl || null,
+                    thumbnailUrl: thumbnailUrl,
                     sourceId: post.id,
                     timestamp: new Date(post.created_time).getTime(),
                     pinned: false,

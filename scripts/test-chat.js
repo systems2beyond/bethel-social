@@ -13,7 +13,10 @@ async function testChat() {
             },
             body: JSON.stringify({
                 data: {
-                    message: "Tell me about the senior shoe event"
+                    message: "Can you add the senior shoe event to my calendar?",
+                    userName: "Ryan",
+                    userPhone: "555-0199",
+                    history: []
                 }
             })
         });

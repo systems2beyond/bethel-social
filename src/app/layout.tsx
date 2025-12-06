@@ -21,6 +21,7 @@ export const metadata: Metadata = {
 import { Providers } from "@/components/Providers";
 import { Sidebar } from "@/components/Layout/Sidebar";
 import { BottomBar } from "@/components/Layout/BottomBar";
+import { OnboardingModal } from "@/components/Auth/OnboardingModal";
 
 export default function RootLayout({
   children,
@@ -52,6 +53,7 @@ export default function RootLayout({
               <BottomBar />
             </main>
           </div>
+          <OnboardingModal />
         </Providers>
       </body>
     </html>

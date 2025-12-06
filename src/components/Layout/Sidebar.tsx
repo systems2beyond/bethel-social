@@ -165,9 +165,11 @@ import { db } from '@/lib/firebase';
 import { useChat } from '@/context/ChatContext';
 import { useRouter } from 'next/navigation';
 
+import { Plus } from 'lucide-react';
+
 function RecentChats() {
     const { user } = useAuth();
-    const { loadChat } = useChat();
+    const { loadChat, createNewChat } = useChat();
     const router = useRouter();
     const [chats, setChats] = React.useState<any[]>([]);
 
@@ -197,9 +199,21 @@ function RecentChats() {
 
     return (
         <div className="mt-8 px-6">
-            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
-                Recent Chats
-            </h3>
+            <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                    Recent Chats
+                </h3>
+                <button
+                    onClick={() => {
+                        createNewChat();
+                        router.push('/chat');
+                    }}
+                    className="p-1 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
+                    title="New Chat"
+                >
+                    <Plus className="w-4 h-4" />
+                </button>
+            </div>
             <div className="space-y-3">
                 {chats.map((chat) => (
                     <button

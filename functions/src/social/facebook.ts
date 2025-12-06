@@ -79,14 +79,24 @@ export const syncFacebookPosts = async (backfill = false) => {
 
                 // Check for video in attachments
                 let mediaUrl = post.full_picture;
+                let postType: 'facebook' | 'video' | 'youtube' = 'facebook';
+                let thumbnailUrl = null;
+
                 if (post.attachments?.data[0]?.media?.source) {
                     mediaUrl = post.attachments.data[0].media.source;
+                    if (mediaUrl && (mediaUrl.includes('youtube.com') || mediaUrl.includes('youtu.be'))) {
+                        postType = 'youtube';
+                    } else {
+                        postType = 'video';
+                    }
+                    thumbnailUrl = post.full_picture || null;
                 }
 
                 batch.set(postRef, {
-                    type: 'facebook',
+                    type: postType,
                     content: post.message || '',
                     mediaUrl: mediaUrl || null,
+                    thumbnailUrl: thumbnailUrl,
                     sourceId: post.id,
                     timestamp: new Date(post.created_time).getTime(),
                     pinned: false,

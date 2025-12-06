@@ -30,6 +30,35 @@ export function LightboxProvider({ children }: { children: React.ReactNode }) {
         document.body.style.overflow = 'unset';
     }, []);
 
+    const iframeRef = React.useRef<HTMLIFrameElement>(null);
+
+    React.useEffect(() => {
+        if (isOpen && currentType === 'video' && currentSrc) {
+            // Attempt to unmute multiple times to catch different load states
+            const times = [500, 1000, 2000];
+            const timeouts: NodeJS.Timeout[] = [];
+
+            times.forEach(t => {
+                timeouts.push(setTimeout(() => {
+                    if (iframeRef.current?.contentWindow) {
+                        iframeRef.current.contentWindow.postMessage(JSON.stringify({
+                            event: 'command',
+                            func: 'unMute',
+                            args: []
+                        }), '*');
+                        iframeRef.current.contentWindow.postMessage(JSON.stringify({
+                            event: 'command',
+                            func: 'setVolume',
+                            args: [100]
+                        }), '*');
+                    }
+                }, t));
+            });
+
+            return () => timeouts.forEach(clearTimeout);
+        }
+    }, [isOpen, currentType, currentSrc]);
+
     return (
         <LightboxContext.Provider value={{ openLightbox, closeLightbox }}>
             {children}
@@ -58,7 +87,24 @@ export function LightboxProvider({ children }: { children: React.ReactNode }) {
                             <div className="relative w-full h-full flex items-center justify-center">
                                 {currentType === 'video' ? (
                                     <iframe
-                                        src={currentSrc?.replace('watch?v=', 'embed/').split('&')[0] + '?autoplay=1'}
+                                        ref={iframeRef}
+                                        src={(() => {
+                                            if (!currentSrc) return '';
+                                            let newSrc = currentSrc;
+                                            if (newSrc.includes('watch?v=')) {
+                                                newSrc = newSrc.replace('watch?v=', 'embed/').split('&')[0];
+                                            }
+
+                                            const hasParams = newSrc.includes('?');
+                                            const separator = hasParams ? '&' : '?';
+                                            const params = [];
+
+                                            if (!newSrc.includes('autoplay=')) params.push('autoplay=1');
+                                            if (!newSrc.includes('mute=')) params.push('mute=0');
+                                            if (!newSrc.includes('enablejsapi=')) params.push('enablejsapi=1');
+
+                                            return params.length > 0 ? `${newSrc}${separator}${params.join('&')}` : newSrc;
+                                        })()}
                                         className="w-full h-full max-w-4xl aspect-video rounded-lg"
                                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                                         allowFullScreen

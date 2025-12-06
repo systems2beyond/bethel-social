@@ -3,7 +3,9 @@
 import React from 'react';
 import { Post } from '@/types';
 import { motion } from 'framer-motion';
-import { Heart, MessageCircle, Share2, Facebook, Youtube, Pin } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Facebook, Youtube, Pin, Sparkles, Play } from 'lucide-react';
+import { CommentsSection } from './CommentsSection';
+import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -85,30 +87,168 @@ const VideoPlayer = ({ url, postId }: { url: string; postId: string }) => {
     );
 };
 
+interface VideoPlayerRef {
+    play: () => void;
+    pause: () => void;
+}
+
+const NativeVideoPlayer = React.forwardRef<VideoPlayerRef, { url: string; poster?: string }>(({ url, poster }, ref) => {
+    const videoRef = React.useRef<HTMLVideoElement>(null);
+
+    React.useImperativeHandle(ref, () => ({
+        play: () => {
+            if (videoRef.current) {
+                videoRef.current.play().catch(e => console.log('Autoplay prevented:', e));
+            }
+        },
+        pause: () => {
+            if (videoRef.current) {
+                videoRef.current.pause();
+            }
+        }
+    }));
+
+    React.useEffect(() => {
+        const handleFullscreenChange = () => {
+            const fsElement = document.fullscreenElement || (document as any).webkitFullscreenElement || (document as any).mozFullScreenElement || (document as any).msFullscreenElement;
+            console.log('[NativePlayer] Fullscreen change:', fsElement === videoRef.current, fsElement);
+
+            const isFullscreen = fsElement === videoRef.current;
+            if (isFullscreen && videoRef.current) {
+                console.log('[NativePlayer] Unmuting...');
+                videoRef.current.muted = false;
+            }
+        };
+
+        const events = ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'];
+        events.forEach(event => document.addEventListener(event, handleFullscreenChange));
+
+        return () => events.forEach(event => document.removeEventListener(event, handleFullscreenChange));
+    }, []);
+
+    return (
+        <div className="aspect-video bg-black">
+            <video
+                ref={videoRef}
+                src={url}
+                poster={poster}
+                className="w-full h-full object-contain"
+                controls
+                playsInline
+                loop
+                muted
+            />
+        </div>
+    );
+});
+NativeVideoPlayer.displayName = 'NativeVideoPlayer';
+
+const YouTubeFeedPlayer = React.forwardRef<VideoPlayerRef, { url: string }>(({ url }, ref) => {
+    const iframeRef = React.useRef<HTMLIFrameElement>(null);
+    const [origin, setOrigin] = React.useState('');
+
+    React.useEffect(() => {
+        setOrigin(window.location.origin);
+    }, []);
+
+    React.useImperativeHandle(ref, () => ({
+        play: () => {
+            if (iframeRef.current?.contentWindow) {
+                iframeRef.current.contentWindow.postMessage(JSON.stringify({
+                    event: 'command',
+                    func: 'playVideo',
+                    args: []
+                }), '*');
+            }
+        },
+        pause: () => {
+            if (iframeRef.current?.contentWindow) {
+                iframeRef.current.contentWindow.postMessage(JSON.stringify({
+                    event: 'command',
+                    func: 'pauseVideo',
+                    args: []
+                }), '*');
+            }
+        }
+    }));
+
+    const videoId = React.useMemo(() => {
+        if (url.includes('embed/')) return url.split('embed/')[1].split('?')[0];
+        if (url.includes('v=')) return url.split('v=')[1].split('&')[0];
+        if (url.includes('youtu.be/')) return url.split('youtu.be/')[1].split('?')[0];
+        return null;
+    }, [url]);
+
+    if (!videoId) return null;
+
+    React.useEffect(() => {
+        const handleFullscreenChange = () => {
+            const fsElement = document.fullscreenElement || (document as any).webkitFullscreenElement || (document as any).mozFullScreenElement || (document as any).msFullscreenElement;
+            console.log('[YouTubePlayer] Fullscreen change:', fsElement === iframeRef.current, fsElement);
+
+            const isFullscreen = fsElement === iframeRef.current;
+            if (isFullscreen && iframeRef.current?.contentWindow) {
+                console.log('[YouTubePlayer] Unmuting...');
+                iframeRef.current.contentWindow.postMessage(JSON.stringify({
+                    event: 'command',
+                    func: 'unMute',
+                    args: []
+                }), '*');
+                iframeRef.current.contentWindow.postMessage(JSON.stringify({
+                    event: 'command',
+                    func: 'setVolume',
+                    args: [100]
+                }), '*');
+            }
+        };
+
+        const events = ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'];
+        events.forEach(event => document.addEventListener(event, handleFullscreenChange));
+
+        return () => events.forEach(event => document.removeEventListener(event, handleFullscreenChange));
+    }, []);
+
+    return (
+        <div className="aspect-video bg-black">
+            <iframe
+                ref={iframeRef}
+                src={`https://www.youtube.com/embed/${videoId}?enablejsapi=1&autoplay=0&mute=1&controls=1&playsinline=1&rel=0&origin=${origin}`}
+                className="w-full h-full"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+            />
+        </div>
+    );
+});
+YouTubeFeedPlayer.displayName = 'YouTubeFeedPlayer';
+
 export const PostCard: React.FC<PostCardProps> = ({ post }) => {
     const { registerPost, unregisterPost, reportVisibility } = useFeed();
     const { openLightbox } = useLightbox();
+    const router = useRouter();
     const containerRef = React.useRef<HTMLDivElement>(null);
+    const videoPlayerRef = React.useRef<VideoPlayerRef>(null);
 
-    // Register non-video posts too (for AI context)
+    // Register post with FeedContext
     React.useEffect(() => {
-        const isVideo = post.mediaUrl && (post.mediaUrl.includes('youtube.com') || post.mediaUrl.includes('youtu.be'));
-
-        if (!isVideo) {
-            registerPost(post.id, {
-                content: post.content,
-                mediaUrl: post.mediaUrl,
-                type: post.mediaUrl ? 'image' : 'text'
-            });
-            return () => unregisterPost(post.id);
-        }
+        registerPost(post.id, {
+            content: post.content,
+            mediaUrl: post.mediaUrl,
+            type: post.type === 'video' || post.type === 'youtube' ? 'video' : (post.mediaUrl ? 'image' : 'text'),
+            play: () => {
+                console.log(`[PostCard] Playing video ${post.id}`, videoPlayerRef.current);
+                videoPlayerRef.current?.play();
+            },
+            pause: () => {
+                console.log(`[PostCard] Pausing video ${post.id}`);
+                videoPlayerRef.current?.pause();
+            }
+        });
+        return () => unregisterPost(post.id);
     }, [post, registerPost, unregisterPost]);
 
-    // Observe visibility for non-video posts
+    // Observe visibility for ALL posts
     React.useEffect(() => {
-        const isVideo = post.mediaUrl && (post.mediaUrl.includes('youtube.com') || post.mediaUrl.includes('youtu.be'));
-        if (isVideo) return; // VideoPlayer handles its own observation
-
         const observer = new IntersectionObserver(
             (entries) => {
                 entries.forEach((entry) => {
@@ -123,7 +263,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
         }
 
         return () => observer.disconnect();
-    }, [post, reportVisibility]);
+    }, [post.id, reportVisibility]);
 
     const formatDate = (timestamp: number) => {
         return new Date(timestamp).toLocaleDateString('en-US', {
@@ -140,6 +280,8 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
                 return <Facebook className="w-5 h-5 text-blue-600" />;
             case 'youtube':
                 return <Youtube className="w-5 h-5 text-red-600" />;
+            case 'video':
+                return <Facebook className="w-5 h-5 text-blue-600" />;
             default:
                 return null;
         }
@@ -147,11 +289,17 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
 
     const [isLiked, setIsLiked] = React.useState(false);
     const [likeCount, setLikeCount] = React.useState(post.likes || 0);
-    const [imageError, setImageError] = React.useState(false);
+    const [showComments, setShowComments] = React.useState(false);
 
     const handleLike = () => {
         setIsLiked(!isLiked);
         setLikeCount(prev => isLiked ? prev - 1 : prev + 1);
+    };
+
+    const handleAskAI = () => {
+        const context = `[Context: Post by ${post.author?.name || 'Unknown'}\nContent: "${post.content}"\n${post.mediaUrl ? `Media URL: ${post.mediaUrl}` : ''}]`;
+        const query = `Tell me about this post ${context}`;
+        router.push(`/chat?q=${encodeURIComponent(query)}&postId=${post.id}`);
     };
 
     return (
@@ -202,72 +350,62 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
             </div>
 
             {/* Media */}
-            {post.mediaUrl && !imageError && (
-                <div className="relative w-full bg-gray-50 dark:bg-zinc-800 overflow-hidden">
-                    {post.mediaUrl.includes('youtube.com') || post.mediaUrl.includes('youtu.be') ? (
-                        <VideoPlayer url={post.mediaUrl} postId={post.id} />
+            {post.mediaUrl && (
+                <div className="mt-2 relative aspect-video bg-black group">
+                    {post.type === 'youtube' ? (
+                        <YouTubeFeedPlayer ref={videoPlayerRef} url={post.mediaUrl} />
+                    ) : post.type === 'video' ? (
+                        <NativeVideoPlayer ref={videoPlayerRef} url={post.mediaUrl} poster={post.thumbnailUrl} />
                     ) : (
                         <div
-                            className="relative aspect-[4/3] cursor-pointer group"
-                            onClick={() => post.mediaUrl && openLightbox(post.mediaUrl)}
+                            className="w-full h-full cursor-pointer"
+                            onClick={() => openLightbox(post.mediaUrl!, 'image')}
                         >
-                            <Image
+                            <img
                                 src={post.mediaUrl}
                                 alt="Post content"
-                                fill
-                                className="object-cover transition-transform duration-500 group-hover:scale-105"
-                                onError={() => setImageError(true)}
+                                className="w-full h-full object-cover"
                             />
-                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
-                                <span className="bg-black/50 text-white px-3 py-1 rounded-full text-sm backdrop-blur-sm">Click to expand</span>
-                            </div>
                         </div>
                     )}
                 </div>
             )}
 
-            {/* Fallback for empty posts (no content + broken image) */}
-            {(!post.content && (!post.mediaUrl || imageError)) && (
-                <div className="px-4 pb-4">
-                    <a
-                        href={post.externalUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:underline text-sm flex items-center gap-1"
-                    >
-                        <Facebook className="w-4 h-4" />
-                        View original post on Facebook
-                    </a>
-                </div>
-            )}
-
             {/* Actions */}
-            <div className="p-4 flex items-center justify-between border-t border-gray-50 dark:border-zinc-800">
-                <div className="flex items-center space-x-6">
-                    <button
-                        onClick={handleLike}
-                        className={cn(
-                            "flex items-center space-x-2 transition-colors group",
-                            isLiked ? "text-red-500" : "text-gray-600 dark:text-gray-400 hover:text-red-500"
-                        )}
-                    >
-                        <motion.div
-                            whileTap={{ scale: 0.8 }}
-                            animate={isLiked ? { scale: [1, 1.2, 1] } : {}}
-                        >
-                            <Heart className={cn("w-6 h-6", isLiked && "fill-current")} />
-                        </motion.div>
-                        <span className="text-sm font-medium">{likeCount}</span>
-                    </button>
-                    <button className="flex items-center space-x-2 text-gray-600 dark:text-gray-400 hover:text-blue-500 transition-colors">
-                        <MessageCircle className="w-6 h-6" />
-                        <span className="text-sm font-medium">{post.comments || 0}</span>
-                    </button>
-                </div>
-                <button className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors">
-                    <Share2 className="w-6 h-6" />
+            <div className="px-4 py-3 border-t border-gray-100 dark:border-zinc-800 flex items-center justify-between">
+                <button className="flex items-center space-x-2 text-gray-500 dark:text-gray-400 hover:text-red-500 transition-colors group">
+                    <Heart className="w-5 h-5 group-hover:fill-current" />
+                    <span className="text-sm font-medium">{post.likes || 0}</span>
+                </button>
+
+                <button
+                    onClick={() => setShowComments(!showComments)}
+                    className={`flex items-center space-x-2 transition-colors ${showComments ? 'text-blue-600' : 'text-gray-500 dark:text-gray-400 hover:text-blue-500'}`}
+                >
+                    <MessageCircle className="w-5 h-5" />
+                    <span className="text-sm font-medium">Comment</span>
+                </button>
+
+                <button
+                    onClick={handleAskAI}
+                    className="flex items-center space-x-2 text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 transition-colors bg-purple-50 dark:bg-purple-900/20 px-3 py-1.5 rounded-full"
+                >
+                    <Sparkles className="w-4 h-4" />
+                    <span className="text-sm font-medium">Ask AI</span>
+                </button>
+
+                <button className="flex items-center space-x-2 text-gray-500 dark:text-gray-400 hover:text-green-500 transition-colors">
+                    <Share2 className="w-5 h-5" />
+                    <span className="text-sm font-medium">Share</span>
                 </button>
             </div>
+
+            {/* Comments Section */}
+            {showComments && (
+                <div className="px-4 pb-4 animate-in slide-in-from-top-2 duration-200">
+                    <CommentsSection postId={post.id} />
+                </div>
+            )}
         </motion.div>
     );
 };

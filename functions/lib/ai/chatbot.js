@@ -109,8 +109,8 @@ const ingestSermon = async (request) => {
 exports.ingestSermon = ingestSermon;
 const chatWithBibleBot = async (request) => {
     var _a;
-    const { message } = request.data;
-    logger.info('Chat request received', { message });
+    const { message, history, userName, userPhone } = request.data;
+    logger.info('Chat request received', { message, historyLength: history === null || history === void 0 ? void 0 : history.length, userName });
     // 0. Check for Handoff Intent (Simple keyword check for now, could be LLM classifier)
     const handoffKeywords = ['talk to human', 'speak to pastor', 'contact staff', 'real person'];
     if (handoffKeywords.some(k => message.toLowerCase().includes(k))) {
@@ -140,14 +140,17 @@ const chatWithBibleBot = async (request) => {
     // 3. Generate Response
     const systemPrompt = `
     You are the "Bethel Assistant", a helpful, warm, and biblically-grounded AI companion for the Bethel Metropolitan Baptist Church community.
+    You are speaking with **${userName || 'a friend'}**${userPhone ? ` (Phone: ${userPhone})` : ''}.
     
     **Your Goals:**
     1. Answer questions about sermons, bible studies, and church events accurately using the provided context.
     2. Provide spiritual support and relevant scripture references when appropriate.
     3. Be welcoming to new visitors and encourage them to join our services (Sundays at 10:00 AM).
+    4. Help the user perform actions like adding events to their calendar or sending emails to the church.
     
     **Rules:**
-    - **Tone:** Warm, empathetic, respectful, and pastoral.
+    - **Tone:** Warm, empathetic, respectful, and pastoral. Treat the user like a close friend and member of the congregation.
+    - **Personalization:** Use **${userName || 'Friend'}**'s name naturally in the conversation to build rapport, especially when offering support or specific information. Ask how they are doing if appropriate.
     - **Scripture:** Always quote the KJV or NIV version when referencing the Bible.
     - **Context:** Use the provided 'Sermon Context' to answer specific questions about what was preached.
     - **Unknowns:** If the answer is not in the context and is not general biblical knowledge, politely say you don't know and offer to connect them with a human.
@@ -155,6 +158,19 @@ const chatWithBibleBot = async (request) => {
     - **Visuals:** The user is looking at the image provided in the context. ALWAYS use this image to answer questions about dates, times, locations, visual details, or text contained within the image. Assume the user's question refers to this image unless specified otherwise.
     - **Image Context:** If the context contains "[Image Analysis]" or "[Extracted Text]", treat this as high-priority information. This text comes directly from images in the post and often contains vital details not present in the main post text.
     
+    **Tools & Actions:**
+    If the user asks to add an event to their calendar or send an email, output a specific ACTION tag at the end of your response.
+    
+    1. **Calendar Action:**
+       Output: \`[ACTION:CALENDAR | Title | StartTime (ISO) | EndTime (ISO) | Location | Description]\`
+       Example: \`[ACTION:CALENDAR | Senior Shoe Event | 2025-05-04T10:00:00 | 2025-05-04T12:00:00 | Bethel Church | Bring new shoes for seniors]\`
+       *Note: Infer the year as 2025 if not specified. Use the context to find the date/time.*
+
+    2. **Email Action:**
+       Output: \`[ACTION:EMAIL | Recipient Email | Subject | Body]\`
+       Example: \`[ACTION:EMAIL | office@bethelmetro.org | Baptism Inquiry | Hi, I would like to know more about baptism...]\`
+       *Note: Default recipient is office@bethelmetro.org unless specified.*
+
     **Sermon Context:**
     ${context || "No specific sermon context available for this query."}
     `;
@@ -172,8 +188,15 @@ const chatWithBibleBot = async (request) => {
     // Actually, keeping the text context is useful for the LLM to know *why* the image is there.
     let prompt = [
         { text: systemPrompt },
-        { text: `\n**User Question:**\n${message}` }
     ];
+    // Add history if present
+    if (history && Array.isArray(history)) {
+        history.forEach((msg) => {
+            prompt.push({ text: `\n**${msg.role === 'user' ? 'User' : 'Model'}:**\n${msg.content}` });
+        });
+    }
+    // Add current question
+    prompt.push({ text: `\n**User Question:**\n${message}` });
     if (imageUrl) {
         // Add image part with contentType
         const lowerUrl = imageUrl.toLowerCase();

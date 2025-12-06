@@ -14,6 +14,7 @@ import {
     serverTimestamp,
     doc,
     setDoc,
+    getDoc,
     getDocs,
     limit
 } from 'firebase/firestore';
@@ -164,7 +165,25 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             // Call AI
             const chatFn = httpsCallable(functions, 'chat');
             const fullMessage = hiddenContext ? `${content}${hiddenContext}` : content;
-            const result = await chatFn({ message: fullMessage });
+
+            // Extract history (last 10 messages)
+            const history = messages.slice(-10).map(m => ({
+                role: m.role === 'user' ? 'user' : 'model',
+                content: m.content
+            }));
+
+            // Fetch user profile for personalization
+            const userDoc = await getDoc(doc(db, 'users', user.uid));
+            const userData = userDoc.data();
+            const userName = userData?.displayName || user.displayName || 'Friend';
+            const userPhone = userData?.phoneNumber || null;
+
+            const result = await chatFn({
+                message: fullMessage,
+                history,
+                userName,
+                userPhone
+            });
             const data = result.data as { response: string };
 
             // Save bot response
