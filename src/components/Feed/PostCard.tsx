@@ -5,12 +5,16 @@ import { Post } from '@/types';
 import { motion } from 'framer-motion';
 import { Heart, MessageCircle, Share2, Facebook, Youtube, Pin, Sparkles, Play } from 'lucide-react';
 import { CommentsSection } from './CommentsSection';
+import { ShareMenu } from './ShareMenu';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
 import { formatTextWithLinks } from '@/lib/utils';
+import { collection, doc, deleteDoc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { useAuth } from '@/context/AuthContext';
 
 function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
@@ -287,13 +291,42 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
         }
     };
 
+    const { user } = useAuth();
     const [isLiked, setIsLiked] = React.useState(false);
     const [likeCount, setLikeCount] = React.useState(post.likes || 0);
     const [showComments, setShowComments] = React.useState(false);
 
-    const handleLike = () => {
-        setIsLiked(!isLiked);
-        setLikeCount(prev => isLiked ? prev - 1 : prev + 1);
+    // Real-time likes listener
+    React.useEffect(() => {
+        const likesRef = collection(db, 'posts', post.id, 'likes');
+        const unsubscribe = onSnapshot(likesRef, (snapshot) => {
+            setLikeCount(snapshot.size);
+            if (user) {
+                setIsLiked(snapshot.docs.some(doc => doc.id === user.uid));
+            }
+        });
+
+        return () => unsubscribe();
+    }, [post.id, user]);
+
+    const handleLike = async () => {
+        if (!user) return; // TODO: Trigger auth modal
+
+        const likeRef = doc(db, 'posts', post.id, 'likes', user.uid);
+        try {
+            if (isLiked) {
+                await deleteDoc(likeRef);
+            } else {
+                await setDoc(likeRef, {
+                    timestamp: serverTimestamp(),
+                    userId: user.uid,
+                    userName: user.displayName,
+                    userPhoto: user.photoURL
+                });
+            }
+        } catch (error) {
+            console.error('Error updating like:', error);
+        }
     };
 
     const handleAskAI = () => {
@@ -373,9 +406,15 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
 
             {/* Actions */}
             <div className="px-4 py-3 border-t border-gray-100 dark:border-zinc-800 flex items-center justify-between">
-                <button className="flex items-center space-x-2 text-gray-500 dark:text-gray-400 hover:text-red-500 transition-colors group">
-                    <Heart className="w-5 h-5 group-hover:fill-current" />
-                    <span className="text-sm font-medium">{post.likes || 0}</span>
+                <button
+                    onClick={handleLike}
+                    className={cn(
+                        "flex items-center space-x-2 transition-colors group",
+                        isLiked ? "text-red-500" : "text-gray-500 dark:text-gray-400 hover:text-red-500"
+                    )}
+                >
+                    <Heart className={cn("w-5 h-5", isLiked && "fill-current")} />
+                    <span className="text-sm font-medium">{likeCount}</span>
                 </button>
 
                 <button
@@ -394,10 +433,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
                     <span className="text-sm font-medium">Ask AI</span>
                 </button>
 
-                <button className="flex items-center space-x-2 text-gray-500 dark:text-gray-400 hover:text-green-500 transition-colors">
-                    <Share2 className="w-5 h-5" />
-                    <span className="text-sm font-medium">Share</span>
-                </button>
+                <ShareMenu post={post} />
             </div>
 
             {/* Comments Section */}

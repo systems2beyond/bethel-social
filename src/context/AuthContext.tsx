@@ -17,6 +17,7 @@ import { useTheme } from 'next-themes';
 interface AuthContextType {
     user: User | null;
     loading: boolean;
+    googleAccessToken: string | null;
     signInWithGoogle: () => Promise<void>;
     signInWithYahoo: () => Promise<void>;
     signInWithFacebook: () => Promise<void>;
@@ -63,10 +64,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return () => unsubscribe();
     }, [setTheme]);
 
+    const [googleAccessToken, setGoogleAccessToken] = useState<string | null>(null);
+
+    // ... (existing useEffect)
+
     const signInWithGoogle = async () => {
         const provider = new GoogleAuthProvider();
+        provider.addScope('https://www.googleapis.com/auth/gmail.send');
         try {
-            await signInWithPopup(auth, provider);
+            const result = await signInWithPopup(auth, provider);
+            const credential = GoogleAuthProvider.credentialFromResult(result);
+            if (credential?.accessToken) {
+                setGoogleAccessToken(credential.accessToken);
+            }
         } catch (error) {
             console.error("Error signing in with Google", error);
             throw error;
@@ -103,7 +113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     return (
-        <AuthContext.Provider value={{ user, loading, signInWithGoogle, signInWithYahoo, signInWithFacebook, signOut }}>
+        <AuthContext.Provider value={{ user, loading, googleAccessToken, signInWithGoogle, signInWithYahoo, signInWithFacebook, signOut }}>
             {children}
         </AuthContext.Provider>
     );
