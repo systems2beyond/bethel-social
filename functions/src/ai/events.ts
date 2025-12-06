@@ -1,15 +1,14 @@
 import * as logger from 'firebase-functions/logger';
 import * as admin from 'firebase-admin';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
-import { defineSecret } from 'firebase-functions/params';
+import { onRequest } from 'firebase-functions/v2/https';
 import { genkit, z } from 'genkit';
-import { googleAI, gemini15Flash } from '@genkit-ai/googleai';
+import { vertexAI } from '@genkit-ai/vertexai';
 
-const GOOGLE_API_KEY = defineSecret('GOOGLE_API_KEY');
-
+// Initialize Genkit with Vertex AI
 const ai = genkit({
-    plugins: [googleAI()],
-    model: gemini15Flash,
+    plugins: [vertexAI({ location: 'us-central1', projectId: 'bethel-metro-social' })],
+    model: 'vertexai/gemini-2.0-flash-001',
 });
 
 const db = admin.firestore();
@@ -27,7 +26,6 @@ const EventSchema = z.object({
 export const extractEventFromPost = onDocumentWritten(
     {
         document: 'posts/{postId}',
-        secrets: [GOOGLE_API_KEY],
         region: 'us-central1',
     },
     async (event) => {
@@ -58,13 +56,13 @@ async function processPostForEvent(postId: string, postData: any) {
 
         const prompt: any[] = [
             {
-                text: `Analyze this social media post. 
-            Context: Today is ${today}. The post was created on ${postDate}.
-            Task: If the post is promoting a specific FUTURE event (happening after ${postDate}), extract the details. 
+                text: `Analyze this social media post.
+    Context: Today is ${today}. The post was created on ${postDate}.
+    Task: If the post is promoting a specific FUTURE event (happening after ${postDate}), extract the details. 
             - If the flyer says "Nov 11" and the post is from Nov 2025, the year is 2025.
             - If the event is in the past relative to the post date, set isEvent to false.
-            - If it is just an inspirational quote or general announcement without a specific date/time, set isEvent to false.` },
-            { text: `\nPost Content:\n${postData.content}` }
+            - If it is just an inspirational quote or general announcement without a specific date / time, set isEvent to false.` },
+            { text: `\nPost Content: \n${postData.content} ` }
         ];
 
         // Determine media URL (prefer thumbnail for YouTube/video)
@@ -85,7 +83,7 @@ async function processPostForEvent(postId: string, postData: any) {
         let result;
         try {
             result = await ai.generate({
-                model: 'googleai/gemini-2.0-flash',
+                model: 'vertexai/gemini-2.0-flash-001',
                 prompt: prompt,
                 output: { schema: EventSchema },
             });
@@ -94,14 +92,14 @@ async function processPostForEvent(postId: string, postData: any) {
             // Remove media part and retry
             const textOnlyPrompt = prompt.filter(p => !p.media);
             result = await ai.generate({
-                model: 'googleai/gemini-2.0-flash',
+                model: 'vertexai/gemini-2.0-flash-001',
                 prompt: textOnlyPrompt,
                 output: { schema: EventSchema },
             });
         }
 
         const extraction = result.output;
-        logger.info(`Gemini response for ${postId}:`, JSON.stringify(extraction));
+        logger.info(`Gemini response for ${postId}: `, JSON.stringify(extraction));
 
         if (extraction && extraction.isEvent && extraction.title && extraction.date) {
             logger.info(`Event detected in post ${postId}: ${extraction.title} on ${extraction.date}`);
@@ -132,15 +130,12 @@ async function processPostForEvent(postId: string, postData: any) {
         }
 
     } catch (e) {
-        logger.error(`Failed to extract event from post ${postId}:`, e);
+        logger.error(`Failed to extract event from post ${postId}: `, e);
     }
 }
 
-import { onRequest } from 'firebase-functions/v2/https';
-
 export const backfillEvents = onRequest(
     {
-        secrets: [GOOGLE_API_KEY],
         region: 'us-central1',
         timeoutSeconds: 540, // Long timeout for batch processing
     },
@@ -173,7 +168,7 @@ export const backfillEvents = onRequest(
                         await processPostForEvent(doc.id, doc.data());
                         processedCount++;
                     } catch (err) {
-                        logger.error(`Failed to process post ${doc.id}:`, err);
+                        logger.error(`Failed to process post ${doc.id}: `, err);
                     }
                 }));
             }

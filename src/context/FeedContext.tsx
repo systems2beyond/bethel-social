@@ -33,6 +33,9 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         rect?: DOMRectReadOnly
     }>>(new Map());
 
+    const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
+    const activePostIdRef = useRef<string | null>(null);
+
     const registerPost = useCallback((id: string, data: { content?: string; mediaUrl?: string; type?: 'video' | 'image' | 'text'; play?: () => void; pause?: () => void }) => {
         // Preserve existing ratio/rect if re-registering
         const existing = posts.current.get(id);
@@ -45,11 +48,12 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
 
     const unregisterPost = useCallback((id: string) => {
         posts.current.delete(id);
-        if (activePostId === id) {
+        if (activePostIdRef.current === id) {
+            activePostIdRef.current = null;
             setActivePostId(null);
             setActivePost(null);
         }
-    }, [activePostId]);
+    }, []);
 
     const reportVisibility = useCallback((id: string, ratio: number, rect: DOMRectReadOnly) => {
         const post = posts.current.get(id);
@@ -58,63 +62,77 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         post.ratio = ratio;
         post.rect = rect;
 
-        recalculateActivePost();
+        // Debounce the recalculation to prevent race conditions on load
+        if (debounceTimeout.current) {
+            clearTimeout(debounceTimeout.current);
+        }
+
+        debounceTimeout.current = setTimeout(() => {
+            recalculateActivePost();
+        }, 200);
     }, []);
 
     const recalculateActivePost = () => {
         const viewportHeight = window.innerHeight;
-        const viewportCenter = viewportHeight / 2;
 
-        let closestDistance = Infinity;
         let bestId: string | null = null;
+        let maxScore = -1;
 
         posts.current.forEach((p, pid) => {
-            // Must be somewhat visible to be considered (e.g. 30%)
-            // And must have a rect
-            if (p.ratio < 0.3 || !p.rect) return;
+            if (!p.rect) return;
 
-            const postCenter = p.rect.top + (p.rect.height / 2);
-            const distance = Math.abs(viewportCenter - postCenter);
+            // Score based primarily on visibility ratio (0 to 100)
+            let score = p.ratio * 100;
 
-            if (distance < closestDistance) {
-                closestDistance = distance;
+            // Apply hysteresis: Give a significant bonus to the currently active post
+            if (pid === activePostIdRef.current) {
+                score += 50;
+            }
+
+            // Penalize very low visibility
+            if (p.ratio < 0.2) {
+                score = -1;
+            }
+
+            if (score > maxScore) {
+                maxScore = score;
                 bestId = pid;
             }
         });
 
-        setActivePostId((prevId) => {
-            if (prevId === bestId) return prevId;
+        // Use ref for synchronous check to prevent race conditions
+        if (activePostIdRef.current === bestId) return;
 
-            // Aggressively pause ALL other videos to ensure strict single playback
-            posts.current.forEach((p, pid) => {
-                if (pid !== bestId && p.play) {
-                    p.pause?.();
-                }
-            });
-
-            // Play new video if it is a video
-            if (bestId) {
-                const newPost = posts.current.get(bestId);
-                if (newPost) {
-                    if (newPost.play) {
-                        newPost.play();
-                    }
-
-                    // Update active post data for AI context
-                    console.log('Setting active post:', bestId, newPost.mediaUrl);
-                    setActivePost({
-                        id: bestId,
-                        content: newPost.content,
-                        mediaUrl: newPost.mediaUrl,
-                        type: newPost.type
-                    });
-                }
-            } else {
-                setActivePost(null);
+        // Aggressively pause ALL other videos to ensure strict single playback
+        posts.current.forEach((p, pid) => {
+            if (pid !== bestId && p.play) {
+                p.pause?.();
             }
-
-            return bestId;
         });
+
+        activePostIdRef.current = bestId;
+        setActivePostId(bestId);
+
+        // Play new video if it is a video
+        if (bestId) {
+            const newPost = posts.current.get(bestId);
+            if (newPost) {
+                if (newPost.play) {
+                    newPost.play();
+                }
+
+                // Update active post data for AI context
+                console.log('Setting active post:', bestId, newPost.mediaUrl);
+                setActivePost({
+                    id: bestId,
+                    content: newPost.content,
+                    mediaUrl: newPost.mediaUrl,
+                    type: newPost.type
+                });
+            }
+        } else {
+            setActivePost(null);
+        }
     };
 
     return (

@@ -13,7 +13,7 @@ async function testChat() {
             },
             body: JSON.stringify({
                 data: {
-                    message: "What events happened at the church in January or February 2025?"
+                    message: "Tell me about the senior shoe event"
                 }
             })
         });

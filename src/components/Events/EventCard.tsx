@@ -5,6 +5,7 @@ import { Calendar, MapPin, Clock, ExternalLink } from 'lucide-react';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { useLightbox } from '@/context/LightboxContext';
+import { useFeed } from '@/context/FeedContext';
 
 import { Event } from '@/types';
 import { formatTextWithLinks } from '@/lib/utils';
@@ -45,8 +46,40 @@ export const EventCard = ({ event }: { event: Event }) => {
 
     const displayImageUrl = getImageUrl(event.imageUrl);
 
+    const { registerPost, unregisterPost, reportVisibility } = useFeed();
+    const containerRef = React.useRef<HTMLDivElement>(null);
+
+    // Register event with FeedContext so it can be used as AI context
+    React.useEffect(() => {
+        registerPost(event.id, {
+            content: `${event.title} - ${event.description} at ${event.location} on ${dateStr} ${timeStr}`,
+            mediaUrl: displayImageUrl || undefined,
+            type: displayImageUrl ? 'image' : 'text'
+        });
+        return () => unregisterPost(event.id);
+    }, [event, registerPost, unregisterPost, displayImageUrl, dateStr, timeStr]);
+
+    // Track visibility
+    React.useEffect(() => {
+        const observer = new IntersectionObserver(
+            (entries) => {
+                entries.forEach((entry) => {
+                    reportVisibility(event.id, entry.intersectionRatio, entry.boundingClientRect);
+                });
+            },
+            { threshold: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0] }
+        );
+
+        if (containerRef.current) {
+            observer.observe(containerRef.current);
+        }
+
+        return () => observer.disconnect();
+    }, [event.id, reportVisibility]);
+
     return (
         <motion.div
+            ref={containerRef}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="bg-white dark:bg-zinc-900 rounded-xl shadow-sm border border-gray-100 dark:border-zinc-800 overflow-hidden flex flex-col md:flex-row hover:shadow-md transition-shadow duration-300"

@@ -38,12 +38,13 @@ const logger = __importStar(require("firebase-functions/logger"));
 const admin = __importStar(require("firebase-admin"));
 // import { z } from 'zod';
 const genkit_1 = require("genkit");
-const googleai_1 = require("@genkit-ai/googleai");
+const vertexai_1 = require("@genkit-ai/vertexai");
 const firestore_1 = require("firebase-admin/firestore");
-// Initialize Genkit
+const router_1 = require("./router");
+// Initialize Genkit with Vertex AI (uses Project Quota/Blaze)
 const ai = (0, genkit_1.genkit)({
-    plugins: [(0, googleai_1.googleAI)()],
-    model: googleai_1.gemini15Flash,
+    plugins: [(0, vertexai_1.vertexAI)({ location: 'us-central1', projectId: 'bethel-metro-social' })],
+    model: 'vertexai/gemini-2.0-flash-001',
 });
 const db = admin.firestore();
 // Simple text splitter
@@ -87,7 +88,7 @@ const ingestSermon = async (request) => {
         const chunk = chunks[i];
         // Generate embedding using Genkit
         const embeddingResult = await ai.embed({
-            embedder: googleai_1.textEmbedding004,
+            embedder: 'vertexai/text-embedding-004',
             content: chunk,
         });
         // Extract the embedding array
@@ -107,6 +108,7 @@ const ingestSermon = async (request) => {
 };
 exports.ingestSermon = ingestSermon;
 const chatWithBibleBot = async (request) => {
+    var _a;
     const { message } = request.data;
     logger.info('Chat request received', { message });
     // 0. Check for Handoff Intent (Simple keyword check for now, could be LLM classifier)
@@ -122,7 +124,7 @@ const chatWithBibleBot = async (request) => {
     }
     // 1. Embed user query
     const queryEmbeddingResult = await ai.embed({
-        embedder: googleai_1.textEmbedding004,
+        embedder: 'vertexai/text-embedding-004',
         content: message,
     });
     const queryVector = extractEmbedding(queryEmbeddingResult);
@@ -150,7 +152,8 @@ const chatWithBibleBot = async (request) => {
     - **Context:** Use the provided 'Sermon Context' to answer specific questions about what was preached.
     - **Unknowns:** If the answer is not in the context and is not general biblical knowledge, politely say you don't know and offer to connect them with a human.
     - **Handoff:** If the user seems distressed, asks for prayer, or wants to speak to a pastor, suggest they contact the church office or use the "Talk to a Human" feature.
-    - **Visuals:** If an image is provided, use it to answer questions about event details, flyers, or visual content.
+    - **Visuals:** The user is looking at the image provided in the context. ALWAYS use this image to answer questions about dates, times, locations, visual details, or text contained within the image. Assume the user's question refers to this image unless specified otherwise.
+    - **Image Context:** If the context contains "[Image Analysis]" or "[Extracted Text]", treat this as high-priority information. This text comes directly from images in the post and often contains vital details not present in the main post text.
     
     **Sermon Context:**
     ${context || "No specific sermon context available for this query."}
@@ -159,6 +162,11 @@ const chatWithBibleBot = async (request) => {
     // Format: [Context: ... Media URL: https://... ]
     const urlMatch = message.match(/Media URL: (https?:\/\/[^\s\]]+)/);
     const imageUrl = urlMatch ? urlMatch[1] : null;
+    logger.info('Regex Match Result', {
+        messageLength: message.length,
+        hasMatch: !!urlMatch,
+        extractedUrl: imageUrl
+    });
     // Clean message by removing the context block for the prompt (optional, but keeps it clean)
     // const cleanMessage = message.replace(/\[Context:.*?\]/s, '').trim(); 
     // Actually, keeping the text context is useful for the LLM to know *why* the image is there.
@@ -167,13 +175,41 @@ const chatWithBibleBot = async (request) => {
         { text: `\n**User Question:**\n${message}` }
     ];
     if (imageUrl) {
-        // Add image part
-        prompt.push({ media: { url: imageUrl } });
+        // Add image part with contentType
+        const lowerUrl = imageUrl.toLowerCase();
+        // 1. Explicitly block known video/non-image domains/extensions that cause Gemini to crash
+        if (lowerUrl.includes('youtube.com') || lowerUrl.includes('youtu.be') || lowerUrl.includes('vimeo.com') || lowerUrl.includes('.mp4') || lowerUrl.includes('.mov')) {
+            logger.info('Skipping media attachment (video domain)', { imageUrl });
+        }
+        else {
+            // 2. Try to detect extension
+            const cleanUrl = imageUrl.split('?')[0];
+            const extension = (_a = cleanUrl.split('.').pop()) === null || _a === void 0 ? void 0 : _a.toLowerCase();
+            let contentType = 'image/jpeg'; // Default fallback
+            if (extension === 'png')
+                contentType = 'image/png';
+            if (extension === 'webp')
+                contentType = 'image/webp';
+            if (extension === 'heic')
+                contentType = 'image/heic';
+            if (extension === 'heif')
+                contentType = 'image/heif';
+            // If extension is 'jpg' or 'jpeg' or unknown, we use 'image/jpeg'
+            logger.info('Attaching media to prompt', { imageUrl, contentType, inferredFrom: extension || 'fallback' });
+            prompt.push({ media: { url: imageUrl, contentType } });
+        }
     }
+    logger.info('Sending prompt to Gemini', {
+        promptLength: JSON.stringify(prompt).length,
+        partsCount: prompt.length
+    });
+    // 4. Smart Routing
+    const selectedModel = await (0, router_1.routeQuery)(message, !!imageUrl);
+    logger.info(`Using model: ${selectedModel}`);
     let response;
     try {
         response = await ai.generate({
-            model: 'googleai/gemini-2.0-flash',
+            model: selectedModel,
             prompt: prompt,
             config: {
                 temperature: 0.7,
@@ -181,7 +217,11 @@ const chatWithBibleBot = async (request) => {
         });
     }
     catch (e) {
-        logger.error('Gemini 2.0 Flash failed:', e);
+        logger.error('Vertex AI Gemini 1.5 Flash failed:', {
+            message: e.message,
+            status: e.status,
+            details: e.errorDetails
+        });
         throw e;
     }
     return { response: response.text };

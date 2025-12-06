@@ -2,17 +2,15 @@ import * as logger from 'firebase-functions/logger';
 import * as admin from 'firebase-admin';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
-import { defineSecret } from 'firebase-functions/params';
 import { genkit } from 'genkit';
-import { googleAI, textEmbedding004 } from '@genkit-ai/googleai';
+import { vertexAI } from '@genkit-ai/vertexai';
 import { FieldValue } from 'firebase-admin/firestore';
 import * as cheerio from 'cheerio';
 
-const GOOGLE_API_KEY = defineSecret('GOOGLE_API_KEY');
-
-// Initialize Genkit
+// Initialize Genkit with Vertex AI
 const ai = genkit({
-    plugins: [googleAI()],
+    plugins: [vertexAI({ location: 'us-central1', projectId: 'bethel-metro-social' })],
+    model: 'vertexai/gemini-2.0-flash-001',
 });
 
 const db = admin.firestore();
@@ -55,7 +53,6 @@ interface IngestRequest {
 
 export const ingestContent = onCall(
     {
-        secrets: [GOOGLE_API_KEY],
         region: 'us-central1',
         timeoutSeconds: 300,
     },
@@ -109,7 +106,7 @@ export const ingestContent = onCall(
             const chunk = chunks[i];
             try {
                 const embeddingResult = await ai.embed({
-                    embedder: textEmbedding004,
+                    embedder: 'vertexai/text-embedding-004',
                     content: chunk,
                 });
                 const embeddingVector = extractEmbedding(embeddingResult);
@@ -141,7 +138,6 @@ export const ingestContent = onCall(
 export const scheduledWebsiteCrawl = onSchedule(
     {
         schedule: 'every 24 hours',
-        secrets: [GOOGLE_API_KEY],
         region: 'us-central1',
         timeoutSeconds: 540,
     },
@@ -192,7 +188,7 @@ async function ingestUrl(url: string) {
     for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i];
         const embeddingResult = await ai.embed({
-            embedder: textEmbedding004,
+            embedder: 'vertexai/text-embedding-004',
             content: chunk,
         });
         const embeddingVector = extractEmbedding(embeddingResult);
@@ -214,11 +210,30 @@ async function ingestUrl(url: string) {
 
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 
+// Helper to describe image using Gemini
+async function describeImage(imageUrl: string): Promise<string> {
+    try {
+        const result = await ai.generate({
+            model: 'vertexai/gemini-2.0-flash-001',
+            prompt: [
+                { text: "Analyze this image in detail. Extract ALL visible text exactly as it appears. Describe the visual content, including people, setting, and mood. If there is any information about dates, times, locations, or announcements, prioritize extracting that accurately. Output format: [Extracted Text]: ... [Visual Description]: ..." },
+                { media: { url: imageUrl } }
+            ]
+        });
+
+        return result.text;
+    } catch (e) {
+        logger.error('Failed to describe image:', e);
+        return '';
+    }
+}
+
 export const ingestSocialPost = onDocumentWritten(
     {
         document: 'posts/{postId}',
-        secrets: [GOOGLE_API_KEY],
         region: 'us-central1',
+        timeoutSeconds: 300,
+        memory: '1GiB',
     },
     async (event) => {
         const snapshot = event.data;
@@ -230,17 +245,20 @@ export const ingestSocialPost = onDocumentWritten(
         const before = snapshot.before.data();
 
         // If deleted or no content, skip
-        if (!after || !after.content) {
-            // TODO: Handle deletion from knowledge base if post is deleted?
+        if (!after) {
             return;
         }
 
-        // If content hasn't changed, skip
-        if (before && before.content === after.content) {
+        // Check if content OR image has changed OR forceIngest flag is set
+        const contentChanged = !before || before.content !== after.content;
+        const imageChanged = !before || before.mediaUrl !== after.mediaUrl;
+        const forceIngest = after.forceIngest === true;
+
+        if (!contentChanged && !imageChanged && !forceIngest) {
             return;
         }
 
-        const text = after.content;
+        let text = after.content || '';
         const postId = event.params.postId;
         const title = `Social Post ${after.timestamp ? new Date(after.timestamp).toLocaleDateString() : ''}`;
 
@@ -255,9 +273,24 @@ export const ingestSocialPost = onDocumentWritten(
 
         logger.info(`Ingesting social post ${postId}...`);
 
+        // Analyze image if present
+        if (after.mediaUrl && !after.mediaUrl.includes('youtube') && !after.mediaUrl.includes('vimeo')) {
+            logger.info(`Analyzing image for post ${postId}...`);
+            const imageDescription = await describeImage(after.mediaUrl);
+            if (imageDescription) {
+                text += `\n\n[Image Analysis]: ${imageDescription}`;
+                logger.info(`Added image analysis to post ${postId}`);
+            }
+        }
+
+        if (!text) {
+            logger.warn(`No text or image description for post ${postId}, skipping.`);
+            return;
+        }
+
         try {
             const embeddingResult = await ai.embed({
-                embedder: textEmbedding004,
+                embedder: 'vertexai/text-embedding-004',
                 content: text,
             });
             const embeddingVector = extractEmbedding(embeddingResult);
@@ -278,6 +311,7 @@ export const ingestSocialPost = onDocumentWritten(
                 metadata: {
                     author: after.author?.name || 'Unknown',
                     platform: after.type || 'unknown',
+                    hasImage: !!after.mediaUrl
                 }
             });
             logger.info(`Ingested social post ${postId}`);

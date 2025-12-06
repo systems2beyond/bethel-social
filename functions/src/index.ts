@@ -117,7 +117,7 @@ export const manualYoutubeSync = onRequest({ secrets: [googleApiKey] }, async (r
 
 
 
-export const chat = onCall({ secrets: [googleApiKey] }, chatWithBibleBot);
-export const ingest = onCall({ secrets: [googleApiKey] }, ingestSermon);
+export const chat = onCall(chatWithBibleBot);
+export const ingest = onCall(ingestSermon);
 
 export { extractEventFromPost, backfillEvents } from './ai/events';
