@@ -4,7 +4,7 @@ import React from 'react';
 import { Post } from '@/types';
 import { motion } from 'framer-motion';
 import { Heart, MessageCircle, Share2, Facebook, Youtube, Pin, Sparkles, Play } from 'lucide-react';
-import { CommentsSection } from './CommentsSection';
+import { CommentsSection } from './CommentsSectionV2';
 import { ShareMenu } from './ShareMenu';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
