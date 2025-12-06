@@ -38,7 +38,7 @@ export const EmailComposer: React.FC<EmailComposerProps> = ({
                 // Try to sign in again to get the token
                 // Note: This might not work seamlessly inside the modal flow without state management updates
                 // For now, we'll show an error if no token is present
-                setError("Please sign in with Google again to enable email sending.");
+                setError("Gmail access token missing. Please sign in with Google again, or use your default email app.");
                 setSending(false);
                 return;
             }
@@ -145,12 +145,38 @@ export const EmailComposer: React.FC<EmailComposerProps> = ({
                                 </div>
 
                                 {error && (
-                                    <div className="text-red-500 text-sm bg-red-50 dark:bg-red-900/20 p-3 rounded-lg">
-                                        {error}
+                                    <div className="flex flex-col gap-2">
+                                        <div className="text-red-500 text-sm bg-red-50 dark:bg-red-900/20 p-3 rounded-lg">
+                                            {error}
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const mailtoLink = `mailto:${recipient}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+                                                window.open(mailtoLink, '_blank');
+                                                onClose();
+                                            }}
+                                            className="w-full py-2 bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors"
+                                        >
+                                            Send using Default Email App
+                                        </button>
                                     </div>
                                 )}
 
-                                <div className="flex justify-end pt-2">
+                                <div className="flex justify-end pt-2 gap-2">
+                                    {!googleAccessToken && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const mailtoLink = `mailto:${recipient}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+                                                window.open(mailtoLink, '_blank');
+                                                onClose();
+                                            }}
+                                            className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full text-sm font-medium transition-colors"
+                                        >
+                                            Use Default App
+                                        </button>
+                                    )}
                                     <button
                                         type="submit"
                                         disabled={sending}
@@ -164,7 +190,7 @@ export const EmailComposer: React.FC<EmailComposerProps> = ({
                                         ) : (
                                             <>
                                                 <Send className="w-4 h-4" />
-                                                Send Email
+                                                Send with Gmail
                                             </>
                                         )}
                                     </button>

@@ -298,24 +298,36 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
 
     // Real-time likes listener
     React.useEffect(() => {
+        console.log(`[PostCard] Setting up likes listener for ${post.id}`);
         const likesRef = collection(db, 'posts', post.id, 'likes');
         const unsubscribe = onSnapshot(likesRef, (snapshot) => {
+            console.log(`[PostCard] Likes update for ${post.id}: count=${snapshot.size}, user=${user?.uid}`);
             setLikeCount(snapshot.size);
             if (user) {
-                setIsLiked(snapshot.docs.some(doc => doc.id === user.uid));
+                const isLikedByMe = snapshot.docs.some(doc => doc.id === user.uid);
+                console.log(`[PostCard] Is liked by me: ${isLikedByMe}`);
+                setIsLiked(isLikedByMe);
             }
+        }, (error) => {
+            console.error(`[PostCard] Likes listener error for ${post.id}:`, error);
         });
 
         return () => unsubscribe();
     }, [post.id, user]);
 
     const handleLike = async () => {
-        if (!user) return; // TODO: Trigger auth modal
+        if (!user) {
+            console.log('[PostCard] User not logged in, cannot like');
+            // TODO: Trigger auth modal
+            return;
+        }
 
+        console.log(`[PostCard] Toggling like for ${post.id}. Current state: ${isLiked}`);
         const likeRef = doc(db, 'posts', post.id, 'likes', user.uid);
         try {
             if (isLiked) {
                 await deleteDoc(likeRef);
+                console.log('[PostCard] Like removed');
             } else {
                 await setDoc(likeRef, {
                     timestamp: serverTimestamp(),
@@ -323,9 +335,10 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
                     userName: user.displayName,
                     userPhoto: user.photoURL
                 });
+                console.log('[PostCard] Like added');
             }
         } catch (error) {
-            console.error('Error updating like:', error);
+            console.error('[PostCard] Error updating like:', error);
         }
     };
 

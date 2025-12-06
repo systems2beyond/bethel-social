@@ -43,10 +43,15 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({ post }) => {
     };
 
     const handleCalendar = () => {
-        // Simple Google Calendar link for now
         const title = encodeURIComponent(`Post by ${post.author?.name || 'Bethel Metropolitan'}`);
-        const details = encodeURIComponent(`${post.content}\n\nLink: ${shareUrl}`);
-        const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&details=${details}`;
+        const details = encodeURIComponent(`${post.content.substring(0, 1000)}\n\nLink: ${shareUrl}`);
+
+        // Create start and end times (now + 1 hour)
+        const now = new Date();
+        const start = now.toISOString().replace(/-|:|\.\d\d\d/g, '');
+        const end = new Date(now.getTime() + 60 * 60 * 1000).toISOString().replace(/-|:|\.\d\d\d/g, '');
+
+        const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&details=${details}&dates=${start}/${end}`;
         window.open(url, '_blank');
         setIsOpen(false);
     };

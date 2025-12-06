@@ -24,6 +24,10 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ postId }) => {
     const [showGifPicker, setShowGifPicker] = useState(false);
     const [showMentions, setShowMentions] = useState(false);
     const [mentionQuery, setMentionQuery] = useState('');
+    const [gifs, setGifs] = useState<any[]>([]);
+    const [loadingGifs, setLoadingGifs] = useState(false);
+    const [gifSearch, setGifSearch] = useState('');
+    const GIPHY_API_KEY = 'sgTzkiK7jpgLn20oW2mEQJGNNRZbTMav';
     const fileInputRef = useRef<HTMLInputElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -55,6 +59,32 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ postId }) => {
 
         return () => unsubscribe();
     }, [postId]);
+
+    useEffect(() => {
+        if (showGifPicker) {
+            fetchGifs();
+        }
+    }, [showGifPicker, gifSearch]);
+
+    const fetchGifs = async () => {
+        setLoadingGifs(true);
+        try {
+            const endpoint = gifSearch ? 'search' : 'trending';
+            const url = `https://api.giphy.com/v1/gifs/${endpoint}?api_key=${GIPHY_API_KEY}&limit=20&rating=g${gifSearch ? `&q=${encodeURIComponent(gifSearch)}` : ''}`;
+            const res = await fetch(url);
+            const data = await res.json();
+            setGifs(data.data);
+        } catch (error) {
+            console.error("Error fetching GIFs:", error);
+        } finally {
+            setLoadingGifs(false);
+        }
+    };
+
+    const handleGifSelect = (gif: any) => {
+        setMediaPreview(gif.images.fixed_height.url);
+        setShowGifPicker(false);
+    };
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
@@ -317,8 +347,9 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ postId }) => {
                                     </button>
                                     <button
                                         type="button"
-                                        className="p-2 rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-                                        title="Poll"
+                                        className="p-2 rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors opacity-50 cursor-not-allowed"
+                                        title="Polls (Coming Soon)"
+                                        disabled
                                     >
                                         <AlignLeft className="w-5 h-5" />
                                     </button>
@@ -350,28 +381,56 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ postId }) => {
 
                             {/* Emoji Picker Popover */}
                             {showEmojiPicker && (
-                                <div className="absolute top-full left-0 mt-2 z-50">
-                                    <div className="fixed inset-0 z-40" onClick={() => setShowEmojiPicker(false)} />
-                                    <div className="relative z-50">
-                                        <EmojiPicker onEmojiClick={handleEmojiClick} />
+                                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm" onClick={() => setShowEmojiPicker(false)}>
+                                    <div className="relative bg-white dark:bg-zinc-900 rounded-xl shadow-2xl" onClick={e => e.stopPropagation()}>
+                                        <EmojiPicker onEmojiClick={handleEmojiClick} theme={document.documentElement.classList.contains('dark') ? 'dark' as any : 'light' as any} />
                                     </div>
                                 </div>
                             )}
 
-                            {/* GIF Picker Popover (Mock) */}
+
+
+                            return (
+                            // ... (existing JSX)
+                            {/* GIF Picker Popover */}
                             {showGifPicker && (
-                                <div className="absolute top-full left-0 mt-2 z-50 w-72 bg-white dark:bg-zinc-900 rounded-xl shadow-xl border border-gray-200 dark:border-zinc-700 p-2">
-                                    <div className="fixed inset-0 z-40" onClick={() => setShowGifPicker(false)} />
-                                    <div className="relative z-50 space-y-2">
-                                        <input
-                                            type="text"
-                                            placeholder="Search GIFs..."
-                                            className="w-full px-3 py-2 rounded-lg bg-gray-100 dark:bg-zinc-800 border-none text-sm"
-                                        />
-                                        <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
-                                            {[1, 2, 3, 4].map(i => (
-                                                <div key={i} className="aspect-video bg-gray-200 dark:bg-zinc-800 rounded-lg animate-pulse" />
-                                            ))}
+                                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm" onClick={() => setShowGifPicker(false)}>
+                                    <div className="relative w-full max-w-md bg-white dark:bg-zinc-900 rounded-xl shadow-2xl border border-gray-200 dark:border-zinc-700 p-4" onClick={e => e.stopPropagation()}>
+                                        <div className="flex items-center justify-between mb-4">
+                                            <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">Select a GIF</h3>
+                                            <button onClick={() => setShowGifPicker(false)} className="p-1 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full text-gray-500">
+                                                <X className="w-5 h-5" />
+                                            </button>
+                                        </div>
+                                        <div className="space-y-4">
+                                            <input
+                                                type="text"
+                                                value={gifSearch}
+                                                onChange={(e) => setGifSearch(e.target.value)}
+                                                placeholder="Search GIFs..."
+                                                className="w-full px-4 py-2 rounded-lg bg-gray-100 dark:bg-zinc-800 border-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-gray-100 placeholder-gray-500"
+                                            />
+                                            <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto">
+                                                {loadingGifs ? (
+                                                    [1, 2, 3, 4].map(i => (
+                                                        <div key={i} className="aspect-video bg-gray-200 dark:bg-zinc-800 rounded-lg animate-pulse" />
+                                                    ))
+                                                ) : (
+                                                    gifs.map(gif => (
+                                                        <button
+                                                            key={gif.id}
+                                                            onClick={() => handleGifSelect(gif)}
+                                                            className="relative aspect-video rounded-lg overflow-hidden hover:opacity-80 transition-opacity"
+                                                        >
+                                                            <img
+                                                                src={gif.images.fixed_height_small.url}
+                                                                alt={gif.title}
+                                                                className="w-full h-full object-cover"
+                                                            />
+                                                        </button>
+                                                    ))
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
