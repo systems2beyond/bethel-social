@@ -121,3 +121,4 @@ export const chat = onCall(chatWithBibleBot);
 export const ingest = onCall(ingestSermon);
 
 export { extractEventFromPost, backfillEvents } from './ai/events';
+export { onCommentWritten } from './triggers/comments';

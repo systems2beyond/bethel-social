@@ -54,15 +54,27 @@ export const onCommentCreated = onDocumentCreated(
             const postContent = postData?.content || "No content";
             const postAuthor = postData?.author?.name || "Unknown";
 
-            // B. Recent Comments (Thread Context)
-            // Get last 5 comments before this one to understand the conversation
-            const commentsSnapshot = await db.collection('posts').doc(postId).collection('comments')
-                .orderBy('timestamp', 'desc')
-                .limit(5)
-                .get();
+            // B. Thread Context (Ancestors)
+            // Walk up the parentId chain to understand the specific conversation path
+            const threadComments: any[] = [];
+            let currentComment: any = comment;
+            let depth = 0;
+            const MAX_DEPTH = 5;
 
-            // Reverse to get chronological order
-            const recentComments = commentsSnapshot.docs.map(doc => doc.data()).reverse();
+            // Add the current comment first (it's the one triggering the reply)
+            threadComments.push(currentComment);
+
+            while (currentComment.parentId && depth < MAX_DEPTH) {
+                const parentDoc = await db.collection('posts').doc(postId).collection('comments').doc(currentComment.parentId).get();
+                if (!parentDoc.exists) break;
+
+                currentComment = parentDoc.data();
+                threadComments.unshift(currentComment); // Add to beginning to maintain chronological order
+                depth++;
+            }
+
+            // If thread is short, maybe fetch some recent top-level comments for general vibe? 
+            // For now, let's stick to the strict thread context to stay focused.
 
             // 3. Construct Prompt
             const systemPrompt = `
@@ -73,14 +85,14 @@ export const onCommentCreated = onDocumentCreated(
             - **Biblical & Grounded:** You speak with wisdom, referencing scripture naturally (KJV or NIV).
             - **Friendly & Approachable:** You are not a robot; you are a helpful member of the community.
             - **Humble:** You acknowledge you are an AI helper, but you strive to serve like a disciple.
-            - **Context Aware:** You are reading a comment thread on a social media post.
+            - **Context Aware:** You are reading a specific thread of comments on a social media post.
             
             **The Post You Are Commenting On:**
             Author: ${postAuthor}
             Content: "${postContent}"
             
-            **Recent Comments:**
-            ${recentComments.map(c => `- ${c.author.name}: "${c.content}"`).join('\n')}
+            **The Conversation Thread (Oldest to Newest):**
+            ${threadComments.map(c => `- ${c.author.name}: "${c.content}"`).join('\n')}
             
             **Instructions:**
             - Reply to the last comment by **${comment.author.name}**.
@@ -88,6 +100,7 @@ export const onCommentCreated = onDocumentCreated(
             - Answer their question or offer spiritual encouragement.
             - If they ask for prayer, offer a short prayer.
             - Use emojis sparingly but effectively.
+            - Maintain the flow of the specific conversation thread.
             `;
 
             const userPrompt = `Reply to this comment: "${comment.content}"`;
@@ -106,19 +119,24 @@ export const onCommentCreated = onDocumentCreated(
             const responseText = result.text;
 
             // 5. Post Reply
-            await db.collection('posts').doc(postId).collection('comments').add({
+            const replyData = {
                 postId: postId,
                 author: {
                     id: 'ai-matthew',
                     name: 'Matthew',
-                    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Matthew&clothing=graphicShirt&eyes=happy&mouth=smile&top=shortHair' // Placeholder avatar
+                    avatarUrl: 'https://bethel-metro-social.web.app/images/matthew-avatar.png'
                 },
                 content: responseText,
                 timestamp: Date.now(),
-                isAi: true // Flag for frontend styling
-            });
+                isAi: true, // Flag for frontend styling
+                parentId: commentId // Reply to the comment that triggered this
+            };
 
-            logger.info(`Matthew replied to comment ${commentId}`);
+            logger.error(`[DEBUG] Preparing to write reply. CommentId (Parent): ${commentId}, PostId: ${postId}`, replyData);
+
+            await db.collection('posts').doc(postId).collection('comments').add(replyData);
+
+            logger.error(`Matthew replied to comment ${commentId} in thread. ParentId set to: ${commentId}`);
 
         } catch (error) {
             logger.error("Error generating Matthew response:", error);

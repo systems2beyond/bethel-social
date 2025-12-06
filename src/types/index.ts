@@ -47,4 +47,6 @@ export interface Comment {
     content: string;
     timestamp: number;
     isAi?: boolean;
+    parentId?: string; // For nested replies
+    likes?: number;
 }

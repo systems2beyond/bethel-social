@@ -76,82 +76,88 @@ export const BibleBot: React.FC = () => {
                 {isOpen ? (
                     <span className="text-2xl font-bold">×</span>
                 ) : (
-                    <Bot className="w-8 h-8" />
+                    <div className="w-full h-full rounded-full overflow-hidden border-2 border-white/20">
+                        <img src="/images/matthew-avatar.png" alt="Chat" className="w-full h-full object-cover object-center" />
+                    </div>
                 )}
-            </button>
+            </button >
 
             {/* Chat Window */}
             <AnimatePresence>
-                {isOpen && (
-                    <motion.div
-                        initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 20, scale: 0.95 }}
-                        className="fixed bottom-24 right-6 w-96 h-[500px] bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden z-50"
-                    >
-                        {/* Header */}
-                        <div className="bg-blue-600 p-4 text-white flex items-center justify-between">
-                            <div className="flex items-center space-x-2">
-                                <Bot className="w-6 h-6" />
-                                <span className="font-semibold">Bethel Bible Bot</span>
+                {
+                    isOpen && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+                            className="fixed bottom-24 right-6 w-96 h-[500px] bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden z-50"
+                        >
+                            {/* Header */}
+                            <div className="bg-blue-600 p-4 text-white flex items-center justify-between">
+                                <div className="flex items-center space-x-2">
+                                    <div className="w-8 h-8 rounded-full overflow-hidden border border-white/30">
+                                        <img src="/images/matthew-avatar.png" alt="Matthew" className="w-full h-full object-cover object-center" />
+                                    </div>
+                                    <span className="font-semibold">Matthew (AI)</span>
+                                </div>
                             </div>
-                        </div>
 
-                        {/* Messages */}
-                        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
-                            {messages.map((msg) => (
-                                <div
-                                    key={msg.id}
-                                    className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                                >
+                            {/* Messages */}
+                            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+                                {messages.map((msg) => (
                                     <div
-                                        className={`max-w-[80%] p-3 rounded-2xl text-sm ${msg.role === 'user'
-                                            ? 'bg-blue-600 text-white rounded-br-none'
-                                            : 'bg-white text-gray-800 border border-gray-200 rounded-bl-none shadow-sm'
-                                            }`}
+                                        key={msg.id}
+                                        className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                                     >
-                                        {msg.content}
-                                        {msg.handoff && (
-                                            <div className="mt-2 pt-2 border-t border-gray-100 flex items-center text-blue-600 font-medium">
-                                                <Phone className="w-4 h-4 mr-2" />
-                                                <span>Staff Notified</span>
-                                            </div>
-                                        )}
+                                        <div
+                                            className={`max-w-[80%] p-3 rounded-2xl text-sm ${msg.role === 'user'
+                                                ? 'bg-blue-600 text-white rounded-br-none'
+                                                : 'bg-white text-gray-800 border border-gray-200 rounded-bl-none shadow-sm'
+                                                }`}
+                                        >
+                                            {msg.content}
+                                            {msg.handoff && (
+                                                <div className="mt-2 pt-2 border-t border-gray-100 flex items-center text-blue-600 font-medium">
+                                                    <Phone className="w-4 h-4 mr-2" />
+                                                    <span>Staff Notified</span>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
-                            {isLoading && (
-                                <div className="flex justify-start">
-                                    <div className="bg-white p-3 rounded-2xl rounded-bl-none shadow-sm border border-gray-200">
-                                        <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+                                ))}
+                                {isLoading && (
+                                    <div className="flex justify-start">
+                                        <div className="bg-white p-3 rounded-2xl rounded-bl-none shadow-sm border border-gray-200">
+                                            <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+                                        </div>
                                     </div>
-                                </div>
-                            )}
-                            <div ref={messagesEndRef} />
-                        </div>
-
-                        {/* Input */}
-                        <form onSubmit={handleSubmit} className="p-4 bg-white border-t border-gray-100">
-                            <div className="flex items-center space-x-2">
-                                <input
-                                    type="text"
-                                    value={input}
-                                    onChange={(e) => setInput(e.target.value)}
-                                    placeholder="Ask a question..."
-                                    className="flex-1 p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                                <button
-                                    type="submit"
-                                    disabled={isLoading || !input.trim()}
-                                    className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                                >
-                                    <Send className="w-5 h-5" />
-                                </button>
+                                )}
+                                <div ref={messagesEndRef} />
                             </div>
-                        </form>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+
+                            {/* Input */}
+                            <form onSubmit={handleSubmit} className="p-4 bg-white border-t border-gray-100">
+                                <div className="flex items-center space-x-2">
+                                    <input
+                                        type="text"
+                                        value={input}
+                                        onChange={(e) => setInput(e.target.value)}
+                                        placeholder="Ask a question..."
+                                        className="flex-1 p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                    <button
+                                        type="submit"
+                                        disabled={isLoading || !input.trim()}
+                                        className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                                    >
+                                        <Send className="w-5 h-5" />
+                                    </button>
+                                </div>
+                            </form>
+                        </motion.div>
+                    )
+                }
+            </AnimatePresence >
         </>
     );
 };

@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { X, Send, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { createPortal } from 'react-dom';
 
 interface EmailComposerProps {
     isOpen: boolean;
@@ -33,6 +34,7 @@ export const EmailComposer: React.FC<EmailComposerProps> = ({
 
         try {
             let token = googleAccessToken;
+            console.error("DEBUG: EmailComposer token check:", token ? "Present" : "Missing");
 
             if (!token) {
                 // Try to sign in again to get the token
@@ -86,9 +88,9 @@ export const EmailComposer: React.FC<EmailComposerProps> = ({
 
     if (!isOpen) return null;
 
-    return (
+    const content = (
         <AnimatePresence>
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
                 <motion.div
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
@@ -149,22 +151,31 @@ export const EmailComposer: React.FC<EmailComposerProps> = ({
                                         <div className="text-red-500 text-sm bg-red-50 dark:bg-red-900/20 p-3 rounded-lg">
                                             {error}
                                         </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                const mailtoLink = `mailto:${recipient}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-                                                window.open(mailtoLink, '_blank');
-                                                onClose();
-                                            }}
-                                            className="w-full py-2 bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors"
-                                        >
-                                            Send using Default Email App
-                                        </button>
+                                        <div className="flex gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => signInWithGoogle()}
+                                                className="flex-1 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg text-sm font-medium hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                                            >
+                                                Sign in with Google
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const mailtoLink = `mailto:${recipient}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+                                                    window.open(mailtoLink, '_blank');
+                                                    onClose();
+                                                }}
+                                                className="flex-1 py-2 bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors"
+                                            >
+                                                Use Default App
+                                            </button>
+                                        </div>
                                     </div>
                                 )}
 
                                 <div className="flex justify-end pt-2 gap-2">
-                                    {!googleAccessToken && (
+                                    {!googleAccessToken && !error && (
                                         <button
                                             type="button"
                                             onClick={() => {
@@ -202,4 +213,7 @@ export const EmailComposer: React.FC<EmailComposerProps> = ({
             </div>
         </AnimatePresence>
     );
+
+    if (typeof document === 'undefined') return null;
+    return createPortal(content, document.body);
 };

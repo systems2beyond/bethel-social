@@ -3,14 +3,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Share2, Mail, MessageSquare, Calendar, Link as LinkIcon, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Post } from '@/types';
+import { Post, Comment } from '@/types';
 import { EmailComposer } from './EmailComposer';
 
 interface ShareMenuProps {
     post: Post;
+    comment?: Comment;
 }
 
-export const ShareMenu: React.FC<ShareMenuProps> = ({ post }) => {
+export const ShareMenu: React.FC<ShareMenuProps> = ({ post, comment }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [showEmailComposer, setShowEmailComposer] = useState(false);
     const [copied, setCopied] = useState(false);
@@ -28,7 +29,13 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({ post }) => {
     }, []);
 
     const shareUrl = typeof window !== 'undefined' ? `${window.location.origin}/post/${post.id}` : '';
-    const shareText = `Check out this post from Bethel Metropolitan: ${post.content.substring(0, 100)}... ${shareUrl}`;
+
+    // Customize text based on whether we are sharing the post or a specific comment
+    const contentToShare = comment ? comment.content : post.content;
+    const authorName = comment ? comment.author.name : (post.author?.name || 'Bethel Metropolitan');
+    const typeLabel = comment ? 'comment' : 'post';
+
+    const shareText = `Check out this ${typeLabel} by ${authorName}: ${contentToShare.substring(0, 100)}... ${shareUrl}`;
 
     const handleCopyLink = () => {
         navigator.clipboard.writeText(shareUrl);
@@ -43,8 +50,8 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({ post }) => {
     };
 
     const handleCalendar = () => {
-        const title = encodeURIComponent(`Post by ${post.author?.name || 'Bethel Metropolitan'}`);
-        const details = encodeURIComponent(`${post.content.substring(0, 1000)}\n\nLink: ${shareUrl}`);
+        const title = encodeURIComponent(`${typeLabel === 'comment' ? 'Comment' : 'Post'} by ${authorName}`);
+        const details = encodeURIComponent(`${contentToShare.substring(0, 1000)}\n\nLink: ${shareUrl}`);
 
         // Create start and end times (now + 1 hour)
         const now = new Date();

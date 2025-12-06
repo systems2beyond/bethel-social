@@ -435,7 +435,9 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
                     className={`flex items-center space-x-2 transition-colors ${showComments ? 'text-blue-600' : 'text-gray-500 dark:text-gray-400 hover:text-blue-500'}`}
                 >
                     <MessageCircle className="w-5 h-5" />
-                    <span className="text-sm font-medium">Comment</span>
+                    <span className="text-sm font-medium">
+                        {post.comments && post.comments > 0 ? `${post.comments} Comments` : 'Comment'}
+                    </span>
                 </button>
 
                 <button
@@ -452,7 +454,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
             {/* Comments Section */}
             {showComments && (
                 <div className="px-4 pb-4 animate-in slide-in-from-top-2 duration-200">
-                    <CommentsSection postId={post.id} />
+                    <CommentsSection post={post} />
                 </div>
             )}
         </motion.div>

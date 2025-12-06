@@ -36,7 +36,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.backfillEvents = exports.extractEventFromPost = exports.ingest = exports.chat = exports.manualYoutubeSync = exports.syncYoutube = exports.fbWebhook = exports.syncFacebook = exports.ingestSocialPost = exports.scheduledWebsiteCrawl = exports.ingestContent = exports.debugPosts = exports.manualFacebookSync = void 0;
+exports.onCommentWritten = exports.backfillEvents = exports.extractEventFromPost = exports.ingest = exports.chat = exports.manualYoutubeSync = exports.syncYoutube = exports.fbWebhook = exports.syncFacebook = exports.ingestSocialPost = exports.scheduledWebsiteCrawl = exports.ingestContent = exports.debugPosts = exports.manualFacebookSync = void 0;
 const admin = __importStar(require("firebase-admin"));
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const https_1 = require("firebase-functions/v2/https");
@@ -142,4 +142,6 @@ exports.ingest = (0, https_1.onCall)(chatbot_1.ingestSermon);
 var events_1 = require("./ai/events");
 Object.defineProperty(exports, "extractEventFromPost", { enumerable: true, get: function () { return events_1.extractEventFromPost; } });
 Object.defineProperty(exports, "backfillEvents", { enumerable: true, get: function () { return events_1.backfillEvents; } });
+var comments_1 = require("./triggers/comments");
+Object.defineProperty(exports, "onCommentWritten", { enumerable: true, get: function () { return comments_1.onCommentWritten; } });
 //# sourceMappingURL=index.js.map

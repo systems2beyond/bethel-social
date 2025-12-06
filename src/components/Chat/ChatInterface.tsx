@@ -202,10 +202,10 @@ export function ChatInterface() {
                     )}
                 >
                     <div className={cn(
-                        "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
-                        msg.role === 'user' ? "bg-blue-600" : "bg-purple-600"
+                        "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden",
+                        msg.role === 'user' ? "bg-blue-600" : "bg-transparent border border-gray-200 dark:border-gray-700"
                     )}>
-                        {msg.role === 'user' ? <User className="w-5 h-5 text-white" /> : <Bot className="w-5 h-5 text-white" />}
+                        {msg.role === 'user' ? <User className="w-5 h-5 text-white" /> : <img src="/images/matthew-avatar.png" alt="Matthew" className="w-full h-full object-cover object-center" />}
                     </div>
 
                     <div className={cn(
@@ -221,8 +221,8 @@ export function ChatInterface() {
 
             {isLoading && (
                 <div className="flex items-start space-x-4">
-                    <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center flex-shrink-0">
-                        <Bot className="w-5 h-5 text-white" />
+                    <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 border border-gray-200 dark:border-gray-700">
+                        <img src="/images/matthew-avatar.png" alt="Matthew" className="w-full h-full object-cover object-center" />
                     </div>
                     <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl rounded-tl-none px-6 py-4 shadow-sm">
                         <div className="flex space-x-2">
