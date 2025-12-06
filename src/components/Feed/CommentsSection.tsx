@@ -120,7 +120,10 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
     };
 
     const handleCommentLike = async (commentId: string) => {
-        if (!user) return; // TODO: Trigger auth modal
+        if (!user) {
+            alert("Please sign in to like comments.");
+            return;
+        }
 
         const likeRef = doc(db, 'posts', postId, 'comments', commentId, 'likes', user.uid);
         const commentRef = doc(db, 'posts', postId, 'comments', commentId);
@@ -264,7 +267,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
 
         // Dynamic classes for trending styling
         const containerClasses = (isTrending || isTrendingPreview)
-            ? "rounded-xl border border-yellow-200 dark:border-yellow-900/50 bg-yellow-50/50 dark:bg-yellow-900/10 overflow-hidden mb-2"
+            ? "rounded-xl border border-yellow-200 dark:border-yellow-900/50 bg-yellow-50/50 dark:bg-yellow-900/10 mb-2"
             : "relative";
 
         const contentClasses = (isTrending || isTrendingPreview)
