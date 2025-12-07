@@ -420,21 +420,6 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
                         ))}
                     </div>
                 )}
-
-                {/* Show Previous Replies Button - Only in Thread Mode */}
-                {!isCollapsed && !isExpanded && hiddenCount > 0 && focusedCommentId && (
-                    <div className="ml-3 md:ml-12 mt-2">
-                        <button
-                            onClick={() => toggleThreadExpand(comment.id)}
-                            className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
-                        >
-                            <div className="w-4 h-4 rounded-full bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center">
-                                <span className="text-[10px]">+</span>
-                            </div>
-                            Show {hiddenCount} previous replies
-                        </button>
-                    </div>
-                )}
             </div>
         );
     };
