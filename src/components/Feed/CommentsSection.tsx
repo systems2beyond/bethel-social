@@ -89,7 +89,11 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
 
     const handleAddComment = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newComment.trim() || !user || loading) return;
+        if (!user) {
+            alert("Please sign in to comment.");
+            return;
+        }
+        if (!newComment.trim() || loading) return;
 
         setLoading(true);
         try {
@@ -468,20 +472,31 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
                             }
                         }}
                     />
-                    <div className="absolute right-2 bottom-2 flex items-center space-x-2">
+                    <div className="absolute right-2 bottom-2 flex items-center space-x-1">
                         <button
                             type="button"
                             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                            className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-full hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors"
+                            className="p-2 text-gray-400 hover:text-yellow-500 rounded-full hover:bg-gray-100 dark:hover:bg-zinc-700 transition-colors"
+                            title="Add emoji"
                         >
                             <Smile className="w-5 h-5" />
                         </button>
                         <button
+                            type="button"
+                            onClick={() => alert("GIF integration coming soon!")}
+                            className="p-2 text-gray-400 hover:text-pink-500 rounded-full hover:bg-gray-100 dark:hover:bg-zinc-700 transition-colors"
+                            title="Add GIF"
+                        >
+                            <span className="font-bold text-xs border border-current rounded px-1">GIF</span>
+                        </button>
+                        <div className="w-px h-4 bg-gray-200 dark:bg-zinc-700 mx-1" />
+                        <button
                             type="submit"
                             disabled={!newComment.trim() || loading}
-                            className="p-1.5 bg-blue-600 text-white rounded-full hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+                            className="p-2 text-blue-600 hover:text-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                            title="Send comment"
                         >
-                            <Send className="w-4 h-4" />
+                            <Send className="w-5 h-5" />
                         </button>
                     </div>
                 </div>
