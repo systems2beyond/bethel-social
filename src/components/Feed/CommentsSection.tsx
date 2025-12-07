@@ -180,6 +180,24 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
         });
     };
 
+    const [focusedCommentId, setFocusedCommentId] = useState<string | null>(null);
+
+    // Helper to get ancestors of a comment
+    const getAncestors = (commentId: string, allComments: Comment[]): Comment[] => {
+        const ancestors: Comment[] = [];
+        let currentComment = allComments.find(c => c.id === commentId);
+        while (currentComment && currentComment.parentId) {
+            const parent = allComments.find(c => c.id === currentComment!.parentId);
+            if (parent) {
+                ancestors.unshift(parent);
+                currentComment = parent;
+            } else {
+                break;
+            }
+        }
+        return ancestors;
+    };
+
     // Helper to get all descendants (children, grandchildren, etc.)
     const getAllDescendants = (parentId: string, allComments: Comment[]): Comment[] => {
         const directChildren = allComments.filter(c => c.parentId === parentId);
@@ -191,7 +209,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
     };
 
     // Recursive component for rendering threads
-    const CommentThread = ({ comment, depth = 0, isTrendingPreview = false, isTrending = false }: { comment: Comment, depth?: number, isTrendingPreview?: boolean, isTrending?: boolean }) => {
+    const CommentThread = ({ comment, depth = 0, isTrendingPreview = false, isTrending = false, isFocused = false }: { comment: Comment, depth?: number, isTrendingPreview?: boolean, isTrending?: boolean, isFocused?: boolean }) => {
         const [isLiked, setIsLiked] = useState(false);
 
         // Check if user liked this comment
@@ -213,7 +231,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
 
         // Trending Logic (only for top-level comments)
         let trendingDescendant: Comment | null = null;
-        if (depth === 0 && allDescendants.length > 0) {
+        if (depth === 0 && allDescendants.length > 0 && !focusedCommentId) {
             // Simple trending: most likes. If tie, most recent.
             trendingDescendant = [...allDescendants].sort((a, b) => {
                 const likesA = a.likes || 0;
@@ -227,45 +245,12 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
         let visibleReplies: Comment[] = [];
         let showTrendingPreviewBlock = false;
 
-        if (isExpanded) {
+        // Strict Paging Logic: Only the focused comment shows its direct children.
+        // All other comments (ancestors, children) hide their replies to prevent deep indentation.
+        if (focusedCommentId === comment.id && !isCollapsed) {
             visibleReplies = directReplies;
         } else {
-            // Default View: Last 2 direct replies
-            const lastTwo = directReplies.slice(-2);
-            visibleReplies = lastTwo;
-
-            // Helper to check if a descendant is effectively visible in the current view hierarchy
-            const isDescendantVisible = (targetId: string, rootId: string): boolean => {
-                // 1. Build path from target to root
-                const path: Comment[] = [];
-                let curr = comments.find(c => c.id === targetId);
-                while (curr && curr.id !== rootId) {
-                    path.unshift(curr);
-                    curr = comments.find(c => c.id === curr?.parentId);
-                }
-
-                // 2. Traverse down the path checking visibility at each step
-                let currentParentId = rootId;
-                for (const node of path) {
-                    const isParentExpanded = expandedThreads.has(currentParentId);
-                    if (!isParentExpanded) {
-                        // If parent is collapsed, node must be in the last 2 replies
-                        const siblings = comments.filter(c => c.parentId === currentParentId);
-                        // Note: Assuming comments are sorted chronologically as they are in the main render
-                        const visibleSiblings = siblings.slice(-2);
-                        if (!visibleSiblings.find(s => s.id === node.id)) {
-                            return false; // Hidden by collapse
-                        }
-                    }
-                    currentParentId = node.id;
-                }
-                return true;
-            };
-
-            // Show trending PREVIEW if it exists and is NOT effectively visible
-            if (trendingDescendant && !isDescendantVisible(trendingDescendant.id, comment.id)) {
-                showTrendingPreviewBlock = true;
-            }
+            visibleReplies = [];
         }
 
         const hiddenCount = directReplies.length - visibleReplies.length;
@@ -277,7 +262,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
 
         const contentClasses = (isTrending || isTrendingPreview)
             ? "relative flex gap-3 px-4 py-3 bg-transparent transition-colors group"
-            : "relative flex gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors group";
+            : `relative flex gap-3 px-4 py-3 ${isFocused ? 'bg-blue-50/50 dark:bg-blue-900/10 ring-1 ring-blue-100 dark:ring-blue-800' : 'hover:bg-gray-50 dark:hover:bg-zinc-800/50'} transition-colors group`;
 
         return (
             <div className={containerClasses}>
@@ -291,8 +276,8 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
 
                 {/* The Comment Itself */}
                 <div className={contentClasses}>
-                    {/* Vertical Thread Line (if it has replies and NOT collapsed) */}
-                    {directReplies.length > 0 && !isCollapsed && !isTrendingPreview && !isTrending && (
+                    {/* Vertical Thread Line - Only show if we are the focused comment and have expanded replies */}
+                    {directReplies.length > 0 && !isCollapsed && !isTrendingPreview && !isTrending && focusedCommentId === comment.id && (
                         <div className="absolute left-[1.35rem] md:left-[2.25rem] top-12 bottom-0 w-0.5 bg-gray-200 dark:bg-zinc-800 group-hover:bg-gray-300 dark:group-hover:bg-zinc-700 transition-colors" />
                     )}
 
@@ -326,8 +311,8 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
                                 · {formatDistanceToNow(comment.timestamp, { addSuffix: true })}
                             </span>
 
-                            {/* Collapse Toggle (Only show on main thread, not inside trending preview) */}
-                            {allDescendants.length > 0 && !isTrendingPreview && !isTrending && (
+                            {/* Collapse Toggle (Only show if we are the focused comment) */}
+                            {allDescendants.length > 0 && !isTrendingPreview && !isTrending && focusedCommentId === comment.id && (
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
@@ -386,6 +371,22 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
                                         {(comment.likes || 0) > 0 && <span className="text-xs">{comment.likes}</span>}
                                     </button>
 
+                                    {/* Thread Focus Button (Drill-down) - Show for ANY comment with hidden replies */}
+                                    {directReplies.length > 0 && focusedCommentId !== comment.id && (
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setFocusedCommentId(comment.id);
+                                            }}
+                                            className="flex items-center gap-2 group/btn"
+                                        >
+                                            <div className="w-8 h-px bg-gray-300 dark:bg-zinc-700 group-hover/btn:bg-gray-400 transition-colors" />
+                                            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 group-hover/btn:text-gray-700 dark:group-hover/btn:text-gray-200 transition-colors">
+                                                View {directReplies.length} {directReplies.length === 1 ? 'reply' : 'replies'}
+                                            </span>
+                                        </button>
+                                    )}
+
                                     <div className="relative">
                                         <ShareMenu post={post} comment={comment} />
                                     </div>
@@ -420,8 +421,8 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
                     </div>
                 )}
 
-                {/* Show Previous Replies Button */}
-                {!isCollapsed && !isExpanded && hiddenCount > 0 && (
+                {/* Show Previous Replies Button - Only in Thread Mode */}
+                {!isCollapsed && !isExpanded && hiddenCount > 0 && focusedCommentId && (
                     <div className="ml-3 md:ml-12 mt-2">
                         <button
                             onClick={() => toggleThreadExpand(comment.id)}
@@ -438,8 +439,60 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
         );
     };
 
-    // Main Render
-    const topLevelComments = comments.filter(c => !c.parentId);
+    // Main Render Logic
+    let contentToRender;
+
+    if (focusedCommentId) {
+        const focusedComment = comments.find(c => c.id === focusedCommentId);
+        if (focusedComment) {
+            const ancestors = getAncestors(focusedCommentId, comments);
+            contentToRender = (
+                <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+                    {/* Back Button */}
+                    <button
+                        onClick={() => setFocusedCommentId(null)}
+                        className="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors mb-4"
+                    >
+                        <div className="p-1 rounded-full bg-gray-100 dark:bg-zinc-800">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 19-7-7 7-7" /><path d="M19 12H5" /></svg>
+                        </div>
+                        Back to all comments
+                    </button>
+
+                    {/* Ancestors (Context) */}
+                    {ancestors.length > 0 && (
+                        <div className="space-y-4 opacity-75">
+                            {ancestors.map(ancestor => (
+                                <div key={ancestor.id} className="relative">
+                                    <CommentThread comment={ancestor} depth={0} />
+                                    {/* Connector Line to next item */}
+                                    <div className="absolute left-[1.35rem] md:left-[2.25rem] top-12 bottom-[-1rem] w-0.5 bg-gray-200 dark:bg-zinc-800" />
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Focused Comment (Root of this view) */}
+                    <div className="relative">
+                        <CommentThread comment={focusedComment} depth={0} isFocused={true} />
+                    </div>
+                </div>
+            );
+        } else {
+            // Fallback if focused comment not found (e.g. deleted)
+            setFocusedCommentId(null);
+        }
+    } else {
+        // Default View: Top-level comments
+        const topLevelComments = comments.filter(c => !c.parentId);
+        contentToRender = (
+            <div className="space-y-4">
+                {topLevelComments.map(comment => (
+                    <CommentThread key={comment.id} comment={comment} />
+                ))}
+            </div>
+        );
+    }
 
     return (
         <div className="mt-4 space-y-6">
@@ -536,11 +589,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
             </form>
 
             {/* Comments List */}
-            <div className="space-y-4">
-                {topLevelComments.map(comment => (
-                    <CommentThread key={comment.id} comment={comment} />
-                ))}
-            </div>
+            {contentToRender}
         </div>
     );
 };
