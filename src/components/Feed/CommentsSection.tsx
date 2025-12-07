@@ -293,7 +293,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
                 <div className={contentClasses}>
                     {/* Vertical Thread Line (if it has replies and NOT collapsed) */}
                     {directReplies.length > 0 && !isCollapsed && !isTrendingPreview && !isTrending && (
-                        <div className="absolute left-[2.25rem] top-12 bottom-0 w-0.5 bg-gray-200 dark:bg-zinc-800 group-hover:bg-gray-300 dark:group-hover:bg-zinc-700 transition-colors" />
+                        <div className="absolute left-[1.35rem] md:left-[2.25rem] top-12 bottom-0 w-0.5 bg-gray-200 dark:bg-zinc-800 group-hover:bg-gray-300 dark:group-hover:bg-zinc-700 transition-colors" />
                     )}
 
                     {/* Avatar */}
@@ -302,11 +302,11 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
                             <img
                                 src={comment.author.avatarUrl}
                                 alt={comment.author.name}
-                                className={`${depth > 0 ? 'w-8 h-8' : 'w-10 h-10'} rounded-full object-cover object-center border border-gray-100 dark:border-zinc-800`}
+                                className={`${depth > 0 ? 'w-6 h-6 md:w-8 md:h-8' : 'w-8 h-8 md:w-10 md:h-10'} rounded-full object-cover object-center border border-gray-100 dark:border-zinc-800`}
                             />
                         ) : (
-                            <div className={`${depth > 0 ? 'w-8 h-8' : 'w-10 h-10'} rounded-full bg-gray-200 dark:bg-zinc-700 flex items-center justify-center`}>
-                                <User className={`${depth > 0 ? 'w-4 h-4' : 'w-5 h-5'} text-gray-500 dark:text-gray-400`} />
+                            <div className={`${depth > 0 ? 'w-6 h-6 md:w-8 md:h-8' : 'w-8 h-8 md:w-10 md:h-10'} rounded-full bg-gray-200 dark:bg-zinc-700 flex items-center justify-center`}>
+                                <User className={`${depth > 0 ? 'w-3 h-3 md:w-4 md:h-4' : 'w-4 h-4 md:w-5 md:h-5'} text-gray-500 dark:text-gray-400`} />
                             </div>
                         )}
                     </div>
@@ -314,7 +314,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
                     {/* Content */}
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                            <span className="font-semibold text-gray-900 dark:text-white text-sm">
+                            <span className="font-semibold text-gray-900 dark:text-white text-xs md:text-sm">
                                 {comment.author.name}
                             </span>
                             {comment.isAi && (
@@ -322,7 +322,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
                                     AI
                                 </span>
                             )}
-                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                            <span className="text-[10px] md:text-xs text-gray-500 dark:text-gray-400">
                                 · {formatDistanceToNow(comment.timestamp, { addSuffix: true })}
                             </span>
 
@@ -356,7 +356,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
                                 </p>
 
                                 {/* Action Buttons */}
-                                <div className="flex items-center justify-between mt-3 max-w-md text-gray-500 dark:text-gray-400">
+                                <div className="flex items-center justify-between mt-2 md:mt-3 max-w-md text-gray-500 dark:text-gray-400">
                                     <button
                                         onClick={() => {
                                             setReplyingTo(comment);
@@ -368,7 +368,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
                                         className="group flex items-center gap-1 hover:text-blue-500 transition-colors"
                                     >
                                         <div className="p-1.5 rounded-full group-hover:bg-blue-50 dark:group-hover:bg-blue-900/20 transition-colors">
-                                            <MessageCircle className="w-4 h-4" />
+                                            <MessageCircle className="w-3.5 h-3.5 md:w-4 md:h-4" />
                                         </div>
                                         {directReplies.length > 0 && <span className="text-xs">{directReplies.length}</span>}
                                     </button>
@@ -381,7 +381,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
                                         className={`group flex items-center gap-1 transition-colors ${isLiked ? 'text-pink-500' : 'hover:text-pink-500'}`}
                                     >
                                         <div className={`p-1.5 rounded-full transition-colors ${isLiked ? 'bg-pink-50 dark:bg-pink-900/20' : 'group-hover:bg-pink-50 dark:group-hover:bg-pink-900/20'}`}>
-                                            <Heart className={`w-4 h-4 ${isLiked ? 'fill-current' : ''}`} />
+                                            <Heart className={`w-3.5 h-3.5 md:w-4 md:h-4 ${isLiked ? 'fill-current' : ''}`} />
                                         </div>
                                         {(comment.likes || 0) > 0 && <span className="text-xs">{comment.likes}</span>}
                                     </button>
@@ -397,7 +397,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
 
                 {/* Trending Preview Block (Separate from main thread) */}
                 {showTrendingPreviewBlock && trendingDescendant && (
-                    <div className="ml-12 mt-2 mb-2">
+                    <div className="ml-3 md:ml-12 mt-2 mb-2">
                         <CommentThread
                             comment={trendingDescendant}
                             depth={depth + 1}
@@ -408,7 +408,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
 
                 {/* Replies */}
                 {!isCollapsed && visibleReplies.length > 0 && (
-                    <div className="ml-12 mt-3 space-y-3">
+                    <div className="ml-3 md:ml-12 mt-2 md:mt-3 space-y-2 md:space-y-3">
                         {visibleReplies.map(reply => (
                             <CommentThread
                                 key={reply.id}
@@ -422,7 +422,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
 
                 {/* Show Previous Replies Button */}
                 {!isCollapsed && !isExpanded && hiddenCount > 0 && (
-                    <div className="ml-12 mt-2">
+                    <div className="ml-3 md:ml-12 mt-2">
                         <button
                             onClick={() => toggleThreadExpand(comment.id)}
                             className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
