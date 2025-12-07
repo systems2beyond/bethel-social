@@ -35,10 +35,6 @@ export default function RootLayout({
       >
         <Providers>
           <div className="flex h-screen overflow-hidden">
-            {/* DEBUG BANNER */}
-            <div className="fixed top-0 left-0 w-full bg-red-600 text-white text-center py-2 z-[9999] font-bold shadow-lg">
-              SYSTEM UPDATE: V3.0 - IF YOU SEE THIS, THE DEPLOYMENT WORKED
-            </div>
             {/* Sidebar - Hidden on mobile, visible on desktop */}
             <div className="hidden md:block">
               <Sidebar />

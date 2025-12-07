@@ -7,7 +7,7 @@ import { db } from '@/lib/firebase';
 import { ShareMenu } from './ShareMenu';
 import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, deleteDoc, setDoc, increment, getDoc } from 'firebase/firestore';
 import { Post, Comment } from '@/types';
-import { User, Send, MessageSquare, Heart, X, Smile } from 'lucide-react';
+import { User, Send, MessageCircle, Heart, X, Smile } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import EmojiPicker, { EmojiClickData, Theme } from 'emoji-picker-react';
 
@@ -319,7 +319,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
                                 </span>
                             )}
                             <span className="text-xs text-gray-500 dark:text-gray-400">
-                                · {formatDistanceToNow(comment.timestamp, { addSuffix: true })} <span className="text-[10px] text-green-500 font-bold">(v2)</span>
+                                · {formatDistanceToNow(comment.timestamp, { addSuffix: true })}
                             </span>
 
                             {/* Collapse Toggle (Only show on main thread, not inside trending preview) */}
@@ -364,7 +364,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
                                         className="group flex items-center gap-1 hover:text-blue-500 transition-colors"
                                     >
                                         <div className="p-1.5 rounded-full group-hover:bg-blue-50 dark:group-hover:bg-blue-900/20 transition-colors">
-                                            <MessageSquare className="w-4 h-4" />
+                                            <MessageCircle className="w-4 h-4" />
                                         </div>
                                         {directReplies.length > 0 && <span className="text-xs">{directReplies.length}</span>}
                                     </button>
