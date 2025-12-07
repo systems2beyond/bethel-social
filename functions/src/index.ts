@@ -7,7 +7,7 @@ const googleApiKey = defineSecret('GOOGLE_API_KEY');
 admin.initializeApp();
 
 // Import social functions
-import { facebookWebhook, syncFacebookPosts } from './social/facebook';
+import { facebookWebhook, syncFacebookPosts, syncFacebookLiveStatus } from './social/facebook';
 import { syncYoutubeContent } from './social/youtube';
 
 export const manualFacebookSync = onRequest(async (req, res) => {
@@ -100,13 +100,14 @@ export { ingestContent, scheduledWebsiteCrawl, ingestSocialPost } from './ai/kno
 export * from './ai/comments';
 
 
-export const syncFacebook = onSchedule('every 60 minutes', async (event) => {
+export const syncFacebook = onSchedule('every 10 minutes', async (event) => {
     await syncFacebookPosts();
+    await syncFacebookLiveStatus();
 });
 
 export const fbWebhook = onRequest(facebookWebhook);
 
-export const syncYoutube = onSchedule({ schedule: 'every 60 minutes', secrets: [googleApiKey] }, async (event) => {
+export const syncYoutube = onSchedule({ schedule: 'every 10 minutes', secrets: [googleApiKey] }, async (event) => {
     await syncYoutubeContent();
 });
 

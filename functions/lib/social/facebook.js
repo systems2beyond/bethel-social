@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.facebookWebhook = exports.syncFacebookPosts = void 0;
+exports.facebookWebhook = exports.syncFacebookLiveStatus = exports.syncFacebookPosts = void 0;
 const logger = __importStar(require("firebase-functions/logger"));
 const admin = __importStar(require("firebase-admin"));
 const axios_1 = __importDefault(require("axios"));
@@ -153,6 +153,68 @@ const syncFacebookPosts = async (backfill = false) => {
     }
 };
 exports.syncFacebookPosts = syncFacebookPosts;
+const syncFacebookLiveStatus = async () => {
+    logger.info('Checking Facebook Live status...');
+    const PAGE_ID = process.env.FB_PAGE_ID;
+    const ACCESS_TOKEN = process.env.FB_ACCESS_TOKEN;
+    if (!PAGE_ID || !ACCESS_TOKEN)
+        return;
+    const db = admin.firestore();
+    try {
+        // 1. Get currently LIVE videos
+        const response = await axios_1.default.get(`https://graph.facebook.com/v18.0/${PAGE_ID}/live_videos`, {
+            params: {
+                access_token: ACCESS_TOKEN,
+                status: 'LIVE_NOW',
+                fields: 'id,description,title,embed_html,permalink_url,status,creation_time'
+            }
+        });
+        const liveVideos = response.data.data;
+        const liveVideoIds = new Set(liveVideos.map((v) => v.id));
+        // 2. Update/Create Live Posts
+        const batch = db.batch();
+        for (const video of liveVideos) {
+            const postRef = db.collection('posts').doc(`fb_${video.id}`);
+            batch.set(postRef, {
+                type: 'facebook_live',
+                content: video.description || video.title || 'Live Stream',
+                mediaUrl: video.permalink_url,
+                thumbnailUrl: null,
+                sourceId: video.id,
+                timestamp: new Date(video.creation_time).getTime(),
+                pinned: true,
+                isLive: true,
+                author: {
+                    name: 'Bethel Metropolitan',
+                    avatarUrl: null
+                },
+                externalUrl: video.permalink_url,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
+        }
+        // 3. Find old live posts that are no longer live and unmark them
+        const oldLiveSnapshot = await db.collection('posts')
+            .where('type', '==', 'facebook_live')
+            .where('isLive', '==', true)
+            .get();
+        oldLiveSnapshot.docs.forEach(doc => {
+            const sourceId = doc.data().sourceId;
+            if (!liveVideoIds.has(sourceId)) {
+                batch.update(doc.ref, {
+                    isLive: false,
+                    pinned: false,
+                    type: 'facebook_video'
+                });
+            }
+        });
+        await batch.commit();
+        logger.info(`Synced Facebook Live status. Found ${liveVideos.length} live videos.`);
+    }
+    catch (error) {
+        logger.error('Error syncing Facebook Live status:', error);
+    }
+};
+exports.syncFacebookLiveStatus = syncFacebookLiveStatus;
 const facebookWebhook = async (req, res) => {
     const VERIFY_TOKEN = process.env.FB_VERIFY_TOKEN;
     // const APP_SECRET = process.env.FB_APP_SECRET;

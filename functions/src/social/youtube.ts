@@ -17,7 +17,7 @@ interface YoutubeVideo {
 export const syncYoutubeContent = async () => {
     logger.info('Starting YouTube sync...');
 
-    const API_KEY = process.env.GOOGLE_AI_API_KEY; // Using the same key if it has YouTube Data API enabled
+    const API_KEY = process.env.GOOGLE_API_KEY || process.env.GOOGLE_AI_API_KEY; // Try both, prefer the one injected by secret
     let CHANNEL_ID = process.env.YOUTUBE_CHANNEL_ID;
 
     if (!API_KEY) {
@@ -49,26 +49,78 @@ export const syncYoutubeContent = async () => {
         const response = await youtube.search.list({
             key: API_KEY,
             channelId: CHANNEL_ID,
-            part: ['snippet'],
+            part: ['snippet'], // Search only supports snippet
             order: 'date',
-            maxResults: 5,
+            maxResults: 10, // Increased from 5
             type: ['video'],
         });
 
-        const items = response.data.items || [];
+        // 2. Fetch currently LIVE video
+        const liveResponse = await youtube.search.list({
+            key: API_KEY,
+            channelId: CHANNEL_ID,
+            part: ['snippet'],
+            type: ['video'],
+            eventType: 'live',
+            maxResults: 1,
+        });
+
+        // 3. Fetch recently COMPLETED live videos (Standard search misses these sometimes)
+        const completedResponse = await youtube.search.list({
+            key: API_KEY,
+            channelId: CHANNEL_ID,
+            part: ['snippet'],
+            type: ['video'],
+            eventType: 'completed',
+            order: 'date',
+            maxResults: 3,
+        });
+
+        const searchItems = [
+            ...(response.data.items || []),
+            ...(liveResponse.data.items || []),
+            ...(completedResponse.data.items || [])
+        ];
+        const uniqueVideoIds = Array.from(new Set(searchItems.map(item => item.id?.videoId).filter(id => !!id))) as string[];
+
+        if (uniqueVideoIds.length === 0) {
+            logger.info('No videos found.');
+            return;
+        }
+
+        // 3. Fetch Video Details (needed for liveStreamingDetails)
+        const videoDetailsResponse = await youtube.videos.list({
+            key: API_KEY,
+            id: uniqueVideoIds,
+            part: ['snippet', 'liveStreamingDetails']
+        });
+
+        const items = videoDetailsResponse.data.items || [];
+        logger.info(`Found ${items.length} videos. Processing...`);
+
         const db = admin.firestore();
         const batch = db.batch();
 
         for (const item of items) {
-            if (!item.snippet || !item.id?.videoId) continue;
+            if (!item.snippet || !item.id) continue;
+
+            // Determine best timestamp: Actual Start -> Scheduled Start -> Published At
+            let timestamp = new Date(item.snippet.publishedAt || new Date().toISOString()).getTime();
+            if (item.liveStreamingDetails?.actualStartTime) {
+                timestamp = new Date(item.liveStreamingDetails.actualStartTime).getTime();
+            } else if (item.liveStreamingDetails?.scheduledStartTime) {
+                timestamp = new Date(item.liveStreamingDetails.scheduledStartTime).getTime();
+            }
+
+            logger.info(`Processing video: ${item.snippet.title} (${item.id}) - Time: ${new Date(timestamp).toISOString()}`);
 
             const video: YoutubeVideo = {
-                id: item.id.videoId,
+                id: item.id,
                 title: item.snippet.title || 'Untitled Video',
                 description: item.snippet.description || '',
                 thumbnailUrl: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url || '',
-                publishedAt: item.snippet.publishedAt || new Date().toISOString(),
-                videoId: item.id.videoId,
+                publishedAt: new Date(timestamp).toISOString(),
+                videoId: item.id,
                 isLive: item.snippet.liveBroadcastContent === 'live',
             };
 
@@ -76,12 +128,12 @@ export const syncYoutubeContent = async () => {
 
             batch.set(postRef, {
                 type: 'youtube',
-                content: `${video.title}\n\n${video.description}`, // Combine title and description
+                content: `${video.title}\n\n${video.description}`,
                 mediaUrl: `https://www.youtube.com/watch?v=${video.videoId}`,
                 thumbnailUrl: video.thumbnailUrl,
                 sourceId: video.id,
-                timestamp: new Date(video.publishedAt).getTime(),
-                pinned: video.isLive, // Auto-pin live streams
+                timestamp: timestamp,
+                pinned: video.isLive,
                 author: {
                     name: 'Bethel Metropolitan',
                     avatarUrl: null
