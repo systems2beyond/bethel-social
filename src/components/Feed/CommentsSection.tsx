@@ -35,6 +35,8 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
 
     const [replyingTo, setReplyingTo] = useState<Comment | null>(null);
     const [expandedThreads, setExpandedThreads] = useState<Set<string>>(new Set());
+    const [focusedCommentId, setFocusedCommentId] = useState<string | null>(null);
+    const activeThread = focusedCommentId ? comments.find(c => c.id === focusedCommentId) : null;
 
     const filteredUsers = MOCK_USERS.filter(u =>
         u.name.toLowerCase().includes(mentionQuery.toLowerCase()) ||
@@ -180,8 +182,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
         });
     };
 
-    const [focusedCommentId, setFocusedCommentId] = useState<string | null>(null);
-    const activeThread = focusedCommentId ? comments.find(c => c.id === focusedCommentId) : null;
+
 
     // Helper to get ancestors of a comment
     const getAncestors = (commentId: string, allComments: Comment[]): Comment[] => {
