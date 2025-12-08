@@ -109,7 +109,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
                 content: newComment,
                 mediaUrl: null, // Add media support to Comment type if needed
                 timestamp: Date.now(), // Use client timestamp for immediate sort, server timestamp for consistency
-                parentId: replyingTo ? replyingTo.id : (activeThread ? activeThread.id : null)
+                parentId: replyingTo ? replyingTo.id : (activeThread ? activeThread.id : (focusedCommentId || null))
             });
             setNewComment('');
             setShowEmojiPicker(false);
@@ -502,7 +502,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
                             e.target.style.height = 'auto';
                             e.target.style.height = e.target.scrollHeight + 'px';
                         }}
-                        placeholder={replyingTo ? `Replying to ${replyingTo.author.name}...` : (activeThread ? `Replying to ${activeThread.author.name}...` : "Write a comment...")}
+                        placeholder={replyingTo ? `Replying to ${replyingTo.author.name}...` : (activeThread ? `Replying to ${activeThread.author.name}...` : (focusedCommentId ? "Replying to thread..." : "Write a comment..."))}
                         className="w-full bg-gray-50 dark:bg-zinc-800 border-none rounded-xl py-3 pl-4 pr-12 focus:ring-2 focus:ring-blue-500 resize-none min-h-[48px] max-h-32"
                         rows={1}
                         onKeyDown={(e) => {
