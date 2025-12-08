@@ -16,6 +16,7 @@ import { useTheme } from 'next-themes';
 
 interface AuthContextType {
     user: User | null;
+    userData: any | null;
     loading: boolean;
     googleAccessToken: string | null;
     signInWithGoogle: () => Promise<void>;
@@ -28,6 +29,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
+    const [userData, setUserData] = useState<any | null>(null);
     const [loading, setLoading] = useState(true);
     const { setTheme } = useTheme();
 
@@ -42,20 +44,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
                 if (!userSnap.exists()) {
                     // Create new user doc
-                    await setDoc(userRef, {
+                    const newUserData = {
                         email: currentUser.email,
                         displayName: currentUser.displayName,
                         photoURL: currentUser.photoURL,
                         createdAt: serverTimestamp(),
-                        theme: 'system' // Default theme
-                    });
+                        theme: 'system', // Default theme
+                        role: 'member' // Default role
+                    };
+                    await setDoc(userRef, newUserData);
+                    setUserData(newUserData);
                 } else {
                     // Update existing user doc (if needed) and load theme
-                    const userData = userSnap.data();
-                    if (userData.theme) {
-                        setTheme(userData.theme);
+                    const data = userSnap.data();
+                    setUserData(data);
+                    if (data.theme) {
+                        setTheme(data.theme);
                     }
                 }
+            } else {
+                setUserData(null);
             }
 
             setLoading(false);
@@ -164,6 +172,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const signOut = async () => {
         try {
             await firebaseSignOut(auth);
+            setUserData(null);
         } catch (error) {
             console.error("Error signing out", error);
             throw error;
@@ -171,7 +180,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     return (
-        <AuthContext.Provider value={{ user, loading, googleAccessToken, signInWithGoogle, signInWithYahoo, signInWithFacebook, signOut }}>
+        <AuthContext.Provider value={{ user, userData, loading, googleAccessToken, signInWithGoogle, signInWithYahoo, signInWithFacebook, signOut }}>
             {children}
         </AuthContext.Provider>
     );

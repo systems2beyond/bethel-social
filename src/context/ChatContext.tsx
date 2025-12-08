@@ -24,12 +24,13 @@ interface Message {
     role: 'user' | 'assistant';
     content: string;
     timestamp: number;
+    intent?: 'chat' | 'post';
 }
 
 interface ChatContextType {
     messages: Message[];
     isLoading: boolean;
-    sendMessage: (content: string, hiddenContext?: string) => Promise<void>;
+    sendMessage: (content: string, hiddenContext?: string, options?: { intent?: 'chat' | 'post' }) => Promise<void>;
     currentChatId: string | null;
     createNewChat: () => Promise<void>;
     loadChat: (chatId: string) => void;
@@ -65,7 +66,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 id: doc.id,
                 role: doc.data().role,
                 content: doc.data().content,
-                timestamp: doc.data().createdAt?.toMillis() || Date.now()
+                timestamp: doc.data().createdAt?.toMillis() || Date.now(),
+                intent: doc.data().intent
             })) as Message[];
 
             if (msgs.length > 0) {
@@ -93,8 +95,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setCurrentChatId(chatId);
     };
 
-    const sendMessage = async (content: string, hiddenContext?: string) => {
+    const sendMessage = async (content: string, hiddenContext?: string, options: { intent?: 'chat' | 'post' } = {}) => {
         if (!content.trim()) return;
+
+        const intent = options.intent || 'chat';
 
         // Optimistic update for local state (if not using Firestore yet)
         if (!user) {
@@ -114,7 +118,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             try {
                 const chatFn = httpsCallable(functions, 'chat');
                 const fullMessage = hiddenContext ? `${content}${hiddenContext}` : content;
-                const result = await chatFn({ message: fullMessage });
+                const result = await chatFn({ message: fullMessage, intent });
                 const data = result.data as { response: string };
 
                 const botMsg: Message = {
@@ -156,7 +160,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             await addDoc(collection(db, 'users', user.uid, 'chats', chatId, 'messages'), {
                 role: 'user',
                 content,
-                createdAt: serverTimestamp()
+                createdAt: serverTimestamp(),
+                intent // Store intent for debugging/history
             });
 
             // Update chat title if it's the first message (and generic title)
@@ -182,7 +187,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 message: fullMessage,
                 history,
                 userName,
-                userPhone
+                userPhone,
+                intent
             });
             const data = result.data as { response: string };
 

@@ -215,6 +215,29 @@ export function ChatInterface() {
                             : "bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 text-gray-800 dark:text-gray-200 rounded-tl-none"
                     )}>
                         {renderMessageContent(msg.content)}
+                        {msg.intent === 'post' && msg.role === 'assistant' && (
+                            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-zinc-800 flex items-center space-x-3">
+                                <button
+                                    onClick={() => {
+                                        // TODO: Open real post composer
+                                        navigator.clipboard.writeText(msg.content);
+                                        alert('Draft copied to clipboard! (Post Composer coming soon)');
+                                    }}
+                                    className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
+                                >
+                                    <span>Use Draft</span>
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        // TODO: Open composer with empty state?
+                                        alert('Create your own post (Coming soon)');
+                                    }}
+                                    className="px-4 py-2 bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors"
+                                >
+                                    <span>Edit / Post Manually</span>
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
             ))}
