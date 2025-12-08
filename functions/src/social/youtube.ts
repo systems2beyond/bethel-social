@@ -17,29 +17,51 @@ interface YoutubeVideo {
 export const syncYoutubeContent = async () => {
     logger.info('Starting YouTube sync...');
 
-    const API_KEY = process.env.GOOGLE_API_KEY || process.env.GOOGLE_AI_API_KEY; // Try both, prefer the one injected by secret
+    const API_KEY = process.env.GOOGLE_API_KEY || process.env.GOOGLE_AI_API_KEY;
     let CHANNEL_ID = process.env.YOUTUBE_CHANNEL_ID;
 
     if (!API_KEY) {
-        logger.error('Missing YouTube credentials (GOOGLE_AI_API_KEY)');
+        logger.error('Missing Google API Key (GOOGLE_API_KEY or GOOGLE_AI_API_KEY)');
         return;
     }
 
+    logger.info(`Using API Key: ${API_KEY.substring(0, 10)}...`);
+
     try {
+        // 0. Resolve Channel ID if missing
         // 0. Resolve Channel ID if missing
         if (!CHANNEL_ID) {
             logger.info('Resolving channel ID for @BMBCFamily...');
-            const searchResponse = await youtube.search.list({
-                key: API_KEY,
-                q: '@BMBCFamily',
-                type: ['channel'],
-                part: ['id'],
-                maxResults: 1,
-            });
-            if (searchResponse.data.items && searchResponse.data.items.length > 0) {
-                CHANNEL_ID = searchResponse.data.items[0].id?.channelId || undefined;
-                logger.info(`Resolved Channel ID: ${CHANNEL_ID}`);
-            } else {
+            try {
+                const channelResponse = await youtube.channels.list({
+                    key: API_KEY,
+                    forHandle: 'BMBCFamily',
+                    part: ['id']
+                });
+
+                if (channelResponse.data.items && channelResponse.data.items.length > 0) {
+                    CHANNEL_ID = channelResponse.data.items[0].id || undefined;
+                    logger.info(`Resolved Channel ID: ${CHANNEL_ID}`);
+                } else {
+                    // Fallback to search if handle lookup fails
+                    logger.warn('Handle lookup failed, falling back to search...');
+                    const searchResponse = await youtube.search.list({
+                        key: API_KEY,
+                        q: 'BMBCFamily',
+                        type: ['channel'],
+                        part: ['id'],
+                        maxResults: 1,
+                    });
+                    if (searchResponse.data.items && searchResponse.data.items.length > 0) {
+                        CHANNEL_ID = searchResponse.data.items[0].id?.channelId || undefined;
+                        logger.info(`Resolved Channel ID via search: ${CHANNEL_ID}`);
+                    }
+                }
+            } catch (err) {
+                logger.error('Error resolving channel ID:', err);
+            }
+
+            if (!CHANNEL_ID) {
                 logger.error('Could not resolve channel ID for @BMBCFamily');
                 return;
             }
@@ -142,6 +164,21 @@ export const syncYoutubeContent = async () => {
                 isLive: video.isLive,
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
             }, { merge: true });
+
+            // CLEANUP: Remove any Facebook posts that were ingested before this YouTube sync
+            // This handles the race condition where FB sync runs first
+            const fbDuplicates = await db.collection('posts')
+                .where('youtubeVideoId', '==', video.id)
+                .get();
+
+            if (!fbDuplicates.empty) {
+                fbDuplicates.forEach(doc => {
+                    logger.info(`Removing duplicate Facebook post ${doc.id} for YouTube video ${video.id}`);
+                    batch.delete(doc.ref);
+                });
+            } else {
+                logger.info(`No Facebook duplicates found for YouTube video ${video.id}`);
+            }
         }
 
         await batch.commit();

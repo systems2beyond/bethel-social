@@ -81,11 +81,24 @@ export const syncFacebookPosts = async (backfill = false) => {
                 let mediaUrl = post.full_picture;
                 let postType: 'facebook' | 'video' | 'youtube' = 'facebook';
                 let thumbnailUrl = null;
+                let youtubeVideoId = null;
 
                 if (post.attachments?.data[0]?.media?.source) {
                     mediaUrl = post.attachments.data[0].media.source;
                     if (mediaUrl && (mediaUrl.includes('youtube.com') || mediaUrl.includes('youtu.be'))) {
                         postType = 'youtube';
+                        // Extract Video ID
+                        const match = mediaUrl.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
+                        if (match && match[1]) {
+                            youtubeVideoId = match[1];
+
+                            // CHECK: Does this video already exist as a native YouTube post?
+                            const existingYtDoc = await db.collection('posts').doc(`yt_${youtubeVideoId}`).get();
+                            if (existingYtDoc.exists) {
+                                logger.info(`Skipping Facebook post ${post.id} because it duplicates YouTube video ${youtubeVideoId}`);
+                                continue;
+                            }
+                        }
                     } else {
                         postType = 'video';
                     }
@@ -98,6 +111,7 @@ export const syncFacebookPosts = async (backfill = false) => {
                     mediaUrl: mediaUrl || null,
                     thumbnailUrl: thumbnailUrl,
                     sourceId: post.id,
+                    youtubeVideoId: youtubeVideoId, // Save for reverse-lookup cleanup
                     timestamp: new Date(post.created_time).getTime(),
                     pinned: false,
                     author: {

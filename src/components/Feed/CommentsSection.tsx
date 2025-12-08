@@ -107,7 +107,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
                 content: newComment,
                 mediaUrl: null, // Add media support to Comment type if needed
                 timestamp: Date.now(), // Use client timestamp for immediate sort, server timestamp for consistency
-                parentId: replyingTo ? replyingTo.id : null
+                parentId: replyingTo ? replyingTo.id : (activeThread ? activeThread.id : null)
             });
             setNewComment('');
             setShowEmojiPicker(false);
@@ -181,6 +181,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
     };
 
     const [focusedCommentId, setFocusedCommentId] = useState<string | null>(null);
+    const activeThread = focusedCommentId ? comments.find(c => c.id === focusedCommentId) : null;
 
     // Helper to get ancestors of a comment
     const getAncestors = (commentId: string, allComments: Comment[]): Comment[] => {
@@ -436,9 +437,9 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
                     {/* Back Button */}
                     <button
                         onClick={() => setFocusedCommentId(null)}
-                        className="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors mb-4"
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-full transition-all shadow-md hover:shadow-lg mb-6 group"
                     >
-                        <div className="p-1 rounded-full bg-gray-100 dark:bg-zinc-800">
+                        <div className="p-1 rounded-full bg-white/20 group-hover:bg-white/30 transition-colors">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 19-7-7 7-7" /><path d="M19 12H5" /></svg>
                         </div>
                         Back to all comments
@@ -500,7 +501,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
                             e.target.style.height = 'auto';
                             e.target.style.height = e.target.scrollHeight + 'px';
                         }}
-                        placeholder={replyingTo ? "Write a reply..." : "Write a comment..."}
+                        placeholder={replyingTo ? `Replying to ${replyingTo.author.name}...` : (activeThread ? `Replying to ${activeThread.author.name}...` : "Write a comment...")}
                         className="w-full bg-gray-50 dark:bg-zinc-800 border-none rounded-xl py-3 pl-4 pr-12 focus:ring-2 focus:ring-blue-500 resize-none min-h-[48px] max-h-32"
                         rows={1}
                         onKeyDown={(e) => {
