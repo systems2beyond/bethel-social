@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Post } from '@/types';
 import { PostCard } from './PostCard';
+import { useFeed } from '@/context/FeedContext';
 import { collection, query, orderBy, limit, getDocs, startAfter, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { LiveStreamBanner } from './LiveStreamBanner';
@@ -42,6 +43,7 @@ export const SocialFeed: React.FC = () => {
     }, []);
 
     const fetchPosts = React.useCallback(async (isInitial = false) => {
+        console.log('fetchPosts called', { isInitial, loading, loadingMore, hasMore, refreshTrigger });
         if ((!isInitial && loading) || loadingMore || (!isInitial && !hasMore)) return;
 
         try {
@@ -103,9 +105,14 @@ export const SocialFeed: React.FC = () => {
         }
     }, [lastVisible, hasMore, loading, loadingMore]);
 
+    const { refreshTrigger } = useFeed();
+
     useEffect(() => {
+        console.log('refreshTrigger changed:', refreshTrigger);
+        setHasMore(true);
+        setLastVisible(null);
         fetchPosts(true);
-    }, []); // Initial load only
+    }, [refreshTrigger]); // Reload when refreshTrigger changes
 
     useEffect(() => {
         const observer = new IntersectionObserver(

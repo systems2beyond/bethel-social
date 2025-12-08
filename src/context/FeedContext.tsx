@@ -15,6 +15,8 @@ interface FeedContextType {
     reportVisibility: (id: string, ratio: number, rect: DOMRectReadOnly) => void;
     activePostId: string | null;
     activePost: ActivePost | null;
+    refreshTrigger: number;
+    triggerRefresh: () => void;
 }
 
 const FeedContext = createContext<FeedContextType | undefined>(undefined);
@@ -22,6 +24,12 @@ const FeedContext = createContext<FeedContextType | undefined>(undefined);
 export function FeedProvider({ children }: { children: React.ReactNode }) {
     const [activePostId, setActivePostId] = useState<string | null>(null);
     const [activePost, setActivePost] = useState<ActivePost | null>(null);
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+    const triggerRefresh = useCallback(() => {
+        console.log('triggerRefresh called, prev:', refreshTrigger);
+        setRefreshTrigger(prev => prev + 1);
+    }, [refreshTrigger]);
 
     const posts = useRef<Map<string, {
         content?: string;
@@ -135,8 +143,10 @@ export function FeedProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
+
+
     return (
-        <FeedContext.Provider value={{ registerPost, unregisterPost, reportVisibility, activePostId, activePost }}>
+        <FeedContext.Provider value={{ registerPost, unregisterPost, reportVisibility, activePostId, activePost, refreshTrigger, triggerRefresh }}>
             {children}
         </FeedContext.Provider>
     );

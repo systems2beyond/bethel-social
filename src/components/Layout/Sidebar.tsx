@@ -90,7 +90,8 @@ import { useAuth } from '@/context/AuthContext';
 import { LogIn } from 'lucide-react';
 
 function UserSection() {
-    const { user, signInWithGoogle, signInWithYahoo, signInWithFacebook, signOut, loading } = useAuth();
+    const { user, userData, signInWithGoogle, signInWithYahoo, signInWithFacebook, signOut, loading } = useAuth();
+    const router = useRouter();
 
     if (loading) return <div className="h-12 animate-pulse bg-gray-100 dark:bg-zinc-800 rounded-lg mx-4" />;
 
@@ -134,9 +135,11 @@ function UserSection() {
         );
     }
 
+    const isAdmin = userData?.role === 'admin';
+
     return (
-        <div className="flex items-center space-x-3 px-4 py-3">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-xs overflow-hidden relative">
+        <div className="flex items-center space-x-2 px-4 py-3">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-xs overflow-hidden relative flex-shrink-0">
                 {user.photoURL ? (
                     <img src={user.photoURL} alt={user.displayName || 'User'} className="w-full h-full object-cover" />
                 ) : (
@@ -149,9 +152,20 @@ function UserSection() {
                 </p>
                 <p className="text-xs text-gray-500 truncate">{user.email}</p>
             </div>
+
+            {isAdmin && (
+                <button
+                    onClick={() => router.push('/admin')}
+                    className="p-1.5 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+                    title="Admin Settings"
+                >
+                    <Settings className="w-4 h-4 text-gray-500 hover:text-blue-600" />
+                </button>
+            )}
+
             <button
                 onClick={signOut}
-                className="p-1 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors"
+                className="p-1.5 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
                 title="Sign Out"
             >
                 <LogOut className="w-4 h-4 text-gray-400 hover:text-red-500" />

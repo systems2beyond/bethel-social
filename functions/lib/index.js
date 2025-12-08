@@ -36,7 +36,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onCommentWritten = exports.backfillEvents = exports.extractEventFromPost = exports.ingest = exports.chat = exports.manualYoutubeSync = exports.syncYoutube = exports.fbWebhook = exports.syncFacebook = exports.ingestSocialPost = exports.scheduledWebsiteCrawl = exports.ingestContent = exports.debugPosts = exports.manualFacebookSync = void 0;
+exports.updateUserRole = exports.onCommentWritten = exports.backfillEvents = exports.extractEventFromPost = exports.ingest = exports.chat = exports.manualYoutubeSync = exports.syncYoutube = exports.fbWebhook = exports.syncFacebook = exports.ingestSocialPost = exports.scheduledWebsiteCrawl = exports.ingestContent = exports.debugPosts = exports.manualFacebookSync = void 0;
 const admin = __importStar(require("firebase-admin"));
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const https_1 = require("firebase-functions/v2/https");
@@ -145,4 +145,6 @@ Object.defineProperty(exports, "extractEventFromPost", { enumerable: true, get: 
 Object.defineProperty(exports, "backfillEvents", { enumerable: true, get: function () { return events_1.backfillEvents; } });
 var comments_1 = require("./triggers/comments");
 Object.defineProperty(exports, "onCommentWritten", { enumerable: true, get: function () { return comments_1.onCommentWritten; } });
+var user_management_1 = require("./admin/user_management");
+Object.defineProperty(exports, "updateUserRole", { enumerable: true, get: function () { return user_management_1.updateUserRole; } });
 //# sourceMappingURL=index.js.map
