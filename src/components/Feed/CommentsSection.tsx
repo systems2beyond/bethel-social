@@ -44,6 +44,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
     );
 
     useEffect(() => {
+        console.log('CommentsSection v2 loaded');
         const q = query(
             collection(db, 'posts', postId, 'comments'),
             orderBy('timestamp', 'asc')
