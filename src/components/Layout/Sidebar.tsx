@@ -141,14 +141,14 @@ function UserSection() {
         <div className="flex items-center space-x-2 px-4 py-3">
             <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-xs overflow-hidden relative flex-shrink-0">
                 {user.photoURL ? (
-                    <img src={user.photoURL} alt={user.displayName || 'User'} className="w-full h-full object-cover" />
+                    <img src={user.photoURL} alt={userData?.displayName || user.displayName || 'User'} className="w-full h-full object-cover" />
                 ) : (
-                    (user.displayName?.[0] || user.email?.[0] || 'U').toUpperCase()
+                    (userData?.displayName?.[0] || user.displayName?.[0] || user.email?.[0] || 'U').toUpperCase()
                 )}
             </div>
             <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                    {user.displayName || 'User'}
+                    {userData?.displayName || user.displayName || 'User'}
                 </p>
                 <p className="text-xs text-gray-500 truncate">{user.email}</p>
             </div>

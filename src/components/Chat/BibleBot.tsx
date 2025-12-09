@@ -5,6 +5,7 @@ import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
 import { Send, User, Bot, Loader2, Phone } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '@/context/AuthContext';
 
 interface Message {
     id: string;
@@ -14,6 +15,7 @@ interface Message {
 }
 
 export const BibleBot: React.FC = () => {
+    const { user, userData } = useAuth();
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState<Message[]>([
         { id: '0', role: 'bot', content: 'Hello! I am the Bethel Bible Bot. Ask me anything about our sermons or the Bible.' }
@@ -39,7 +41,15 @@ export const BibleBot: React.FC = () => {
 
         try {
             const chatFn = httpsCallable(functions, 'chat');
-            const result = await chatFn({ message: userMsg.content, history: [] }) as any;
+            const userName = userData?.displayName || user?.displayName;
+            const userPhone = userData?.phoneNumber;
+
+            const result = await chatFn({
+                message: userMsg.content,
+                history: [],
+                userName,
+                userPhone
+            }) as any;
 
             const botMsg: Message = {
                 id: (Date.now() + 1).toString(),

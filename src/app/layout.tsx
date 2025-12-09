@@ -23,6 +23,7 @@ import { Sidebar } from "@/components/Layout/Sidebar";
 import { BottomBar } from "@/components/Layout/BottomBar";
 import { OnboardingModal } from "@/components/Auth/OnboardingModal";
 
+
 export default function RootLayout({
   children,
 }: Readonly<{

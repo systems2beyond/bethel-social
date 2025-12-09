@@ -291,7 +291,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
         }
     };
 
-    const { user } = useAuth();
+    const { user, userData } = useAuth();
     const [isLiked, setIsLiked] = React.useState(false);
     const [likeCount, setLikeCount] = React.useState(post.likes || 0);
     const [showComments, setShowComments] = React.useState(false);
@@ -332,7 +332,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
                 await setDoc(likeRef, {
                     timestamp: serverTimestamp(),
                     userId: user.uid,
-                    userName: user.displayName,
+                    userName: userData?.displayName || user.displayName,
                     userPhoto: user.photoURL
                 });
                 console.log('[PostCard] Like added');

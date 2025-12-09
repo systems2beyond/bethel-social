@@ -17,7 +17,7 @@ interface CommentsSectionProps {
 
 export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
     const postId = post.id;
-    const { user } = useAuth();
+    const { user, userData } = useAuth();
     const [comments, setComments] = useState<Comment[]>([]);
     const [newComment, setNewComment] = useState('');
     const [loading, setLoading] = useState(false);
@@ -104,7 +104,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
                 postId,
                 author: {
                     id: user.uid,
-                    name: user.displayName || 'Anonymous',
+                    name: userData?.displayName || user.displayName || 'Anonymous',
                     avatarUrl: user.photoURL
                 },
                 content: newComment,
@@ -147,7 +147,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
                 await setDoc(likeRef, {
                     timestamp: serverTimestamp(),
                     userId: user.uid,
-                    userName: user.displayName,
+                    userName: userData?.displayName || user.displayName,
                     userPhoto: user.photoURL
                 });
                 await setDoc(commentRef, { likes: increment(1) }, { merge: true });

@@ -39,12 +39,12 @@ interface ChatContextType {
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
 export function ChatProvider({ children }: { children: ReactNode }) {
-    const { user } = useAuth();
+    const { user, userData } = useAuth();
     const [messages, setMessages] = useState<Message[]>([
         {
             id: 'welcome',
             role: 'assistant',
-            content: 'Hello! I am the Bethel Assistant. How can I help you today?',
+            content: 'Hello! I am Matthew, your Bethel Assistant. How can I help you today?',
             timestamp: Date.now(),
         }
     ]);
@@ -149,11 +149,20 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 // Create new chat if none exists
                 const chatRef = await addDoc(collection(db, 'users', user.uid, 'chats'), {
                     createdAt: serverTimestamp(),
-                    title: content.substring(0, 30) + '...',
+                    title: content.substring(0, 30) + (content.length > 30 ? '...' : ''),
                     updatedAt: serverTimestamp()
                 });
                 chatId = chatRef.id;
                 setCurrentChatId(chatId);
+            } else {
+                // Check if we need to update the title (if it's still "New Chat")
+                const chatDocRef = doc(db, 'users', user.uid, 'chats', chatId);
+                const chatDoc = await getDoc(chatDocRef);
+                if (chatDoc.exists() && chatDoc.data().title === 'New Chat') {
+                    await setDoc(chatDocRef, {
+                        title: content.substring(0, 30) + (content.length > 30 ? '...' : '')
+                    }, { merge: true });
+                }
             }
 
             // Save user message
@@ -178,8 +187,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             }));
 
             // Fetch user profile for personalization
-            const userDoc = await getDoc(doc(db, 'users', user.uid));
-            const userData = userDoc.data();
+            // const userDoc = await getDoc(doc(db, 'users', user.uid));
+            // const userData = userDoc.data();
             const userName = userData?.displayName || user.displayName || 'Friend';
             const userPhone = userData?.phoneNumber || null;
 

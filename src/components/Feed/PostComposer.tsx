@@ -15,7 +15,7 @@ interface PostComposerProps {
 }
 
 export function PostComposer({ isOpen, onClose, initialContent = '' }: PostComposerProps) {
-    const { user } = useAuth();
+    const { user, userData } = useAuth();
     const { triggerRefresh } = useFeed();
     const [content, setContent] = useState(initialContent);
     const [mediaFile, setMediaFile] = useState<File | null>(null);
@@ -61,7 +61,7 @@ export function PostComposer({ isOpen, onClose, initialContent = '' }: PostCompo
                 mediaType,
                 author: {
                     uid: user.uid,
-                    name: user.displayName || 'Anonymous',
+                    name: userData?.displayName || user.displayName || 'Anonymous',
                     avatarUrl: user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`
                 },
                 timestamp: Date.now(),
