@@ -44,16 +44,19 @@ export function ChatInterface() {
     };
 
     const renderMessageContent = (content: string) => {
+        // Strip <SUGGEST_SUMMARY> tag
+        const cleanContent = content.replace(/<SUGGEST_SUMMARY>/g, '').trim();
+
         // Regex to match ACTION tags
         const actionRegex = /\[ACTION:(CALENDAR|EMAIL)\s*\|\s*(.*?)\]/g;
         const parts = [];
         let lastIndex = 0;
         let match;
 
-        while ((match = actionRegex.exec(content)) !== null) {
+        while ((match = actionRegex.exec(cleanContent)) !== null) {
             // Add text before the match
             if (match.index > lastIndex) {
-                parts.push(<p key={`text-${lastIndex}`} className="whitespace-pre-wrap leading-relaxed mb-4">{content.substring(lastIndex, match.index)}</p>);
+                parts.push(<p key={`text-${lastIndex}`} className="whitespace-pre-wrap leading-relaxed mb-4">{cleanContent.substring(lastIndex, match.index)}</p>);
             }
 
             const type = match[1];
@@ -105,11 +108,11 @@ export function ChatInterface() {
         }
 
         // Add remaining text
-        if (lastIndex < content.length) {
-            parts.push(<p key={`text-${lastIndex}`} className="whitespace-pre-wrap leading-relaxed">{content.substring(lastIndex)}</p>);
+        if (lastIndex < cleanContent.length) {
+            parts.push(<p key={`text-${lastIndex}`} className="whitespace-pre-wrap leading-relaxed">{cleanContent.substring(lastIndex)}</p>);
         }
 
-        return parts.length > 0 ? parts : <p className="whitespace-pre-wrap leading-relaxed">{content}</p>;
+        return parts.length > 0 ? parts : <p className="whitespace-pre-wrap leading-relaxed">{cleanContent}</p>;
     };
 
     useEffect(() => {

@@ -54,7 +54,7 @@ export const BibleBot: React.FC = () => {
             const botMsg: Message = {
                 id: (Date.now() + 1).toString(),
                 role: 'bot',
-                content: result.data.response,
+                content: result.data.response.replace(/<SUGGEST_SUMMARY>/g, '').trim(),
                 handoff: result.data.handoff
             };
             setMessages(prev => [...prev, botMsg]);

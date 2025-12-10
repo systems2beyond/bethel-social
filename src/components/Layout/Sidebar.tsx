@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, BookOpen, Calendar, Heart, MessageSquare, Moon, Sun, Settings, LogOut } from 'lucide-react';
+import { Home, Compass, Calendar, Users, MessageSquare, Bell, User, LogOut, Settings, PlayCircle, Sun, Moon } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils'; // Assuming utils exists, or I'll use clsx/twMerge directly if not
 
@@ -25,10 +25,10 @@ export function Sidebar() {
 
     const navItems = [
         { icon: Home, label: 'Home', href: '/' },
-        { icon: BookOpen, label: 'Sermons', href: '/sermons' },
+        { icon: PlayCircle, label: 'Sermons', href: '/sermons' },
         { icon: MessageSquare, label: 'Notes', href: '/notes' },
         { icon: Calendar, label: 'Events', href: '/events' },
-        { icon: Heart, label: 'Giving', href: '/giving' },
+        { icon: Users, label: 'Groups', href: '/groups' },
     ];
 
     return (

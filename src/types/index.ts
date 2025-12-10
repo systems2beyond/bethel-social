@@ -50,3 +50,15 @@ export interface Comment {
     parentId?: string; // For nested replies
     likes?: number;
 }
+
+export interface Sermon {
+    id: string;
+    title: string;
+    date: { seconds: number; nanoseconds: number } | string; // Firestore Timestamp or ISO string
+    videoUrl: string;
+    thumbnailUrl?: string;
+    summary?: string;
+    outline?: string[];
+    transcript?: string;
+    createdAt?: any;
+}

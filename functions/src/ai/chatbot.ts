@@ -109,14 +109,38 @@ export const chatWithBibleBot = async (request: any) => {
 
     // 2. Vector Search in Firestore
     // Note: This requires a vector index on 'sermon_chunks' collection
-    const snapshot = await db.collection('sermon_chunks')
+    let vectorQuery: any = db.collection('sermon_chunks');
+
+    // If sermonId is provided, filter by it (Pre-filtering is ideal but requires composite index with vector)
+    // For now, we'll fetch more results and filter in memory or rely on the vector search to find relevant chunks naturally
+    // IF we had a composite index (sermonId + embedding), we could do:
+    // .where('sermonId', '==', request.data.sermonId)
+
+    // However, without a custom index, let's try to just search. 
+    // If the user asks about "this sermon", the semantic similarity to the sermon chunks should be high.
+    // BUT, to be safe and precise, let's try to filter if possible.
+    // Vertex AI Vector Search supports filtering, but Firestore Vector Search is limited.
+
+    // Strategy: If sermonId is present, we might want to fetch chunks for that sermon specifically if the query is very specific?
+    // Actually, Firestore Vector Search DOES support pre-filtering with `where` clauses if you have the index.
+    // Let's assume we might not have the index yet, so we'll do a broad search but maybe boost?
+    // Wait, the user wants "context of the sermons upon ingestion".
+
+    // Let's try to use the `where` clause if `sermonId` is passed.
+    // We will need to create a composite index: sermonId (ASC) + embedding (VECTOR).
+
+    if (request.data.sermonId) {
+        vectorQuery = vectorQuery.where('sermonId', '==', request.data.sermonId);
+    }
+
+    const snapshot = await vectorQuery
         .findNearest('embedding', FieldValue.vector(queryVector), {
             limit: 5,
             distanceMeasure: 'COSINE'
         })
         .get();
 
-    const context = snapshot.docs.map(doc => doc.data().text).join('\n\n');
+    const context = snapshot.docs.map((doc: any) => doc.data().text).join('\n\n');
 
     // 3. Generate Response
     // 3. Generate Response
@@ -153,6 +177,15 @@ export const chatWithBibleBot = async (request: any) => {
        Example: \`[ACTION:EMAIL | office@bethelmetro.org | Baptism Inquiry | Hi, I would like to know more about baptism...]\`
        *Note: Default recipient is office@bethelmetro.org unless specified.*
 
+    3. **Search Action (Visual Aids):**
+       If the user asks for a visual aid (map, image, diagram) or if you believe an image would significantly enhance the explanation (e.g., "Show me a map of Paul's journeys"), output a search query tag at the end.
+       Output: \`<SEARCH>concise search query</SEARCH>\`
+       Example: \`<SEARCH>map of Paul's first missionary journey</SEARCH>\`
+       *Note: Only use this if a visual is genuinely helpful.*
+
+    4. **Summary Suggestion:**
+       If the conversation reaches a "noteworthy" moment (deep theology, practical application) OR if the user explicitly asks to "save this", "add to notes", or "remember this", output the tag \`<SUGGEST_SUMMARY>\` at the very end of your response.
+
     **Sermon Context:**
     ${context || "No specific sermon context available for this query."}
     `;
@@ -176,6 +209,27 @@ export const chatWithBibleBot = async (request: any) => {
         **Context:**
         Use the provided sermon/bible context if relevant to the post topic:
         ${context || "No specific context."}
+        `;
+    }
+
+    // Override prompt for 'summarize_notes' intent
+    if (request.data.intent === 'summarize_notes') {
+        systemPrompt = `
+        You are a professional, strict, and objective Note Taker.
+        Your ONLY job is to convert the provided conversation history and context into a structured study note.
+
+        **Strict Rules:**
+        1. **NO Conversational Filler:** Do NOT say "Here is your summary", "Sure", "I can help with that", or "Let me know if you need anything else".
+        2. **Output ONLY the Content:** Start directly with the first header or bullet point.
+        3. **Format:** Use Markdown.
+           - Use **Bold Headers** for main topics.
+           - Use bullet points for details.
+           - Use > Blockquotes for key scripture or quotes.
+        4. **Content:** Summarize the key theological points, practical applications, and scripture references discussed in the chat history.
+        5. **Context:** Use the provided sermon context to ensure accuracy.
+
+        **Input Context:**
+        ${context || "No specific sermon context."}
         `;
     }
 

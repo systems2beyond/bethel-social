@@ -6,6 +6,7 @@ import { db } from '@/lib/firebase';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { Plus, Trash2, Save, MessageSquare, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useChat } from '@/context/ChatContext';
+import TiptapEditor from '@/components/Editor/TiptapEditor';
 
 interface Note {
     id: string;
@@ -69,8 +70,58 @@ export default function NotesPage() {
         setActiveNoteId(docRef.id);
     };
 
-    const handleSave = async () => {
+    const saveTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+
+    // Auto-save with debounce
+    const debouncedSave = (newTitle: string, newContent: string) => {
+        setIsSaving(true);
+
+        if (saveTimeoutRef.current) {
+            clearTimeout(saveTimeoutRef.current);
+        }
+
+        saveTimeoutRef.current = setTimeout(async () => {
+            if (!user || !activeNoteId) return;
+
+            try {
+                await updateDoc(doc(db, 'users', user.uid, 'notes', activeNoteId), {
+                    title: newTitle,
+                    content: newContent,
+                    updatedAt: serverTimestamp()
+                });
+            } catch (error) {
+                console.error("Error saving note:", error);
+            } finally {
+                setIsSaving(false);
+            }
+        }, 1500);
+    };
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            if (saveTimeoutRef.current) {
+                clearTimeout(saveTimeoutRef.current);
+            }
+        };
+    }, []);
+
+    const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const newTitle = e.target.value;
+        setTitle(newTitle);
+        debouncedSave(newTitle, content);
+    };
+
+    const handleContentChange = (newContent: string) => {
+        setContent(newContent);
+        debouncedSave(title, newContent);
+    };
+
+    // Manual save (immediate)
+    const handleManualSave = async () => {
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
         if (!user || !activeNoteId) return;
+
         setIsSaving(true);
         try {
             await updateDoc(doc(db, 'users', user.uid, 'notes', activeNoteId), {
@@ -139,8 +190,8 @@ export default function NotesPage() {
                             key={note.id}
                             onClick={() => setActiveNoteId(note.id)}
                             className={`p-3 rounded-lg cursor-pointer group relative transition-colors ${activeNoteId === note.id
-                                    ? 'bg-white dark:bg-zinc-800 shadow-sm border border-gray-200 dark:border-zinc-700'
-                                    : 'hover:bg-gray-100 dark:hover:bg-zinc-800/50'
+                                ? 'bg-white dark:bg-zinc-800 shadow-sm border border-gray-200 dark:border-zinc-700'
+                                : 'hover:bg-gray-100 dark:hover:bg-zinc-800/50'
                                 }`}
                         >
                             <h3 className="font-medium text-sm text-gray-900 dark:text-gray-100 truncate pr-6">
@@ -168,13 +219,13 @@ export default function NotesPage() {
                             <input
                                 type="text"
                                 value={title}
-                                onChange={(e) => setTitle(e.target.value)}
+                                onChange={handleTitleChange}
                                 placeholder="Note Title"
                                 className="text-xl font-bold bg-transparent border-none focus:ring-0 p-0 w-full text-gray-900 dark:text-white placeholder-gray-400"
                             />
                             <div className="flex items-center space-x-2">
                                 <button
-                                    onClick={handleSave}
+                                    onClick={handleManualSave}
                                     disabled={isSaving}
                                     className="flex items-center space-x-2 px-4 py-2 bg-gray-100 dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-700 rounded-lg text-sm font-medium transition-colors"
                                 >
@@ -191,11 +242,11 @@ export default function NotesPage() {
                             </div>
                         </div>
                         <div className="flex-1 p-6 overflow-y-auto">
-                            <textarea
-                                value={content}
-                                onChange={(e) => setContent(e.target.value)}
-                                placeholder="Start typing your sermon notes here..."
-                                className="w-full h-full resize-none border-none focus:ring-0 bg-transparent text-lg leading-relaxed text-gray-800 dark:text-gray-200 placeholder-gray-300 dark:placeholder-zinc-700"
+                            <TiptapEditor
+                                content={content}
+                                onChange={handleContentChange}
+                                placeholder="Start typing your notes here..."
+                                className="h-full"
                             />
                         </div>
                     </>

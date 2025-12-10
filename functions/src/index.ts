@@ -124,3 +124,5 @@ export const ingest = onCall(ingestSermon);
 export { extractEventFromPost, backfillEvents } from './ai/events';
 export { onCommentWritten } from './triggers/comments';
 export { updateUserRole } from './admin/user_management';
+export { ingestSermonWebhook } from './ai/sermons';
+export { search } from './ai/search';

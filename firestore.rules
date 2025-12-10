@@ -32,6 +32,11 @@ service cloud.firestore {
       allow write: if request.auth != null;
     }
 
+    match /sermons/{sermonId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
     // User Private Data (Profile, Chat History)
     match /users/{userId} {
       // Allow user to read/write their own data, OR allow admin to read all
@@ -42,6 +47,23 @@ service cloud.firestore {
         allow read, write: if request.auth != null && request.auth.uid == userId;
         
         match /messages/{messageId} {
+          allow read, write: if request.auth != null && request.auth.uid == userId;
+        }
+      }
+
+      match /sermon_notes/{sermonId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+
+        match /chat/{messageId} {
+          allow read, write: if request.auth != null && request.auth.uid == userId;
+        }
+      }
+
+      // Unified Notes
+      match /notes/{noteId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+
+        match /chat/{messageId} {
           allow read, write: if request.auth != null && request.auth.uid == userId;
         }
       }

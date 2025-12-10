@@ -10,6 +10,10 @@
   },
   "dependencies": {
     "@google-cloud/vertexai": "^1.10.0",
+    "@tiptap/extension-placeholder": "^3.13.0",
+    "@tiptap/extension-typography": "^3.13.0",
+    "@tiptap/react": "^3.13.0",
+    "@tiptap/starter-kit": "^3.13.0",
     "axios": "^1.13.2",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
