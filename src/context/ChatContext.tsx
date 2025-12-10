@@ -34,6 +34,8 @@ interface ChatContextType {
     currentChatId: string | null;
     createNewChat: () => Promise<void>;
     loadChat: (chatId: string) => void;
+    registerContextHandler: (handler: ((message: string) => void) | null) => void;
+    hasContextHandler: boolean;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -50,7 +52,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     ]);
     const [isLoading, setIsLoading] = useState(false);
     const [currentChatId, setCurrentChatId] = useState<string | null>(null);
+    const [contextHandler, setContextHandler] = useState<((message: string) => void) | null>(null);
     const router = useRouter();
+
+    const registerContextHandler = (handler: ((message: string) => void) | null) => {
+        setContextHandler(() => handler);
+    };
 
     // Load initial chat or listen to current chat
     useEffect(() => {
@@ -97,6 +104,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     const sendMessage = async (content: string, hiddenContext?: string, options: { intent?: 'chat' | 'post' } = {}) => {
         if (!content.trim()) return;
+
+        // Check for context override
+        if (contextHandler) {
+            contextHandler(content);
+            return;
+        }
 
         const intent = options.intent || 'chat';
 
@@ -173,9 +186,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 intent // Store intent for debugging/history
             });
 
-            // Update chat title if it's the first message (and generic title)
-            // (Skipping for brevity, handled by initial create or update)
-
             // Call AI
             const chatFn = httpsCallable(functions, 'chat');
             const fullMessage = hiddenContext ? `${content}${hiddenContext}` : content;
@@ -187,8 +197,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             }));
 
             // Fetch user profile for personalization
-            // const userDoc = await getDoc(doc(db, 'users', user.uid));
-            // const userData = userDoc.data();
             const userName = userData?.displayName || user.displayName || 'Friend';
             const userPhone = userData?.phoneNumber || null;
 
@@ -221,7 +229,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     };
 
     return (
-        <ChatContext.Provider value={{ messages, isLoading, sendMessage, currentChatId, createNewChat, loadChat }}>
+        <ChatContext.Provider value={{ messages, isLoading, sendMessage, currentChatId, createNewChat, loadChat, registerContextHandler, hasContextHandler: !!contextHandler }}>
             {children}
         </ChatContext.Provider>
     );

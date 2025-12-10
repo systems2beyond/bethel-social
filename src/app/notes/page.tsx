@@ -7,6 +7,7 @@ import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, u
 import { Plus, Trash2, Save, MessageSquare, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useChat } from '@/context/ChatContext';
 import TiptapEditor from '@/components/Editor/TiptapEditor';
+import AiNotesModal from '@/components/Sermons/AiNotesModal';
 
 interface Note {
     id: string;
@@ -23,41 +24,26 @@ export default function NotesPage() {
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
     const [isSaving, setIsSaving] = useState(false);
-    const [showChat, setShowChat] = useState(true);
+    const [isAiNotesModalOpen, setIsAiNotesModalOpen] = useState(false);
+    const [initialAiQuery, setInitialAiQuery] = useState('');
 
-    // Load notes
-    useEffect(() => {
-        if (!user) return;
+    // Register Context Handler for Global Chat
+    const { registerContextHandler } = useChat();
 
-        const q = query(
-            collection(db, 'users', user.uid, 'notes'),
-            orderBy('updatedAt', 'desc')
-        );
-
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const notesData = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            })) as Note[];
-            setNotes(notesData);
-        });
-
-        return () => unsubscribe();
-    }, [user]);
-
-    // Load active note into editor
+    // Register handler whenever NotesPage is active (and a note is selected)
     useEffect(() => {
         if (activeNoteId) {
-            const note = notes.find(n => n.id === activeNoteId);
-            if (note) {
-                setTitle(note.title);
-                setContent(note.content);
-            }
+            registerContextHandler((msg) => handleOpenAiNotes(msg));
         } else {
-            setTitle('');
-            setContent('');
+            registerContextHandler(null);
         }
-    }, [activeNoteId, notes]);
+        return () => registerContextHandler(null);
+    }, [activeNoteId, registerContextHandler]);
+
+    const handleOpenAiNotes = (query?: string) => {
+        setInitialAiQuery(query || '');
+        setIsAiNotesModalOpen(true);
+    };
 
     const handleCreateNote = async () => {
         if (!user) return;
@@ -95,6 +81,13 @@ export default function NotesPage() {
                 setIsSaving(false);
             }
         }, 1500);
+    };
+
+    const handleAddToNotes = (text: string) => {
+        if (!activeNoteId) return;
+        const newContent = content + '\n\n' + text;
+        setContent(newContent);
+        debouncedSave(title, newContent);
     };
 
     // Cleanup on unmount
@@ -146,20 +139,6 @@ export default function NotesPage() {
         }
     };
 
-    const handleAskAI = () => {
-        // Switch to chat and pass context
-        // We'll use a special context string that the ChatContext handles (or we manually send)
-        // Ideally, we want the chat sidebar to open or navigate to chat page with context.
-        // For now, let's just navigate to chat with the note content as context.
-        const context = `\n\n[Context: User is asking about their note titled "${title}". Note Content: "${content}"]`;
-        // We can use the router to go to /chat?q=... or use the ChatContext if we are embedding chat here.
-        // The plan said "Right pane: AI Chat". So we should embed the ChatInterface here?
-        // Or just link to it. Embedding is better for "NotebookLM" feel.
-        // Let's try to reuse ChatInterface if possible, or build a mini one.
-        // For this first pass, let's just link to the main chat.
-        window.location.href = `/chat?q=${encodeURIComponent("Help me understand my notes." + context)}`;
-    };
-
     if (loading) return <div className="p-8 flex justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>;
 
     if (!user) {
@@ -173,43 +152,7 @@ export default function NotesPage() {
 
     return (
         <div className="flex h-screen bg-white dark:bg-zinc-950">
-            {/* Left Sidebar: Note List */}
-            <div className="w-64 border-r border-gray-200 dark:border-zinc-800 flex flex-col bg-gray-50 dark:bg-zinc-900">
-                <div className="p-4 border-b border-gray-200 dark:border-zinc-800 flex justify-between items-center">
-                    <h2 className="font-semibold text-gray-700 dark:text-gray-200">My Notes</h2>
-                    <button
-                        onClick={handleCreateNote}
-                        className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                        <Plus className="w-4 h-4" />
-                    </button>
-                </div>
-                <div className="flex-1 overflow-y-auto p-2 space-y-2">
-                    {notes.map(note => (
-                        <div
-                            key={note.id}
-                            onClick={() => setActiveNoteId(note.id)}
-                            className={`p-3 rounded-lg cursor-pointer group relative transition-colors ${activeNoteId === note.id
-                                ? 'bg-white dark:bg-zinc-800 shadow-sm border border-gray-200 dark:border-zinc-700'
-                                : 'hover:bg-gray-100 dark:hover:bg-zinc-800/50'
-                                }`}
-                        >
-                            <h3 className="font-medium text-sm text-gray-900 dark:text-gray-100 truncate pr-6">
-                                {note.title || 'Untitled Note'}
-                            </h3>
-                            <p className="text-xs text-gray-500 mt-1 truncate">
-                                {note.updatedAt?.toDate().toLocaleDateString()}
-                            </p>
-                            <button
-                                onClick={(e) => handleDelete(e, note.id)}
-                                className="absolute right-2 top-3 opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition-opacity"
-                            >
-                                <Trash2 className="w-3 h-3" />
-                            </button>
-                        </div>
-                    ))}
-                </div>
-            </div>
+            {/* ... (sidebar) ... */}
 
             {/* Center: Editor */}
             <div className="flex-1 flex flex-col min-w-0 bg-white dark:bg-zinc-950">
@@ -233,7 +176,7 @@ export default function NotesPage() {
                                     <span>{isSaving ? 'Saving...' : 'Save'}</span>
                                 </button>
                                 <button
-                                    onClick={handleAskAI}
+                                    onClick={() => handleOpenAiNotes()}
                                     className="flex items-center space-x-2 px-4 py-2 bg-purple-100 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 hover:bg-purple-200 dark:hover:bg-purple-900/40 rounded-lg text-sm font-medium transition-colors"
                                 >
                                     <MessageSquare className="w-4 h-4" />
@@ -247,6 +190,7 @@ export default function NotesPage() {
                                 onChange={handleContentChange}
                                 placeholder="Start typing your notes here..."
                                 className="h-full"
+                                onAskAi={handleOpenAiNotes}
                             />
                         </div>
                     </>
@@ -259,6 +203,19 @@ export default function NotesPage() {
                     </div>
                 )}
             </div>
+
+            {/* AI Notes Modal */}
+            <AiNotesModal
+                isOpen={isAiNotesModalOpen}
+                onClose={() => setIsAiNotesModalOpen(false)}
+                sermonId="general-notes" // Or pass specific sermon ID if linked
+                sermonTitle={title}
+                initialQuery={initialAiQuery}
+                onInsertToNotes={(text) => {
+                    handleAddToNotes(text);
+                    setIsAiNotesModalOpen(false);
+                }}
+            />
         </div>
     );
 }

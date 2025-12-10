@@ -8,6 +8,7 @@ import { doc, onSnapshot, query, collection, orderBy, addDoc, serverTimestamp, s
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
+import { useChat } from '@/context/ChatContext';
 import { Sermon } from '@/types';
 import TiptapEditor from '@/components/Editor/TiptapEditor';
 import AiNotesModal from './AiNotesModal';
@@ -36,6 +37,15 @@ export default function SermonModal({ sermon, initialMode, onClose }: SermonModa
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
+
+    // Register Context Handler for Global Chat
+    const { registerContextHandler } = useChat();
+
+    // Register handler whenever SermonModal is open so the global bar can trigger the AI modal
+    useEffect(() => {
+        registerContextHandler((msg) => handleOpenAiNotes(msg));
+        return () => registerContextHandler(null);
+    }, [registerContextHandler]); // Removed isAiNotesModalOpen dependency
 
     useEffect(() => {
         if (isAiOpen) {
@@ -417,109 +427,7 @@ export default function SermonModal({ sermon, initialMode, onClose }: SermonModa
                                         </div>
                                     </div>
 
-                                    {/* Chat Section */}
-                                    <div className="bg-gray-50 dark:bg-zinc-900/50 flex flex-col min-h-[600px] pb-10 lg:pb-0">
-                                        <div className="px-6 py-4 border-b border-gray-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 sticky top-0 z-10 flex justify-between items-center">
-                                            <div className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                                                <Sparkles className="w-4 h-4 text-purple-500" />
-                                                Ask Matthew
-                                            </div>
-                                            <button
-                                                onClick={handleSummarizeChat}
-                                                disabled={messages.length === 0 || aiLoading}
-                                                className={`text-xs flex items-center gap-1 p-2 -mr-2 transition-all rounded-lg ${showSummarySuggestion
-                                                    ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 ring-2 ring-purple-500 animate-pulse'
-                                                    : 'text-purple-600 hover:text-purple-700 disabled:opacity-50'
-                                                    }`}
-                                                title="Summarize conversation to notes"
-                                            >
-                                                <FileText className="w-3 h-3" />
-                                                {showSummarySuggestion ? 'Save to Notes?' : 'Summarize to Notes'}
-                                            </button>
-                                        </div>
-
-                                        {/* Messages */}
-                                        <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                                            {messages.length === 0 && (
-                                                <div className="text-center text-gray-400 text-sm py-8">
-                                                    Ask questions about the sermon...
-                                                </div>
-                                            )}
-                                            {messages.map((msg) => (
-                                                <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} space-y-2`}>
-                                                    <div className={`group relative max-w-[90%] rounded-2xl px-4 py-2.5 text-sm shadow-sm ${msg.role === 'user'
-                                                        ? 'bg-purple-600 text-white rounded-br-none'
-                                                        : 'bg-white dark:bg-zinc-800 text-gray-800 dark:text-gray-200 border border-gray-100 dark:border-zinc-700 rounded-bl-none'
-                                                        }`}>
-                                                        {msg.content}
-
-                                                        {/* Add to Notes Button (Only for AI messages) */}
-                                                        {msg.role === 'model' && (
-                                                            <div className="absolute -right-16 top-1/2 -translate-y-1/2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                                                                <button
-                                                                    onClick={() => handleAddToNotes(msg.content)}
-                                                                    className="p-2 text-gray-400 hover:text-blue-600 bg-white dark:bg-zinc-800 rounded-full shadow-sm border border-gray-100 dark:border-zinc-700"
-                                                                    title="Add to Notes"
-                                                                >
-                                                                    <Plus className="w-4 h-4" />
-                                                                </button>
-
-                                                                {/* Search/Media Icon (If search tag detected) */}
-                                                                {msg.content.includes('<SEARCH>') && (
-                                                                    <SearchPopover
-                                                                        initialQuery={msg.content.match(/<SEARCH>(.*?)<\/SEARCH>/)?.[1] || ''}
-                                                                        onAddToNotes={(imgHtml) => handleAddToNotes(imgHtml)}
-                                                                    />
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                    </div>
-
-                                                    {/* Inline Summary Suggestion Button */}
-                                                    {msg.hasSuggestion && (
-                                                        <motion.button
-                                                            initial={{ opacity: 0, y: -10 }}
-                                                            animate={{ opacity: 1, y: 0 }}
-                                                            onClick={handleSummarizeChat}
-                                                            className="flex items-center gap-2 px-3 py-1.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs font-medium rounded-full hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors"
-                                                        >
-                                                            <Sparkles className="w-3 h-3" />
-                                                            Save this conversation to notes?
-                                                        </motion.button>
-                                                    )}
-                                                </div>
-                                            ))}
-                                            {aiLoading && (
-                                                <div className="flex justify-start">
-                                                    <div className="bg-white dark:bg-zinc-800 rounded-2xl rounded-bl-none px-4 py-2.5 text-sm border border-gray-100 dark:border-zinc-700 text-gray-500 flex items-center gap-2">
-                                                        <Sparkles className="w-3 h-3 animate-spin" />
-                                                        Thinking...
-                                                    </div>
-                                                </div>
-                                            )}
-                                            <div ref={messagesEndRef} />
-                                        </div>
-
-                                        {/* Input */}
-                                        <div className="p-4 bg-white dark:bg-zinc-900 border-t border-gray-100 dark:border-zinc-800">
-                                            <form onSubmit={handleSendMessage} className="relative">
-                                                <input
-                                                    type="text"
-                                                    value={input}
-                                                    onChange={(e) => setInput(e.target.value)}
-                                                    placeholder="Ask about the sermon..."
-                                                    className="w-full pl-4 pr-10 py-3 bg-gray-100 dark:bg-zinc-800 rounded-full border-none focus:ring-2 focus:ring-purple-500 text-sm"
-                                                />
-                                                <button
-                                                    type="submit"
-                                                    disabled={!input.trim() || aiLoading}
-                                                    className="absolute right-1.5 top-1.5 p-2 bg-purple-600 text-white rounded-full hover:bg-purple-700 disabled:opacity-50 transition-colors shadow-sm"
-                                                >
-                                                    <Send className="w-4 h-4" />
-                                                </button>
-                                            </form>
-                                        </div>
-                                    </div>
+                                    {/* Chat Section Removed */}
 
                                 </div>
                             </div>

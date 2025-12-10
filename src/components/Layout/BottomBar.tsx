@@ -12,7 +12,7 @@ export function BottomBar() {
     const [isMenuOpen, setIsMenuOpen] = React.useState(false);
     const [mode, setMode] = React.useState<'chat' | 'post'>('chat');
     const [isComposerOpen, setIsComposerOpen] = React.useState(false);
-    const { sendMessage, isLoading } = useChat();
+    const { sendMessage, isLoading, hasContextHandler } = useChat();
     const { activePost } = useFeed();
     const { userData } = useAuth();
     const menuRef = React.useRef<HTMLDivElement>(null);
@@ -44,6 +44,12 @@ export function BottomBar() {
         }
 
         setInput(''); // Clear immediately for better UX
+
+        // If context handler exists (e.g. Notes Modal open), use it instead of navigating
+        if (hasContextHandler) {
+            await sendMessage(message, context, { intent: mode });
+            return;
+        }
 
         // If not on chat page, navigate with query param
         if (window.location.pathname !== '/chat') {
@@ -123,6 +129,8 @@ export function BottomBar() {
                         </div>
 
                         <input
+                            id="global-chat-input"
+                            name="global-chat-input"
                             type="text"
                             value={input}
                             onChange={(e) => setInput(e.target.value)}

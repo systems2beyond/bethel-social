@@ -7,10 +7,17 @@ export const MODEL_FLASH = 'vertexai/gemini-2.0-flash-001';
 export const MODEL_PRO = 'vertexai/gemini-2.0-flash-001'; // Using Flash 2.0 for everything as it's better/faster
 
 // Initialize a separate Genkit instance for routing (always uses Flash)
-const routerAi = genkit({
-    plugins: [vertexAI({ location: 'us-central1', projectId: 'bethel-metro-social' })],
-    model: MODEL_FLASH,
-});
+let routerAi: any;
+
+function getRouterAi() {
+    if (!routerAi) {
+        routerAi = genkit({
+            plugins: [vertexAI({ location: 'us-central1', projectId: 'bethel-metro-social' })],
+            model: MODEL_FLASH,
+        });
+    }
+    return routerAi;
+}
 
 const ClassificationSchema = z.object({
     complexity: z.enum(['SIMPLE', 'COMPLEX']).describe("The complexity level of the query."),
@@ -49,7 +56,7 @@ export async function routeQuery(query: string, hasImage: boolean): Promise<any>
         Query: "${query}"
         `;
 
-        const result = await routerAi.generate({
+        const result = await getRouterAi().generate({
             model: MODEL_FLASH,
             prompt: prompt,
             output: { schema: ClassificationSchema },

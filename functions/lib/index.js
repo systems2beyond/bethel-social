@@ -138,8 +138,8 @@ exports.manualYoutubeSync = (0, https_1.onRequest)({ secrets: [googleApiKey] }, 
     await (0, youtube_1.syncYoutubeContent)();
     res.send('YouTube sync executed.');
 });
-exports.chat = (0, https_1.onCall)(chatbot_1.chatWithBibleBot);
-exports.ingest = (0, https_1.onCall)(chatbot_1.ingestSermon);
+exports.chat = (0, https_1.onCall)({ timeoutSeconds: 300, memory: '1GiB' }, chatbot_1.chatWithBibleBot);
+exports.ingest = (0, https_1.onCall)({ timeoutSeconds: 540, memory: '2GiB' }, chatbot_1.ingestSermon);
 var events_1 = require("./ai/events");
 Object.defineProperty(exports, "extractEventFromPost", { enumerable: true, get: function () { return events_1.extractEventFromPost; } });
 Object.defineProperty(exports, "backfillEvents", { enumerable: true, get: function () { return events_1.backfillEvents; } });

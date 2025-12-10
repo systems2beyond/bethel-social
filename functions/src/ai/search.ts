@@ -2,7 +2,7 @@ import * as logger from 'firebase-functions/logger';
 import { onCall } from 'firebase-functions/v2/https';
 import axios from 'axios';
 
-export const search = onCall(async (request) => {
+export const search = onCall({ timeoutSeconds: 300, memory: '512MiB' }, async (request) => {
     const { query } = request.data;
     logger.info(`Search request received for: ${query}`);
 
@@ -13,6 +13,13 @@ export const search = onCall(async (request) => {
     const apiKey = process.env.GOOGLE_SEARCH_API_KEY;
     const cx = process.env.GOOGLE_SEARCH_CX;
 
+    logger.info('Env Vars Check:', {
+        hasApiKey: !!apiKey,
+        apiKeyPrefix: apiKey ? apiKey.substring(0, 5) : 'N/A',
+        hasCx: !!cx,
+        cxPrefix: cx ? cx.substring(0, 5) : 'N/A'
+    });
+
     // 1. Try Real Search if keys exist
     if (apiKey && cx) {
         try {
@@ -22,8 +29,8 @@ export const search = onCall(async (request) => {
                     key: apiKey,
                     cx: cx,
                     q: query,
-                    searchType: 'image',
-                    num: 6, // Fetch 6 images
+                    // searchType: 'image', // Commented out to get web results (citations + images)
+                    num: 6,
                     safe: 'active'
                 }
             });
@@ -32,7 +39,9 @@ export const search = onCall(async (request) => {
             const results = items.map((item: any) => ({
                 title: item.title,
                 link: item.link,
-                thumbnail: item.image?.thumbnailLink || item.link
+                snippet: item.snippet,
+                displayLink: item.displayLink,
+                thumbnail: item.pagemap?.cse_image?.[0]?.src || item.pagemap?.cse_thumbnail?.[0]?.src || null
             }));
 
             return { results };

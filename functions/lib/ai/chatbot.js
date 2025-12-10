@@ -42,10 +42,16 @@ const vertexai_1 = require("@genkit-ai/vertexai");
 const firestore_1 = require("firebase-admin/firestore");
 const router_1 = require("./router");
 // Initialize Genkit with Vertex AI (uses Project Quota/Blaze)
-const ai = (0, genkit_1.genkit)({
-    plugins: [(0, vertexai_1.vertexAI)({ location: 'us-central1', projectId: 'bethel-metro-social' })],
-    model: 'vertexai/gemini-2.0-flash-001',
-});
+let ai;
+function getAi() {
+    if (!ai) {
+        ai = (0, genkit_1.genkit)({
+            plugins: [(0, vertexai_1.vertexAI)({ location: 'us-central1', projectId: 'bethel-metro-social' })],
+            model: 'vertexai/gemini-2.0-flash-001',
+        });
+    }
+    return ai;
+}
 const db = admin.firestore();
 // Simple text splitter
 function splitText(text, chunkSize = 1000, overlap = 100) {
@@ -87,7 +93,7 @@ const ingestSermon = async (request) => {
     for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i];
         // Generate embedding using Genkit
-        const embeddingResult = await ai.embed({
+        const embeddingResult = await getAi().embed({
             embedder: 'vertexai/text-embedding-004',
             content: chunk,
         });
@@ -123,7 +129,7 @@ const chatWithBibleBot = async (request) => {
         };
     }
     // 1. Embed user query
-    const queryEmbeddingResult = await ai.embed({
+    const queryEmbeddingResult = await getAi().embed({
         embedder: 'vertexai/text-embedding-004',
         content: message,
     });
@@ -223,21 +229,32 @@ const chatWithBibleBot = async (request) => {
         ${context || "No specific context."}
         `;
     }
-    // Override prompt for 'summarize_notes' intent
-    if (request.data.intent === 'summarize_notes') {
+    // Override prompt for 'summarize_notes' intent OR general notes assistant
+    if (request.data.intent === 'summarize_notes' || request.data.intent === 'notes_assistant') {
         systemPrompt = `
-        You are a professional, strict, and objective Note Taker.
-        Your ONLY job is to convert the provided conversation history and context into a structured study note.
-
-        **Strict Rules:**
-        1. **NO Conversational Filler:** Do NOT say "Here is your summary", "Sure", "I can help with that", or "Let me know if you need anything else".
-        2. **Output ONLY the Content:** Start directly with the first header or bullet point.
-        3. **Format:** Use Markdown.
-           - Use **Bold Headers** for main topics.
-           - Use bullet points for details.
+        You are a professional, objective note-taker and research assistant.
+        Your goal is to help the user create high-quality, structured notes from the sermon.
+        
+        RULES:
+        1.  **Strictly Professional Tone:** Do NOT use conversational filler like "Sure!", "Here is...", "I can help with that", or "Great question". Start your response DIRECTLY with the content.
+        2.  **No Prefixes:** Do NOT prefix your response with "Model:", "Assistant:", or "AI:". Just output the answer.
+        3.  **Format:** Use Markdown for structure (headings, bullet points, bold text).
            - Use > Blockquotes for key scripture or quotes.
-        4. **Content:** Summarize the key theological points, practical applications, and scripture references discussed in the chat history.
-        5. **Context:** Use the provided sermon context to ensure accuracy.
+        4.  **Content:** Focus on facts, scripture references, and key theological points.
+        5.  **Search:** You have access to a search tool. If you need to verify facts, find latest information, or find visual aids (images, maps), you MUST output a search query wrapped in tags like this: <SEARCH>query</SEARCH>. 
+           - **NEVER** apologize for not having access to the internet or say "I cannot provide a map". You CAN provide it by using the search tag.
+           - Do not describe the image or fact, just output the tag.
+        
+        Example User: "Can you find a map of Paul's journey?"
+        Example Output: <SEARCH>map of Paul's missionary journeys</SEARCH>
+        
+        Example User: "What is the historical context of Ephesus?"
+        Example Output: <SEARCH>historical context of Ephesus first century</SEARCH>
+        
+        Example User: "Summarize the main point."
+        Example Output: **The Main Point**
+        The central theme of this sermon is...
+        6. **Context:** Use the provided sermon context to ensure accuracy.
 
         **Input Context:**
         ${context || "No specific sermon context."}
@@ -261,7 +278,8 @@ const chatWithBibleBot = async (request) => {
     // Add history if present
     if (history && Array.isArray(history)) {
         history.forEach((msg) => {
-            prompt.push({ text: `\n**${msg.role === 'user' ? 'User' : 'Model'}:**\n${msg.content}` });
+            // Use a simpler format to avoid confusing the AI into repeating "Model:"
+            prompt.push({ text: `\n${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}` });
         });
     }
     // Add current question
@@ -300,7 +318,7 @@ const chatWithBibleBot = async (request) => {
     logger.info(`Using model: ${selectedModel}`);
     let response;
     try {
-        response = await ai.generate({
+        response = await getAi().generate({
             model: selectedModel,
             prompt: prompt,
             config: {

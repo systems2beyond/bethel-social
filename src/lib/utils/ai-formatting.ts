@@ -1,15 +1,18 @@
-
 /**
  * Formats AI response text (Markdown-like) into HTML with specific styling.
  * Handles bold, italic, headers (with highlighter style), and lists.
  */
+// Redefine to strip at start
 export const formatAiResponse = (text: string) => {
-    const lines = text.split('\n');
+    // Strip <SEARCH> tags (multiline) so they don't show up as text
+    const cleanText = text.replace(/<SEARCH>[\s\S]*?<\/SEARCH>/g, '');
+
+    const lines = cleanText.split('\n');
     let html = '';
     let inList = false;
 
     // Shared Header Style
-    const headerStyle = "background-color: rgba(168, 85, 247, 0.15); padding: 4px 8px; border-radius: 6px; display: inline-block; margin-top: 24px; margin-bottom: 8px; color: #9333ea; font-weight: 600;";
+    const headerStyle = "background-color: rgba(168, 85, 247, 0.15); padding: 4px 8px; border-radius: 6px; display: inline-block; margin-top: 24px; margin-bottom: 8px; color: #4c1d95; font-weight: 700;";
 
     lines.forEach((line, index) => {
         let processedLine = line.trim();
@@ -64,5 +67,8 @@ export const formatAiResponse = (text: string) => {
  * Strips internal tags like <SUGGEST_SUMMARY> from the content.
  */
 export const cleanAiResponse = (content: string) => {
-    return content.replace(/<SUGGEST_SUMMARY>/g, '').trim();
+    return content
+        .replace(/<SUGGEST_SUMMARY>/g, '')
+        .replace(/<SEARCH>[\s\S]*?<\/SEARCH>/g, '') // Strip search tags (multiline)
+        .trim();
 };

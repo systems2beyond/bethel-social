@@ -118,8 +118,8 @@ export const manualYoutubeSync = onRequest({ secrets: [googleApiKey] }, async (r
 
 
 
-export const chat = onCall(chatWithBibleBot);
-export const ingest = onCall(ingestSermon);
+export const chat = onCall({ timeoutSeconds: 300, memory: '1GiB' }, chatWithBibleBot);
+export const ingest = onCall({ timeoutSeconds: 540, memory: '2GiB' }, ingestSermon);
 
 export { extractEventFromPost, backfillEvents } from './ai/events';
 export { onCommentWritten } from './triggers/comments';

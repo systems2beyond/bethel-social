@@ -15,6 +15,12 @@ interface TiptapEditorProps {
 }
 
 const TiptapEditor = ({ content, onChange, placeholder = 'Start typing...', className = '', onAskAi }: TiptapEditorProps) => {
+    const onAskAiRef = React.useRef(onAskAi);
+
+    useEffect(() => {
+        onAskAiRef.current = onAskAi;
+    }, [onAskAi]);
+
     const editor = useEditor({
         extensions: [
             StarterKit,
@@ -28,30 +34,32 @@ const TiptapEditor = ({ content, onChange, placeholder = 'Start typing...', clas
                 class: `prose dark:prose-invert max-w-none focus:outline-none min-h-[200px] ${className}`,
             },
             handleKeyDown: (view, event) => {
-                if (event.key === 'Enter' && onAskAi) {
+                if (event.key === 'Enter') {
                     const { state } = view;
                     const { selection } = state;
                     const { $from } = selection;
                     const currentLineText = $from.parent.textContent;
 
-                    // Match @matt or @matthew followed by query
-                    const match = currentLineText.match(/^@(matt|matthew)\s+(.+)$/i);
+                    console.log('Tiptap Enter Key:', { currentLineText, hasOnAskAi: !!onAskAiRef.current });
 
-                    if (match) {
-                        const query = match[2];
+                    if (onAskAiRef.current) {
+                        // Match @matt or @matthew, optional leading whitespace, optional query
+                        const match = currentLineText.match(/^\s*@(matt|matthew)(?:\s+(.+))?$/i);
+                        console.log('Tiptap Match:', match);
 
-                        // Remove the trigger line
-                        // We need to find the start and end of the current node
-                        const start = $from.start();
-                        const end = $from.end();
+                        if (match) {
+                            const query = match[2] || ''; // Capture group 2 is the query, or empty
 
-                        // Delete the range
-                        view.dispatch(state.tr.delete(start, end)); // Delete content
-                        // Optionally delete the node itself if it's a paragraph to avoid empty line? 
-                        // For now, just clearing content is safer.
+                            // Remove the trigger line
+                            const start = $from.start();
+                            const end = $from.end();
 
-                        onAskAi(query);
-                        return true; // Prevent default Enter behavior (new line)
+                            view.dispatch(state.tr.delete(start, end)); // Delete content
+
+                            console.log('Triggering AI with query:', query);
+                            onAskAiRef.current(query);
+                            return true; // Prevent default Enter behavior (new line)
+                        }
                     }
                 }
                 return false;

@@ -56,7 +56,7 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
                 history: messages.map(m => ({ role: m.role, content: m.content })),
                 userName: userData?.displayName || user.displayName,
                 sermonId: sermonId,
-                // We can add a specific intent if needed, e.g., 'notes_assistant'
+                intent: 'notes_assistant'
             }) as any;
 
             let aiResponse = result.data.response;
@@ -123,9 +123,21 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
                         <Sparkles className="w-5 h-5 text-purple-500" />
                         <h2 className="font-semibold text-gray-900 dark:text-white">Notes Assistant</h2>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors">
-                        <X className="w-5 h-5 text-gray-500" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-gray-400 font-mono">v1.1</span>
+                        {messages.length > 0 && (
+                            <button
+                                onClick={handleSummarize}
+                                className="flex items-center gap-2 px-3 py-1.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs font-medium rounded-full hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors"
+                            >
+                                <Sparkles className="w-3 h-3" />
+                                Save this conversation to notes?
+                            </button>
+                        )}
+                        <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors">
+                            <X className="w-5 h-5 text-gray-500" />
+                        </button>
+                    </div>
                 </div>
 
                 {/* Messages */}
@@ -154,9 +166,23 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
                                 : 'bg-white dark:bg-zinc-800 text-gray-800 dark:text-gray-200 border border-gray-100 dark:border-zinc-700 rounded-bl-none'
                                 }`}>
                                 {msg.role === 'model' ? (
-                                    <div dangerouslySetInnerHTML={{ __html: formatAiResponse(msg.content) }} />
+                                    <>
+                                        {/* Debug Log */}
+                                        {console.log('AI Msg Content:', msg.content)}
+                                        <div dangerouslySetInnerHTML={{ __html: formatAiResponse(msg.content) }} />
+                                    </>
                                 ) : (
                                     msg.content
+                                )}
+
+                                {/* Search Results (If search tag detected) */}
+                                {msg.role === 'model' && msg.content.includes('<SEARCH>') && (
+                                    <div className="mt-4">
+                                        <SearchResults
+                                            initialQuery={msg.content.match(/<SEARCH>([\s\S]*?)<\/SEARCH>/)?.[1]?.trim() || ''}
+                                            onInsertToNotes={onInsertToNotes}
+                                        />
+                                    </div>
                                 )}
                             </div>
 
@@ -191,6 +217,8 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
                 <div className="p-4 bg-white dark:bg-zinc-900 border-t border-gray-100 dark:border-zinc-800">
                     <form onSubmit={(e) => handleSendMessage(e)} className="relative">
                         <input
+                            id="ai-notes-input"
+                            name="ai-notes-input"
                             type="text"
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
@@ -208,6 +236,103 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
                     </form>
                 </div>
             </motion.div>
+        </div>
+    );
+}
+
+// Perplexity-style Search Results Component
+function SearchResults({ initialQuery, onInsertToNotes }: { initialQuery: string, onInsertToNotes: (html: string) => void }) {
+    const [results, setResults] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        if (initialQuery) {
+            handleSearch();
+        }
+    }, [initialQuery]);
+
+    const handleSearch = async () => {
+        setLoading(true);
+        try {
+            const searchFn = httpsCallable(functions, 'search');
+            const res = await searchFn({ query: initialQuery }) as any;
+            setResults(res.data.results || []);
+        } catch (err) {
+            console.error("Search failed", err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="flex items-center gap-2 text-xs text-gray-400 animate-pulse">
+                <Search className="w-3 h-3" />
+                Searching web for "{initialQuery}"...
+            </div>
+        );
+    }
+
+    if (results.length === 0) return null;
+
+    const images = results.filter(r => r.thumbnail);
+
+    return (
+        <div className="space-y-4 w-full">
+            {/* Sources Section */}
+            <div>
+                <div className="flex items-center gap-2 mb-2">
+                    <FileText className="w-3 h-3 text-gray-400" />
+                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Sources</h3>
+                </div>
+                <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar -mx-1 px-1">
+                    {results.map((result, idx) => (
+                        <a
+                            key={idx}
+                            href={result.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex-shrink-0 w-[140px] p-3 bg-gray-50 dark:bg-zinc-800/50 hover:bg-gray-100 dark:hover:bg-zinc-800 border border-gray-100 dark:border-zinc-700 rounded-xl transition-colors flex flex-col gap-2 group"
+                        >
+                            <div className="flex items-center gap-2">
+                                <img
+                                    src={`https://www.google.com/s2/favicons?domain=${result.displayLink || result.link}&sz=32`}
+                                    alt=""
+                                    className="w-4 h-4 rounded-sm opacity-70 group-hover:opacity-100 transition-opacity"
+                                />
+                                <span className="text-[10px] text-gray-400 truncate flex-1">{result.displayLink || new URL(result.link).hostname}</span>
+                            </div>
+                            <div className="text-xs font-medium text-gray-700 dark:text-gray-300 line-clamp-2 leading-snug">
+                                {result.title}
+                            </div>
+                        </a>
+                    ))}
+                </div>
+            </div>
+
+            {/* Images Section */}
+            {images.length > 0 && (
+                <div>
+                    <div className="flex items-center gap-2 mb-2">
+                        <ImageIcon className="w-3 h-3 text-gray-400" />
+                        <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Images</h3>
+                    </div>
+                    <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar -mx-1 px-1">
+                        {images.map((img, idx) => (
+                            <div key={idx} className="group relative flex-shrink-0 w-[120px] aspect-square bg-gray-100 dark:bg-zinc-800 rounded-xl overflow-hidden cursor-pointer hover:ring-2 hover:ring-purple-500 transition-all">
+                                <img src={img.thumbnail} alt={img.title} className="w-full h-full object-cover" />
+                                <button
+                                    onClick={() => onInsertToNotes(`<img src="${img.thumbnail}" alt="${img.title}" style="max-width: 100%; border-radius: 8px; margin: 24px 0;" /><p class="text-xs text-gray-500 text-center mb-6">${img.title}</p>`)}
+                                    className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity text-white font-medium text-xs backdrop-blur-sm"
+                                >
+                                    <Plus className="w-4 h-4 mr-1" />
+                                    Add
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

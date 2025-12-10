@@ -2,7 +2,14 @@ import * as logger from 'firebase-functions/logger';
 import * as admin from 'firebase-admin';
 import { google } from 'googleapis';
 
-const youtube = google.youtube('v3');
+let youtubeClient: any;
+
+function getYoutube() {
+    if (!youtubeClient) {
+        youtubeClient = google.youtube('v3');
+    }
+    return youtubeClient;
+}
 
 interface YoutubeVideo {
     id: string;
@@ -33,7 +40,7 @@ export const syncYoutubeContent = async () => {
         if (!CHANNEL_ID) {
             logger.info('Resolving channel ID for @BMBCFamily...');
             try {
-                const channelResponse = await youtube.channels.list({
+                const channelResponse = await getYoutube().channels.list({
                     key: API_KEY,
                     forHandle: 'BMBCFamily',
                     part: ['id']
@@ -45,7 +52,7 @@ export const syncYoutubeContent = async () => {
                 } else {
                     // Fallback to search if handle lookup fails
                     logger.warn('Handle lookup failed, falling back to search...');
-                    const searchResponse = await youtube.search.list({
+                    const searchResponse = await getYoutube().search.list({
                         key: API_KEY,
                         q: 'BMBCFamily',
                         type: ['channel'],
@@ -68,7 +75,7 @@ export const syncYoutubeContent = async () => {
         }
 
         // 1. Fetch latest videos
-        const response = await youtube.search.list({
+        const response = await getYoutube().search.list({
             key: API_KEY,
             channelId: CHANNEL_ID,
             part: ['snippet'], // Search only supports snippet
@@ -78,7 +85,7 @@ export const syncYoutubeContent = async () => {
         });
 
         // 2. Fetch currently LIVE video
-        const liveResponse = await youtube.search.list({
+        const liveResponse = await getYoutube().search.list({
             key: API_KEY,
             channelId: CHANNEL_ID,
             part: ['snippet'],
@@ -88,7 +95,7 @@ export const syncYoutubeContent = async () => {
         });
 
         // 3. Fetch recently COMPLETED live videos (Standard search misses these sometimes)
-        const completedResponse = await youtube.search.list({
+        const completedResponse = await getYoutube().search.list({
             key: API_KEY,
             channelId: CHANNEL_ID,
             part: ['snippet'],
@@ -111,7 +118,7 @@ export const syncYoutubeContent = async () => {
         }
 
         // 3. Fetch Video Details (needed for liveStreamingDetails)
-        const videoDetailsResponse = await youtube.videos.list({
+        const videoDetailsResponse = await getYoutube().videos.list({
             key: API_KEY,
             id: uniqueVideoIds,
             part: ['snippet', 'liveStreamingDetails']

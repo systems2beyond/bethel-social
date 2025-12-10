@@ -8,10 +8,17 @@ import { FieldValue } from 'firebase-admin/firestore';
 import * as cheerio from 'cheerio';
 
 // Initialize Genkit with Vertex AI
-const ai = genkit({
-    plugins: [vertexAI({ location: 'us-central1', projectId: 'bethel-metro-social' })],
-    model: 'vertexai/gemini-2.0-flash-001',
-});
+let ai: any;
+
+function getAi() {
+    if (!ai) {
+        ai = genkit({
+            plugins: [vertexAI({ location: 'us-central1', projectId: 'bethel-metro-social' })],
+            model: 'vertexai/gemini-2.0-flash-001',
+        });
+    }
+    return ai;
+}
 
 const db = admin.firestore();
 
@@ -105,7 +112,7 @@ export const ingestContent = onCall(
         for (let i = 0; i < chunks.length; i++) {
             const chunk = chunks[i];
             try {
-                const embeddingResult = await ai.embed({
+                const embeddingResult = await getAi().embed({
                     embedder: 'vertexai/text-embedding-004',
                     content: chunk,
                 });
@@ -187,7 +194,7 @@ async function ingestUrl(url: string) {
 
     for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i];
-        const embeddingResult = await ai.embed({
+        const embeddingResult = await getAi().embed({
             embedder: 'vertexai/text-embedding-004',
             content: chunk,
         });
@@ -213,7 +220,7 @@ import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 // Helper to describe image using Gemini
 async function describeImage(imageUrl: string): Promise<string> {
     try {
-        const result = await ai.generate({
+        const result = await getAi().generate({
             model: 'vertexai/gemini-2.0-flash-001',
             prompt: [
                 { text: "Analyze this image in detail. Extract ALL visible text exactly as it appears. Describe the visual content, including people, setting, and mood. If there is any information about dates, times, locations, or announcements, prioritize extracting that accurately. Output format: [Extracted Text]: ... [Visual Description]: ..." },
@@ -289,7 +296,7 @@ export const ingestSocialPost = onDocumentWritten(
         }
 
         try {
-            const embeddingResult = await ai.embed({
+            const embeddingResult = await getAi().embed({
                 embedder: 'vertexai/text-embedding-004',
                 content: text,
             });
