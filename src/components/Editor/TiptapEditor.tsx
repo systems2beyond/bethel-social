@@ -29,7 +29,7 @@ const TiptapEditor = ({ content, onChange, placeholder = 'Start typing...', clas
                 placeholder: placeholder,
             }),
             Image.configure({
-                inline: true,
+                inline: false,
                 allowBase64: true,
             }),
         ],

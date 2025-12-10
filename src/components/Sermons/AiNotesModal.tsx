@@ -289,7 +289,7 @@ function SearchResults({ initialQuery, onInsertToNotes, onRefine }: { initialQue
                 {onRefine && (
                     <button
                         onClick={() => onRefine(`About the search result "${initialQuery}": `)}
-                        className="text-[10px] text-purple-600 hover:text-purple-700 font-medium flex items-center gap-1"
+                        className="px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs font-bold rounded-md hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors flex items-center gap-1"
                     >
                         <Sparkles className="w-3 h-3" />
                         Refine / Ask
@@ -352,9 +352,9 @@ function SearchResults({ initialQuery, onInsertToNotes, onRefine }: { initialQue
                                 <img src={img.thumbnail} alt={img.title} className="w-full h-full object-cover" />
                                 <button
                                     onClick={() => onInsertToNotes(`<img src="${img.thumbnail}" alt="${img.title}" style="max-width: 100%; border-radius: 8px; margin: 24px 0;" /><p class="text-xs text-gray-500 text-center mb-6">${img.title}</p><p></p>`)}
-                                    className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity text-white font-medium text-xs backdrop-blur-sm"
+                                    className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity text-white font-bold text-sm backdrop-blur-[2px]"
                                 >
-                                    <Plus className="w-4 h-4 mr-1" />
+                                    <Plus className="w-5 h-5 mr-1" />
                                     Add
                                 </button>
                             </div>
