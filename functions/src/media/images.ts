@@ -8,7 +8,7 @@ if (!admin.apps.length) {
     admin.initializeApp();
 }
 
-export const saveImageFromUrl = onCall(async (request) => {
+export const saveImageFromUrl = onCall({ cors: true }, async (request) => {
     // Check authentication
     if (!request.auth) {
         throw new HttpsError(
