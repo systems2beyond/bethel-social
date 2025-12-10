@@ -271,15 +271,32 @@ function SearchResults({ initialQuery, onInsertToNotes, onRefine }: { initialQue
         setProcessingImage(img.thumbnail);
         try {
             // Call the proxy function to save image to our storage
-            const saveImageFn = httpsCallable(functions, 'saveImageProxy');
-            const result = await saveImageFn({ imageUrl: img.thumbnail }) as any;
+            // Use fetch instead of httpsCallable to bypass SDK issues and handle CORS manually
+            const response = await fetch('https://us-central1-bethel-metro-social.cloudfunctions.net/saveImageProxy', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    // Add auth token if needed later, but for now we are testing connectivity
+                    // 'Authorization': `Bearer ${token}` 
+                },
+                body: JSON.stringify({ imageUrl: img.thumbnail })
+            });
 
-            if (result.data.success && result.data.url) {
-                // Insert the proxied URL
-                onInsertToNotes(`<img src="${result.data.url}" alt="${img.title}" style="max-width: 100%; border-radius: 8px; margin: 24px 0;" /><p class="text-xs text-gray-500 text-center mb-6">${img.title}</p><p></p>`);
-            } else {
-                throw new Error('Failed to save image');
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Server returned ${response.status}: ${errorText}`);
             }
+
+            const result = await response.json();
+
+            if (!result.success) {
+                throw new Error(result.error || 'Unknown error saving image');
+            }
+
+            // For the connectivity test, we don't get a URL back, so we just use the original
+            // Once we restore functionality, we'll use result.url
+            const finalUrl = result.url || img.thumbnail;
+            onInsertToNotes(`<img src="${finalUrl}" alt="${img.title}" style="max-width: 100%; border-radius: 8px; margin: 24px 0;" /><p class="text-xs text-gray-500 text-center mb-6">${img.title}</p><p></p>`);
         } catch (error) {
             console.error("Error saving image:", error);
             // Fallback to original URL if proxy fails
