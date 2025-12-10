@@ -32,7 +32,7 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
             Placeholder.configure({
                 placeholder: placeholder,
             }),
-            Image.configure({
+            ImageResize.configure({
                 inline: false,
                 allowBase64: true,
             }),
