@@ -30,6 +30,40 @@ export default function NotesPage() {
     // Register Context Handler for Global Chat
     const { registerContextHandler } = useChat();
 
+    // Load notes (Restored)
+    useEffect(() => {
+        if (!user) return;
+
+        const q = query(
+            collection(db, 'users', user.uid, 'notes'),
+            orderBy('updatedAt', 'desc')
+        );
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const notesData = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            })) as Note[];
+            setNotes(notesData);
+        });
+
+        return () => unsubscribe();
+    }, [user]);
+
+    // Load active note into editor (Restored)
+    useEffect(() => {
+        if (activeNoteId) {
+            const note = notes.find(n => n.id === activeNoteId);
+            if (note) {
+                setTitle(note.title);
+                setContent(note.content);
+            }
+        } else {
+            setTitle('');
+            setContent('');
+        }
+    }, [activeNoteId, notes]);
+
     // Register handler whenever NotesPage is active (and a note is selected)
     useEffect(() => {
         if (activeNoteId) {
@@ -152,7 +186,43 @@ export default function NotesPage() {
 
     return (
         <div className="flex h-screen bg-white dark:bg-zinc-950">
-            {/* ... (sidebar) ... */}
+            {/* Left Sidebar: Note List (Restored) */}
+            <div className="w-64 border-r border-gray-200 dark:border-zinc-800 flex flex-col bg-gray-50 dark:bg-zinc-900">
+                <div className="p-4 border-b border-gray-200 dark:border-zinc-800 flex justify-between items-center">
+                    <h2 className="font-semibold text-gray-700 dark:text-gray-200">My Notes</h2>
+                    <button
+                        onClick={handleCreateNote}
+                        className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                        <Plus className="w-4 h-4" />
+                    </button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar">
+                    {notes.map(note => (
+                        <div
+                            key={note.id}
+                            onClick={() => setActiveNoteId(note.id)}
+                            className={`p-3 rounded-lg cursor-pointer group relative transition-colors ${activeNoteId === note.id
+                                ? 'bg-white dark:bg-zinc-800 shadow-sm border border-gray-200 dark:border-zinc-700'
+                                : 'hover:bg-gray-100 dark:hover:bg-zinc-800/50'
+                                }`}
+                        >
+                            <h3 className="font-medium text-sm text-gray-900 dark:text-gray-100 truncate pr-6">
+                                {note.title || 'Untitled Note'}
+                            </h3>
+                            <p className="text-xs text-gray-500 mt-1 truncate">
+                                {note.updatedAt?.toDate().toLocaleDateString()}
+                            </p>
+                            <button
+                                onClick={(e) => handleDelete(e, note.id)}
+                                className="absolute right-2 top-3 opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition-opacity"
+                            >
+                                <Trash2 className="w-3 h-3" />
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            </div>
 
             {/* Center: Editor */}
             <div className="flex-1 flex flex-col min-w-0 bg-white dark:bg-zinc-950">
