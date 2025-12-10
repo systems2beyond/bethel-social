@@ -4,7 +4,7 @@ import React, { useEffect, forwardRef, useImperativeHandle } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
-import Image from '@tiptap/extension-image';
+import ImageResize from 'tiptap-extension-resize-image';
 import { Bold, Italic, List, ListOrdered, Heading1, Heading2, Quote } from 'lucide-react';
 
 interface TiptapEditorProps {
