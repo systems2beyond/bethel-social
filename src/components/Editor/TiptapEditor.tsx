@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, forwardRef, useImperativeHandle } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -15,7 +15,11 @@ interface TiptapEditorProps {
     onAskAi?: (query: string) => void;
 }
 
-const TiptapEditor = ({ content, onChange, placeholder = 'Start typing...', className = '', onAskAi }: TiptapEditorProps) => {
+export interface TiptapEditorRef {
+    insertContent: (content: string) => void;
+}
+
+const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, onChange, placeholder = 'Start typing...', className = '', onAskAi }, ref) => {
     const onAskAiRef = React.useRef(onAskAi);
 
     useEffect(() => {
@@ -75,9 +79,26 @@ const TiptapEditor = ({ content, onChange, placeholder = 'Start typing...', clas
         },
     });
 
+    // Expose methods to parent
+    useImperativeHandle(ref, () => ({
+        insertContent: (content: string) => {
+            if (editor) {
+                editor.commands.insertContent(content);
+                // Force a focus to ensure the editor is active
+                editor.commands.focus();
+            }
+        }
+    }));
+
     // Update content if it changes externally (e.g. initial load)
     useEffect(() => {
         if (editor && content && editor.getHTML() !== content) {
+            // Only set content if it's significantly different to avoid cursor jumps
+            // For simple implementation, we might need to be careful here.
+            // If the content prop is coming from the editor's own onUpdate, we shouldn't re-set it.
+            // But here we are relying on the parent to manage state.
+
+            // Check if the content is effectively the same (ignoring minor HTML differences if possible, but strict check is safer for now)
             editor.commands.setContent(content);
         }
     }, [content, editor]);
@@ -138,6 +159,8 @@ const TiptapEditor = ({ content, onChange, placeholder = 'Start typing...', clas
             <EditorContent editor={editor} />
         </div>
     );
-};
+});
+
+TiptapEditor.displayName = 'TiptapEditor';
 
 export default TiptapEditor;

@@ -245,6 +245,7 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
 function SearchResults({ initialQuery, onInsertToNotes, onRefine }: { initialQuery: string, onInsertToNotes: (html: string) => void, onRefine?: (query: string) => void }) {
     const [results, setResults] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
     useEffect(() => {
         if (initialQuery) {
@@ -279,7 +280,46 @@ function SearchResults({ initialQuery, onInsertToNotes, onRefine }: { initialQue
     const images = results.filter(r => r.thumbnail);
 
     return (
-        <div className="space-y-4 w-full bg-gray-50 dark:bg-zinc-900/50 p-3 rounded-xl border border-gray-100 dark:border-zinc-800">
+        <div className="space-y-4 w-full bg-gray-50 dark:bg-zinc-900/50 p-3 rounded-xl border border-gray-100 dark:border-zinc-800 relative">
+            {/* Preview Overlay */}
+            <AnimatePresence>
+                {previewUrl && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 10 }}
+                        className="absolute inset-0 z-10 bg-white dark:bg-zinc-900 rounded-xl overflow-hidden flex flex-col shadow-lg border border-gray-200 dark:border-zinc-700"
+                    >
+                        <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-800">
+                            <div className="flex items-center gap-2 truncate flex-1">
+                                <FileText className="w-3 h-3 text-gray-500" />
+                                <span className="text-xs text-gray-500 truncate">{previewUrl}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <a href={previewUrl} target="_blank" rel="noopener noreferrer" className="p-1 hover:bg-gray-200 dark:hover:bg-zinc-700 rounded text-gray-500" title="Open in New Tab">
+                                    <Send className="w-3 h-3" />
+                                </a>
+                                <button onClick={() => setPreviewUrl(null)} className="p-1 hover:bg-gray-200 dark:hover:bg-zinc-700 rounded text-gray-500">
+                                    <X className="w-3 h-3" />
+                                </button>
+                            </div>
+                        </div>
+                        <div className="flex-1 bg-white relative">
+                            <iframe
+                                src={previewUrl}
+                                className="w-full h-full border-none"
+                                title="Preview"
+                                sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+                            />
+                            {/* Fallback/Loading indicator behind iframe */}
+                            <div className="absolute inset-0 flex items-center justify-center -z-10 text-gray-400 text-xs">
+                                Loading preview...
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             {/* Header / Refine */}
             <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
@@ -309,11 +349,9 @@ function SearchResults({ initialQuery, onInsertToNotes, onRefine }: { initialQue
                             key={idx}
                             className="flex-shrink-0 w-[160px] p-3 bg-white dark:bg-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-700 border border-gray-200 dark:border-zinc-700 rounded-xl transition-all flex flex-col gap-2 group relative"
                         >
-                            <a
-                                href={result.link}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex-1 flex flex-col gap-2"
+                            <button
+                                onClick={() => setPreviewUrl(result.link)}
+                                className="flex-1 flex flex-col gap-2 text-left w-full"
                             >
                                 <div className="flex items-center gap-2">
                                     <img
@@ -326,7 +364,7 @@ function SearchResults({ initialQuery, onInsertToNotes, onRefine }: { initialQue
                                 <div className="text-xs font-medium text-gray-700 dark:text-gray-300 line-clamp-2 leading-snug">
                                     {result.title}
                                 </div>
-                            </a>
+                            </button>
                             <button
                                 onClick={() => onInsertToNotes(`<blockquote><strong><a href="${result.link}">${result.title}</a></strong><br/>${result.snippet || ''}</blockquote><p></p>`)}
                                 className="mt-1 w-full py-1 bg-gray-100 dark:bg-zinc-700 hover:bg-purple-100 dark:hover:bg-purple-900/30 text-gray-500 hover:text-purple-600 text-[10px] font-medium rounded opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-1"
