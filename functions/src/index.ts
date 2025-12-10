@@ -126,3 +126,4 @@ export { onCommentWritten } from './triggers/comments';
 export { updateUserRole } from './admin/user_management';
 export { ingestSermonWebhook } from './ai/sermons';
 export { search } from './ai/search';
+export { saveImageFromUrl } from './media/images';

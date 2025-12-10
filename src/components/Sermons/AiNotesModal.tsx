@@ -246,6 +246,7 @@ function SearchResults({ initialQuery, onInsertToNotes, onRefine }: { initialQue
     const [results, setResults] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const [processingImage, setProcessingImage] = useState<string | null>(null);
 
     useEffect(() => {
         if (initialQuery) {
@@ -263,6 +264,28 @@ function SearchResults({ initialQuery, onInsertToNotes, onRefine }: { initialQue
             console.error("Search failed", err);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleAddImage = async (img: any) => {
+        setProcessingImage(img.thumbnail);
+        try {
+            // Call the proxy function to save image to our storage
+            const saveImageFn = httpsCallable(functions, 'saveImageFromUrl');
+            const result = await saveImageFn({ imageUrl: img.thumbnail }) as any;
+
+            if (result.data.success && result.data.url) {
+                // Insert the proxied URL
+                onInsertToNotes(`<img src="${result.data.url}" alt="${img.title}" style="max-width: 100%; border-radius: 8px; margin: 24px 0;" /><p class="text-xs text-gray-500 text-center mb-6">${img.title}</p><p></p>`);
+            } else {
+                throw new Error('Failed to save image');
+            }
+        } catch (error) {
+            console.error("Error saving image:", error);
+            // Fallback to original URL if proxy fails
+            onInsertToNotes(`<img src="${img.thumbnail}" alt="${img.title}" style="max-width: 100%; border-radius: 8px; margin: 24px 0;" /><p class="text-xs text-gray-500 text-center mb-6">${img.title}</p><p></p>`);
+        } finally {
+            setProcessingImage(null);
         }
     };
 
@@ -389,11 +412,18 @@ function SearchResults({ initialQuery, onInsertToNotes, onRefine }: { initialQue
                             <div key={idx} className="group relative flex-shrink-0 w-[120px] aspect-square bg-gray-100 dark:bg-zinc-800 rounded-xl overflow-hidden cursor-pointer hover:ring-2 hover:ring-purple-500 transition-all">
                                 <img src={img.thumbnail} alt={img.title} className="w-full h-full object-cover" />
                                 <button
-                                    onClick={() => onInsertToNotes(`<img src="${img.thumbnail}" alt="${img.title}" style="max-width: 100%; border-radius: 8px; margin: 24px 0;" /><p class="text-xs text-gray-500 text-center mb-6">${img.title}</p><p></p>`)}
-                                    className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity text-white font-bold text-sm backdrop-blur-[2px]"
+                                    onClick={() => handleAddImage(img)}
+                                    disabled={processingImage === img.thumbnail}
+                                    className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity text-white font-bold text-sm backdrop-blur-[2px] disabled:opacity-100 disabled:bg-black/60"
                                 >
-                                    <Plus className="w-5 h-5 mr-1" />
-                                    Add
+                                    {processingImage === img.thumbnail ? (
+                                        <Sparkles className="w-5 h-5 animate-spin" />
+                                    ) : (
+                                        <>
+                                            <Plus className="w-5 h-5 mr-1" />
+                                            Add
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         ))}
