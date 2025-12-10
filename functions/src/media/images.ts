@@ -74,9 +74,7 @@ export const saveImageProxy = onCall({
 
     } catch (error: any) {
         console.error('Error saving image:', error);
-        throw new HttpsError(
-            'internal',
-            `Failed to save image: ${error.message}`
-        );
+        // Return the error to the client for debugging
+        return { success: false, error: error.message, stack: error.stack };
     }
 });
