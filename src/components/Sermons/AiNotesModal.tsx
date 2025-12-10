@@ -181,6 +181,7 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
                                         <SearchResults
                                             initialQuery={msg.content.match(/<SEARCH>([\s\S]*?)<\/SEARCH>/)?.[1]?.trim() || ''}
                                             onInsertToNotes={onInsertToNotes}
+                                            onRefine={(text) => setInput(text)}
                                         />
                                     </div>
                                 )}
@@ -241,7 +242,7 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
 }
 
 // Perplexity-style Search Results Component
-function SearchResults({ initialQuery, onInsertToNotes }: { initialQuery: string, onInsertToNotes: (html: string) => void }) {
+function SearchResults({ initialQuery, onInsertToNotes, onRefine }: { initialQuery: string, onInsertToNotes: (html: string) => void, onRefine?: (query: string) => void }) {
     const [results, setResults] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -278,7 +279,24 @@ function SearchResults({ initialQuery, onInsertToNotes }: { initialQuery: string
     const images = results.filter(r => r.thumbnail);
 
     return (
-        <div className="space-y-4 w-full">
+        <div className="space-y-4 w-full bg-gray-50 dark:bg-zinc-900/50 p-3 rounded-xl border border-gray-100 dark:border-zinc-800">
+            {/* Header / Refine */}
+            <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                    <Search className="w-3 h-3 text-purple-500" />
+                    <span className="text-xs font-medium text-gray-500">Results for "{initialQuery}"</span>
+                </div>
+                {onRefine && (
+                    <button
+                        onClick={() => onRefine(`About the search result "${initialQuery}": `)}
+                        className="text-[10px] text-purple-600 hover:text-purple-700 font-medium flex items-center gap-1"
+                    >
+                        <Sparkles className="w-3 h-3" />
+                        Refine / Ask
+                    </button>
+                )}
+            </div>
+
             {/* Sources Section */}
             <div>
                 <div className="flex items-center gap-2 mb-2">
@@ -287,25 +305,36 @@ function SearchResults({ initialQuery, onInsertToNotes }: { initialQuery: string
                 </div>
                 <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar -mx-1 px-1">
                     {results.map((result, idx) => (
-                        <a
+                        <div
                             key={idx}
-                            href={result.link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex-shrink-0 w-[140px] p-3 bg-gray-50 dark:bg-zinc-800/50 hover:bg-gray-100 dark:hover:bg-zinc-800 border border-gray-100 dark:border-zinc-700 rounded-xl transition-colors flex flex-col gap-2 group"
+                            className="flex-shrink-0 w-[160px] p-3 bg-white dark:bg-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-700 border border-gray-200 dark:border-zinc-700 rounded-xl transition-all flex flex-col gap-2 group relative"
                         >
-                            <div className="flex items-center gap-2">
-                                <img
-                                    src={`https://www.google.com/s2/favicons?domain=${result.displayLink || result.link}&sz=32`}
-                                    alt=""
-                                    className="w-4 h-4 rounded-sm opacity-70 group-hover:opacity-100 transition-opacity"
-                                />
-                                <span className="text-[10px] text-gray-400 truncate flex-1">{result.displayLink || new URL(result.link).hostname}</span>
-                            </div>
-                            <div className="text-xs font-medium text-gray-700 dark:text-gray-300 line-clamp-2 leading-snug">
-                                {result.title}
-                            </div>
-                        </a>
+                            <a
+                                href={result.link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex-1 flex flex-col gap-2"
+                            >
+                                <div className="flex items-center gap-2">
+                                    <img
+                                        src={`https://www.google.com/s2/favicons?domain=${result.displayLink || result.link}&sz=32`}
+                                        alt=""
+                                        className="w-4 h-4 rounded-sm opacity-70 group-hover:opacity-100 transition-opacity"
+                                    />
+                                    <span className="text-[10px] text-gray-400 truncate flex-1">{result.displayLink || new URL(result.link).hostname}</span>
+                                </div>
+                                <div className="text-xs font-medium text-gray-700 dark:text-gray-300 line-clamp-2 leading-snug">
+                                    {result.title}
+                                </div>
+                            </a>
+                            <button
+                                onClick={() => onInsertToNotes(`<blockquote><strong><a href="${result.link}">${result.title}</a></strong><br/>${result.snippet || ''}</blockquote><p></p>`)}
+                                className="mt-1 w-full py-1 bg-gray-100 dark:bg-zinc-700 hover:bg-purple-100 dark:hover:bg-purple-900/30 text-gray-500 hover:text-purple-600 text-[10px] font-medium rounded opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-1"
+                            >
+                                <Plus className="w-3 h-3" />
+                                Add to Notes
+                            </button>
+                        </div>
                     ))}
                 </div>
             </div>
@@ -322,7 +351,7 @@ function SearchResults({ initialQuery, onInsertToNotes }: { initialQuery: string
                             <div key={idx} className="group relative flex-shrink-0 w-[120px] aspect-square bg-gray-100 dark:bg-zinc-800 rounded-xl overflow-hidden cursor-pointer hover:ring-2 hover:ring-purple-500 transition-all">
                                 <img src={img.thumbnail} alt={img.title} className="w-full h-full object-cover" />
                                 <button
-                                    onClick={() => onInsertToNotes(`<img src="${img.thumbnail}" alt="${img.title}" style="max-width: 100%; border-radius: 8px; margin: 24px 0;" /><p class="text-xs text-gray-500 text-center mb-6">${img.title}</p>`)}
+                                    onClick={() => onInsertToNotes(`<img src="${img.thumbnail}" alt="${img.title}" style="max-width: 100%; border-radius: 8px; margin: 24px 0;" /><p class="text-xs text-gray-500 text-center mb-6">${img.title}</p><p></p>`)}
                                     className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity text-white font-medium text-xs backdrop-blur-sm"
                                 >
                                     <Plus className="w-4 h-4 mr-1" />

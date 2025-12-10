@@ -55,9 +55,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const [contextHandler, setContextHandler] = useState<((message: string) => void) | null>(null);
     const router = useRouter();
 
-    const registerContextHandler = (handler: ((message: string) => void) | null) => {
+    const registerContextHandler = React.useCallback((handler: ((message: string) => void) | null) => {
         setContextHandler(() => handler);
-    };
+    }, []);
 
     // Load initial chat or listen to current chat
     useEffect(() => {
@@ -85,7 +85,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         return () => unsubscribe();
     }, [user, currentChatId]);
 
-    const createNewChat = async () => {
+    const createNewChat = React.useCallback(async () => {
         if (!user) return;
 
         const chatRef = await addDoc(collection(db, 'users', user.uid, 'chats'), {
@@ -96,11 +96,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
         setCurrentChatId(chatRef.id);
         setMessages([]); // Clear for new chat
-    };
+    }, [user]);
 
-    const loadChat = (chatId: string) => {
+    const loadChat = React.useCallback((chatId: string) => {
         setCurrentChatId(chatId);
-    };
+    }, []);
 
     const sendMessage = async (content: string, hiddenContext?: string, options: { intent?: 'chat' | 'post' } = {}) => {
         if (!content.trim()) return;

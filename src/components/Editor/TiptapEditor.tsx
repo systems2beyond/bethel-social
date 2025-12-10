@@ -4,6 +4,7 @@ import React, { useEffect } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
+import Image from '@tiptap/extension-image';
 import { Bold, Italic, List, ListOrdered, Heading1, Heading2, Quote } from 'lucide-react';
 
 interface TiptapEditorProps {
@@ -26,6 +27,10 @@ const TiptapEditor = ({ content, onChange, placeholder = 'Start typing...', clas
             StarterKit,
             Placeholder.configure({
                 placeholder: placeholder,
+            }),
+            Image.configure({
+                inline: true,
+                allowBase64: true,
             }),
         ],
         content: content,
