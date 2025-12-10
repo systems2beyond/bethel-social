@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { db } from '@/lib/firebase';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { Plus, Trash2, Save, MessageSquare, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, Save, MessageSquare } from 'lucide-react';
 import { useChat } from '@/context/ChatContext';
 import TiptapEditor from '@/components/Editor/TiptapEditor';
 import AiNotesModal from '@/components/Sermons/AiNotesModal';
@@ -18,7 +18,6 @@ interface Note {
 
 export default function NotesPage() {
     const { user, loading } = useAuth();
-    const { sendMessage } = useChat();
     const [notes, setNotes] = useState<Note[]>([]);
     const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
     const [title, setTitle] = useState('');
