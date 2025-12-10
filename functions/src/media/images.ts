@@ -1,4 +1,4 @@
-import * as functions from 'firebase-functions';
+import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
@@ -8,18 +8,18 @@ if (!admin.apps.length) {
     admin.initializeApp();
 }
 
-export const saveImageFromUrl = functions.https.onCall(async (data, context) => {
+export const saveImageFromUrl = onCall(async (request) => {
     // Check authentication
-    if (!context.auth) {
-        throw new functions.https.HttpsError(
+    if (!request.auth) {
+        throw new HttpsError(
             'unauthenticated',
             'The function must be called while authenticated.'
         );
     }
 
-    const { imageUrl } = data;
+    const { imageUrl } = request.data;
     if (!imageUrl) {
-        throw new functions.https.HttpsError(
+        throw new HttpsError(
             'invalid-argument',
             'The function must be called with an "imageUrl" argument.'
         );
@@ -44,7 +44,7 @@ export const saveImageFromUrl = functions.https.onCall(async (data, context) => 
 
         // 2. Upload to Firebase Storage
         const bucket = admin.storage().bucket();
-        const filename = `user-uploads/${context.auth.uid}/${uuidv4()}.${extension}`;
+        const filename = `user-uploads/${request.auth.uid}/${uuidv4()}.${extension}`;
         const file = bucket.file(filename);
 
         await file.save(buffer, {
@@ -52,7 +52,7 @@ export const saveImageFromUrl = functions.https.onCall(async (data, context) => 
                 contentType: contentType,
                 metadata: {
                     originalUrl: imageUrl,
-                    uploadedBy: context.auth.uid
+                    uploadedBy: request.auth.uid
                 }
             }
         });
@@ -68,7 +68,7 @@ export const saveImageFromUrl = functions.https.onCall(async (data, context) => 
 
     } catch (error: any) {
         console.error('Error saving image:', error);
-        throw new functions.https.HttpsError(
+        throw new HttpsError(
             'internal',
             `Failed to save image: ${error.message}`
         );
