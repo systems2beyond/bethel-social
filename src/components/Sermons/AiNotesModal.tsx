@@ -276,8 +276,7 @@ function SearchResults({ initialQuery, onInsertToNotes, onRefine }: { initialQue
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    // Add auth token if needed later, but for now we are testing connectivity
-                    // 'Authorization': `Bearer ${token}` 
+                    'Authorization': `Bearer ${await user?.getIdToken()}`
                 },
                 body: JSON.stringify({ imageUrl: img.thumbnail })
             });
