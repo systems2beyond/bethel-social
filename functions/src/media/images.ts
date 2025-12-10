@@ -8,7 +8,13 @@ if (!admin.apps.length) {
     admin.initializeApp();
 }
 
-export const saveImageProxy = onCall({ cors: true }, async (request) => {
+export const saveImageProxy = onCall({
+    cors: [
+        'https://bethel-metro-social.netlify.app',
+        'http://localhost:3000',
+        'http://localhost:5173' // Vite default
+    ]
+}, async (request) => {
     // Check authentication
     if (!request.auth) {
         throw new HttpsError(
