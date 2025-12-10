@@ -271,7 +271,7 @@ function SearchResults({ initialQuery, onInsertToNotes, onRefine }: { initialQue
         setProcessingImage(img.thumbnail);
         try {
             // Call the proxy function to save image to our storage
-            const saveImageFn = httpsCallable(functions, 'saveImageFromUrl');
+            const saveImageFn = httpsCallable(functions, 'saveImageProxy');
             const result = await saveImageFn({ imageUrl: img.thumbnail }) as any;
 
             if (result.data.success && result.data.url) {
