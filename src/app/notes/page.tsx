@@ -25,6 +25,7 @@ export default function NotesPage() {
     const [isSaving, setIsSaving] = useState(false);
     const [isAiNotesModalOpen, setIsAiNotesModalOpen] = useState(false);
     const [initialAiQuery, setInitialAiQuery] = useState('');
+    const [chats, setChats] = useState<Record<string, any[]>>({});
 
     // Register Context Handler for Global Chat
     const { registerContextHandler } = useChat();
@@ -282,13 +283,21 @@ export default function NotesPage() {
                 )}
             </div>
 
-            {/* AI Notes Modal */}
             <AiNotesModal
                 isOpen={isAiNotesModalOpen}
                 onClose={() => setIsAiNotesModalOpen(false)}
                 sermonId="general-notes"
                 sermonTitle={title}
                 initialQuery={initialAiQuery}
+                messages={activeNoteId ? (chats[activeNoteId] || []) : []}
+                onMessagesChange={(newMessages) => {
+                    if (activeNoteId) {
+                        setChats(prev => ({
+                            ...prev,
+                            [activeNoteId]: newMessages
+                        }));
+                    }
+                }}
                 onInsertToNotes={(text) => {
                     handleAddToNotes(text);
                     setIsAiNotesModalOpen(false);

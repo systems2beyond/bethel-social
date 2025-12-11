@@ -14,22 +14,44 @@ interface AiNotesModalProps {
     sermonId: string;
     sermonTitle: string;
     initialQuery?: string;
+    messages: any[];
+    onMessagesChange: (messages: any[]) => void;
     onInsertToNotes: (content: string) => void;
+    onSaveMessage?: (role: string, content: string) => Promise<void>;
 }
 
-export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, initialQuery, onInsertToNotes }: AiNotesModalProps) {
+export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, initialQuery, messages, onMessagesChange, onInsertToNotes, onSaveMessage }: AiNotesModalProps) {
     const { user, userData } = useAuth();
-    const [messages, setMessages] = useState<any[]>([]);
+    // Removed local messages state
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     // Initial Query Handling
     useEffect(() => {
-        console.error('AiNotesModal mounted/updated. isOpen:', isOpen, 'initialQuery:', initialQuery);
-        if (isOpen && initialQuery) {
-            console.log('Triggering handleSendMessage with initialQuery:', initialQuery);
+        console.log('AiNotesModal useEffect. isOpen:', isOpen, 'initialQuery:', initialQuery);
+
+        if (isOpen && initialQuery && initialQuery.trim().length > 0) {
+            console.log('AiNotesModal: Processing initialQuery:', initialQuery);
+
+            // Check if we already asked this recently
+            // Find the last user message (reverse search)
+            const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+            console.log('AiNotesModal: Last user message:', lastUserMsg);
+
+            if (lastUserMsg && lastUserMsg.content.trim() === initialQuery.trim()) {
+                console.log('AiNotesModal: Skipping duplicate query:', initialQuery);
+                return; // Already asked
+            }
+            if (isLoading) {
+                console.log('AiNotesModal: Skipping because loading');
+                return; // Prevent double-fire
+            }
+
+            console.log('AiNotesModal: Triggering handleSendMessage');
             handleSendMessage(undefined, initialQuery);
+        } else {
+            console.log('AiNotesModal: No initialQuery or not open');
         }
     }, [isOpen, initialQuery]);
 
@@ -47,7 +69,16 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
         if (!msgText.trim() || isLoading || !user) return;
 
         const userMsg = { role: 'user', content: msgText };
-        setMessages(prev => [...prev, userMsg]);
+        const newMessages = [...messages, userMsg];
+
+        // Optimistic update
+        onMessagesChange(newMessages);
+
+        // Persist if handler provided
+        if (onSaveMessage) {
+            onSaveMessage('user', msgText).catch(err => console.error("Failed to save user message", err));
+        }
+
         setInput('');
         setIsLoading(true);
 
@@ -66,11 +97,21 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
             // Strip SUGGEST_SUMMARY tag if present (though less likely to be used here, good to be safe)
             aiResponse = aiResponse.replace(/<SUGGEST_SUMMARY>/g, '').trim();
 
-            setMessages(prev => [...prev, { role: 'model', content: aiResponse }]);
+            const aiMsg = { role: 'model', content: aiResponse };
+            onMessagesChange([...newMessages, aiMsg]);
+
+            // Persist AI response
+            if (onSaveMessage) {
+                onSaveMessage('model', aiResponse).catch(err => console.error("Failed to save AI message", err));
+            }
 
         } catch (error) {
             console.error('Error chatting with AI:', error);
-            setMessages(prev => [...prev, { role: 'model', content: "Sorry, I encountered an error. Please try again." }]);
+            const errorMsg = { role: 'model', content: "Sorry, I encountered an error. Please try again." };
+            onMessagesChange([...newMessages, errorMsg]);
+            if (onSaveMessage) {
+                onSaveMessage('model', errorMsg.content).catch(err => console.error("Failed to save error message", err));
+            }
         } finally {
             setIsLoading(false);
         }
@@ -80,7 +121,8 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
         if (isLoading || !user) return;
         setIsLoading(true);
         // Add a system message or user message to show action
-        setMessages(prev => [...prev, { role: 'user', content: "Summarize this sermon for my notes." }]);
+        const newMessages = [...messages, { role: 'user', content: "Summarize this sermon for my notes." }];
+        onMessagesChange(newMessages);
 
         try {
             const chatFn = httpsCallable(functions, 'chat');
@@ -93,7 +135,7 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
             }) as any;
 
             const summary = result.data.response;
-            setMessages(prev => [...prev, { role: 'model', content: summary }]);
+            onMessagesChange([...newMessages, { role: 'model', content: summary }]);
         } catch (error) {
             console.error('Error summarizing:', error);
         } finally {
@@ -126,15 +168,18 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
                         <h2 className="font-semibold text-gray-900 dark:text-white">Notes Assistant</h2>
                     </div>
                     <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-gray-400 font-mono">v1.1</span>
+                        <span className="text-[10px] text-gray-400 font-mono">v1.2</span>
                         {messages.length > 0 && (
-                            <button
-                                onClick={handleSummarize}
-                                className="flex items-center gap-2 px-3 py-1.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs font-medium rounded-full hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors"
-                            >
-                                <Sparkles className="w-3 h-3" />
-                                Save this conversation to notes?
-                            </button>
+                            <div className="flex items-center gap-1">
+                                <button
+                                    onClick={handleSummarize}
+                                    className="flex items-center gap-1 px-3 py-1.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs font-medium rounded-l-full hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors"
+                                    title="Generate a structured summary"
+                                >
+                                    <Sparkles className="w-3 h-3" />
+                                    Summarize
+                                </button>
+                            </div>
                         )}
                         <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors">
                             <X className="w-5 h-5 text-gray-500" />
@@ -187,6 +232,7 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
                                             <SearchResults
                                                 initialQuery={msg.content.match(/<SEARCH>([\s\S]*?)<\/SEARCH>/)?.[1]?.trim() || ''}
                                                 onInsertToNotes={onInsertToNotes}
+                                                isLast={idx === messages.length - 1}
                                                 onRefine={(text) => {
                                                     if (text.startsWith('Search Results:')) {
                                                         // Handle automatic synthesis
@@ -257,7 +303,7 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
 }
 
 // Perplexity-style Search Results Component
-function SearchResults({ initialQuery, onInsertToNotes, onRefine }: { initialQuery: string, onInsertToNotes: (html: string) => void, onRefine?: (query: string) => void }) {
+function SearchResults({ initialQuery, onInsertToNotes, onRefine, isLast }: { initialQuery: string, onInsertToNotes: (html: string) => void, onRefine?: (query: string) => void, isLast?: boolean }) {
     const { user } = useAuth();
     const [results, setResults] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -276,6 +322,10 @@ function SearchResults({ initialQuery, onInsertToNotes, onRefine }: { initialQue
     const [isLoadingReader, setIsLoadingReader] = useState(false);
     const [readerError, setReaderError] = useState<string | null>(null);
 
+    const FUNCTIONS_BASE_URL = process.env.NODE_ENV === 'development'
+        ? 'http://127.0.0.1:5002/bethel-metro-social/us-central1'
+        : 'https://us-central1-bethel-metro-social.cloudfunctions.net';
+
     const handleSourceClick = async (url: string) => {
         setIsLoadingReader(true);
         setReaderError(null);
@@ -283,7 +333,7 @@ function SearchResults({ initialQuery, onInsertToNotes, onRefine }: { initialQue
         setReaderContent(null);
 
         try {
-            const response = await fetch('https://us-central1-bethel-metro-social.cloudfunctions.net/fetchUrlContent', {
+            const response = await fetch(`${FUNCTIONS_BASE_URL}/fetchUrlContent`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url })
@@ -319,8 +369,8 @@ function SearchResults({ initialQuery, onInsertToNotes, onRefine }: { initialQue
             const results = res.data.results || [];
             setResults(results);
 
-            // Trigger synthesis if results found
-            if (results.length > 0 && onRefine) {
+            // Trigger synthesis if results found AND it's the last message
+            if (results.length > 0 && onRefine && isLast) {
                 hasSynthesized.current = true;
                 // We use onRefine as a callback to parent to trigger the synthesis
                 // Construct a context string from results
@@ -345,7 +395,7 @@ function SearchResults({ initialQuery, onInsertToNotes, onRefine }: { initialQue
         try {
             // Call the proxy function to save image to our storage
             // Use fetch instead of httpsCallable to bypass SDK issues and handle CORS manually
-            const response = await fetch('https://us-central1-bethel-metro-social.cloudfunctions.net/saveImageProxy', {
+            const response = await fetch(`${FUNCTIONS_BASE_URL}/saveImageProxy`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

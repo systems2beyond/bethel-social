@@ -10,7 +10,7 @@ import { db, functions } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
 import { useChat } from '@/context/ChatContext';
 import { Sermon } from '@/types';
-import TiptapEditor from '@/components/Editor/TiptapEditor';
+import TiptapEditor, { EditorToolbar } from '../Editor/TiptapEditor';
 import AiNotesModal from './AiNotesModal';
 
 interface SermonModalProps {
@@ -32,6 +32,9 @@ export default function SermonModal({ sermon, initialMode, onClose }: SermonModa
 
     const [isAiNotesModalOpen, setIsAiNotesModalOpen] = useState(false);
     const [initialAiQuery, setInitialAiQuery] = useState('');
+    const [editor, setEditor] = useState<any>(null);
+
+
 
     // Scroll to bottom of chat
     const scrollToBottom = () => {
@@ -401,20 +404,29 @@ export default function SermonModal({ sermon, initialMode, onClose }: SermonModa
 
                                     {/* Notes Section */}
                                     <div className="bg-white dark:bg-zinc-900 flex flex-col min-h-[500px] border-b border-gray-200 dark:border-zinc-800">
-                                        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 sticky top-0 z-10">
-                                            <label className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                                                <Edit3 className="w-4 h-4 text-blue-500" />
-                                                My Notes
-                                            </label>
-                                            <div className="flex items-center gap-2">
-                                                {savingNotes && <span className="text-xs text-green-600 animate-pulse">Saving...</span>}
-                                                <button
-                                                    onClick={() => handleOpenAiNotes()}
-                                                    className="text-xs flex items-center gap-1 px-3 py-1.5 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded-full hover:bg-purple-100 transition-colors"
-                                                >
-                                                    <Sparkles className="w-3 h-3" />
-                                                    Ask AI
-                                                </button>
+                                        <div className="sticky top-0 z-10 bg-white dark:bg-zinc-900 border-b border-gray-100 dark:border-zinc-800">
+                                            <div className="flex items-center justify-between px-6 py-3">
+                                                <label className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                                    <Edit3 className="w-4 h-4 text-blue-500" />
+                                                    My Notes
+                                                </label>
+                                                <div className="flex items-center gap-2">
+                                                    {savingNotes && <span className="text-xs text-green-600 animate-pulse">Saving...</span>}
+                                                    <button
+                                                        onClick={() => handleOpenAiNotes()}
+                                                        className="text-xs flex items-center gap-1 px-3 py-1.5 bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded-full hover:bg-purple-100 transition-colors"
+                                                    >
+                                                        <Sparkles className="w-3 h-3" />
+                                                        Ask AI
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            {/* Editor Toolbar - Sticky inside the header */}
+                                            <div className="px-6 pb-2">
+                                                <EditorToolbar
+                                                    editor={editor}
+                                                    className="border-none shadow-none bg-transparent mb-0 pb-0"
+                                                />
                                             </div>
                                         </div>
 
@@ -424,6 +436,8 @@ export default function SermonModal({ sermon, initialMode, onClose }: SermonModa
                                                 onChange={handleSaveNotes}
                                                 className="min-h-[400px]"
                                                 onAskAi={handleOpenAiNotes}
+                                                showToolbar={false}
+                                                onEditorReady={setEditor}
                                             />
                                         </div>
                                     </div>
@@ -451,10 +465,25 @@ export default function SermonModal({ sermon, initialMode, onClose }: SermonModa
                 sermonId={sermon.id}
                 sermonTitle={sermon.title}
                 initialQuery={initialAiQuery}
+                messages={messages}
+                onMessagesChange={setMessages}
                 onInsertToNotes={(content) => {
                     handleAddToNotes(content);
                     setIsAiNotesModalOpen(false);
                     setInitialAiQuery(''); // Clear query on close
+                }}
+                onSaveMessage={async (role, content) => {
+                    if (!user || !sermon.id) return;
+                    const noteId = `sermon_${sermon.id}`;
+                    try {
+                        await addDoc(collection(db, 'users', user.uid, 'notes', noteId, 'chat'), {
+                            role,
+                            content,
+                            createdAt: serverTimestamp()
+                        });
+                    } catch (error) {
+                        console.error('Error saving chat message:', error);
+                    }
                 }}
             />
         </div>

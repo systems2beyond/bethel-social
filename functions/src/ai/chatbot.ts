@@ -239,6 +239,15 @@ export const chatWithBibleBot = async (request: any) => {
            - **NEVER** apologize for not having access to the internet or say "I cannot provide a map". You CAN provide it by using the search tag.
            - Do not describe the image or fact, just output the tag.
         
+        **Special Instructions for Summarization:**
+        If the user asks to "summarize", "recap", or "save this":
+        - Create a structured summary with:
+          - **Title** (H1)
+          - **Key Points** (Bulleted list)
+          - **Scripture References** (List)
+          - **Actionable Takeaways** (Bulleted list)
+        - Keep it concise but comprehensive.
+        
         Example User: "Can you find a map of Paul's journey?"
         Example Output: <SEARCH>map of Paul's missionary journeys</SEARCH>
         
@@ -246,7 +255,8 @@ export const chatWithBibleBot = async (request: any) => {
         Example Output: <SEARCH>historical context of Ephesus first century</SEARCH>
         
         Example User: "Summarize the main point."
-        Example Output: **The Main Point**
+        Example Output: 
+        # The Main Point
         The central theme of this sermon is...
         
         **Input Context:**

@@ -49,6 +49,9 @@
     "functions": {
       "port": 5002
     },
+    "auth": {
+      "port": 9099
+    },
     "firestore": {
       "port": 8080
     },
