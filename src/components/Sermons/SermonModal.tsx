@@ -181,6 +181,7 @@ export default function SermonModal({ sermon, initialMode, onClose }: SermonModa
 
     // Handle opening AI Notes Modal
     const handleOpenAiNotes = (query?: string) => {
+        console.log('handleOpenAiNotes called with:', query);
         setInitialAiQuery(query || '');
         setIsAiNotesModalOpen(true);
     };
@@ -438,15 +439,22 @@ export default function SermonModal({ sermon, initialMode, onClose }: SermonModa
             </motion.div>
 
             {/* AI Notes Modal */}
+            {/* AI Notes Modal */}
+            {/* AI Notes Modal - Always mounted to preserve state/context */}
             <AiNotesModal
                 isOpen={isAiNotesModalOpen}
-                onClose={() => setIsAiNotesModalOpen(false)}
+                onClose={() => {
+                    console.log('Closing AI Modal, clearing query');
+                    setIsAiNotesModalOpen(false);
+                    setInitialAiQuery(''); // Clear query on close
+                }}
                 sermonId={sermon.id}
                 sermonTitle={sermon.title}
                 initialQuery={initialAiQuery}
                 onInsertToNotes={(content) => {
                     handleAddToNotes(content);
                     setIsAiNotesModalOpen(false);
+                    setInitialAiQuery(''); // Clear query on close
                 }}
             />
         </div>

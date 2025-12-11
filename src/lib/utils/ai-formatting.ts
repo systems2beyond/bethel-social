@@ -11,9 +11,6 @@ export const formatAiResponse = (text: string) => {
     let html = '';
     let inList = false;
 
-    // Shared Header Style
-    const headerStyle = "background-color: rgba(168, 85, 247, 0.15); padding: 4px 8px; border-radius: 6px; display: inline-block; margin-top: 24px; margin-bottom: 8px; color: #4c1d95; font-weight: 700;";
-
     lines.forEach((line, index) => {
         let processedLine = line.trim();
         if (!processedLine) return;
@@ -25,7 +22,7 @@ export const formatAiResponse = (text: string) => {
         if (isBoldHeader) {
             const headerText = processedLine.replace(/^\*\*/, '').replace(/\*\*[:]?$/, '');
             if (inList) { html += '</ul>'; inList = false; }
-            html += `<h3 style="${headerStyle}">${headerText}</h3>`;
+            html += `<h3 class="bg-purple-100 dark:bg-purple-900/30 px-2 py-1 rounded-md inline-block mt-6 mb-2 text-purple-900 dark:text-purple-100 font-bold">${headerText}</h3>`;
             return;
         }
 
@@ -38,23 +35,23 @@ export const formatAiResponse = (text: string) => {
         // Headers (Highlighter Style + Spacing)
         if (processedLine.startsWith('### ')) {
             if (inList) { html += '</ul>'; inList = false; }
-            html += `<h3 style="${headerStyle}">${processedLine.substring(4)}</h3>`;
+            html += `<h3 class="bg-purple-100 dark:bg-purple-900/30 px-2 py-1 rounded-md inline-block mt-6 mb-2 text-purple-900 dark:text-purple-100 font-bold">${processedLine.substring(4)}</h3>`;
         } else if (processedLine.startsWith('## ')) {
             if (inList) { html += '</ul>'; inList = false; }
-            html += `<h2 style="${headerStyle} font-size: 1.2em;">${processedLine.substring(3)}</h2>`;
+            html += `<h2 class="bg-purple-100 dark:bg-purple-900/30 px-2 py-1 rounded-md inline-block mt-6 mb-2 text-purple-900 dark:text-purple-100 font-bold text-lg">${processedLine.substring(3)}</h2>`;
         } else if (processedLine.startsWith('# ')) {
             if (inList) { html += '</ul>'; inList = false; }
-            html += `<h1 style="${headerStyle} font-size: 1.4em;">${processedLine.substring(2)}</h1>`;
+            html += `<h1 class="bg-purple-100 dark:bg-purple-900/30 px-2 py-1 rounded-md inline-block mt-6 mb-2 text-purple-900 dark:text-purple-100 font-bold text-xl">${processedLine.substring(2)}</h1>`;
         }
         // List Items
         else if (processedLine.startsWith('* ') || processedLine.startsWith('- ')) {
-            if (!inList) { html += '<ul style="margin-bottom: 16px; padding-left: 20px;">'; inList = true; }
-            html += `<li style="margin-bottom: 4px;">${processedLine.substring(2)}</li>`;
+            if (!inList) { html += '<ul class="mb-4 pl-5 list-disc">'; inList = true; }
+            html += `<li class="mb-1">${processedLine.substring(2)}</li>`;
         }
         // Regular Text
         else {
             if (inList) { html += '</ul>'; inList = false; }
-            html += `<p style="margin-bottom: 12px; line-height: 1.6;">${processedLine}</p>`;
+            html += `<p class="mb-3 leading-relaxed">${processedLine}</p>`;
         }
     });
 

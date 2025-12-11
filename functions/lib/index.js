@@ -36,7 +36,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.saveImageProxy = exports.search = exports.ingestSermonWebhook = exports.updateUserRole = exports.onCommentWritten = exports.backfillEvents = exports.extractEventFromPost = exports.ingest = exports.chat = exports.manualYoutubeSync = exports.syncYoutube = exports.fbWebhook = exports.syncFacebook = exports.ingestSocialPost = exports.scheduledWebsiteCrawl = exports.ingestContent = exports.debugPosts = exports.manualFacebookSync = void 0;
+exports.fetchUrlContent = exports.saveImageProxy = exports.search = exports.ingestSermonWebhook = exports.updateUserRole = exports.onCommentWritten = exports.backfillEvents = exports.extractEventFromPost = exports.ingest = exports.chat = exports.manualYoutubeSync = exports.syncYoutube = exports.fbWebhook = exports.syncFacebook = exports.ingestSocialPost = exports.scheduledWebsiteCrawl = exports.ingestContent = exports.debugPosts = exports.manualFacebookSync = void 0;
 const admin = __importStar(require("firebase-admin"));
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const https_1 = require("firebase-functions/v2/https");
@@ -153,4 +153,6 @@ var search_1 = require("./ai/search");
 Object.defineProperty(exports, "search", { enumerable: true, get: function () { return search_1.search; } });
 var images_1 = require("./media/images");
 Object.defineProperty(exports, "saveImageProxy", { enumerable: true, get: function () { return images_1.saveImageProxy; } });
+var reader_1 = require("./media/reader");
+Object.defineProperty(exports, "fetchUrlContent", { enumerable: true, get: function () { return reader_1.fetchUrlContent; } });
 //# sourceMappingURL=index.js.map

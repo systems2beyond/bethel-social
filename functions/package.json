@@ -15,7 +15,10 @@
     "@genkit-ai/firebase": "^1.25.0",
     "@genkit-ai/googleai": "^1.25.0",
     "@genkit-ai/vertexai": "^1.25.0",
+    "@mozilla/readability": "^0.6.0",
+    "@sparticuz/chromium": "^143.0.0",
     "@types/cheerio": "^0.22.35",
+    "@types/jsdom": "^27.0.0",
     "axios": "^1.13.2",
     "cheerio": "^1.1.2",
     "dotenv": "^17.2.3",
@@ -23,11 +26,16 @@
     "firebase-functions": "^6.6.0",
     "genkit": "^1.25.0",
     "googleapis": "^167.0.0",
+    "jsdom": "^27.3.0",
+    "pdf-parse": "^1.1.1",
+    "puppeteer": "^24.32.1",
+    "puppeteer-core": "^24.32.1",
     "uuid": "^13.0.0",
     "zod": "^4.1.13"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
+    "@types/puppeteer": "^5.4.7",
     "@types/uuid": "^10.0.0",
     "typescript": "^5.9.3"
   }

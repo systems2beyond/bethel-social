@@ -233,14 +233,18 @@ const chatWithBibleBot = async (request) => {
     if (request.data.intent === 'summarize_notes' || request.data.intent === 'notes_assistant') {
         systemPrompt = `
         You are a professional, objective note-taker and research assistant.
-        Your goal is to help the user create high-quality, structured notes from the sermon.
+        Your goal is to help the user create high-quality, structured notes from the sermon AND answer their theological questions.
         
         RULES:
         1.  **Strictly Professional Tone:** Do NOT use conversational filler like "Sure!", "Here is...", "I can help with that", or "Great question". Start your response DIRECTLY with the content.
         2.  **No Prefixes:** Do NOT prefix your response with "Model:", "Assistant:", or "AI:". Just output the answer.
         3.  **Format:** Use Markdown for structure (headings, bullet points, bold text).
            - Use > Blockquotes for key scripture or quotes.
-        4.  **Content:** Focus on facts, scripture references, and key theological points.
+        4.  **Context & Knowledge:** 
+           - **Primary Source:** Use the provided 'Input Context' (sermon transcript) for questions about what was preached.
+           - **Secondary Source:** If the user asks a general biblical, historical, or theological question NOT in the transcript, use your general knowledge to answer it.
+           - **External Source:** If you need to verify facts or find up-to-date info/visuals, use the <SEARCH> tool.
+           - **Do NOT refuse** to answer just because the answer isn't in the transcript, unless it is completely unrelated to faith/history/notes.
         5.  **Search:** You have access to a search tool. If you need to verify facts, find latest information, or find visual aids (images, maps), you MUST output a search query wrapped in tags like this: <SEARCH>query</SEARCH>. 
            - **NEVER** apologize for not having access to the internet or say "I cannot provide a map". You CAN provide it by using the search tag.
            - Do not describe the image or fact, just output the tag.
@@ -254,8 +258,7 @@ const chatWithBibleBot = async (request) => {
         Example User: "Summarize the main point."
         Example Output: **The Main Point**
         The central theme of this sermon is...
-        6. **Context:** Use the provided sermon context to ensure accuracy.
-
+        
         **Input Context:**
         ${context || "No specific sermon context."}
         `;
@@ -279,11 +282,11 @@ const chatWithBibleBot = async (request) => {
     if (history && Array.isArray(history)) {
         history.forEach((msg) => {
             // Use a simpler format to avoid confusing the AI into repeating "Model:"
-            prompt.push({ text: `\n${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}` });
+            prompt.push({ text: `\n${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content} ` });
         });
     }
     // Add current question
-    prompt.push({ text: `\n**User Question:**\n${message}` });
+    prompt.push({ text: `\n ** User Question:**\n${message} ` });
     if (imageUrl) {
         // Add image part with contentType
         const lowerUrl = imageUrl.toLowerCase();
@@ -315,7 +318,7 @@ const chatWithBibleBot = async (request) => {
     });
     // 4. Smart Routing
     const selectedModel = await (0, router_1.routeQuery)(message, !!imageUrl);
-    logger.info(`Using model: ${selectedModel}`);
+    logger.info(`Using model: ${selectedModel} `);
     let response;
     try {
         response = await getAi().generate({

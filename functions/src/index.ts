@@ -127,3 +127,4 @@ export { updateUserRole } from './admin/user_management';
 export { ingestSermonWebhook } from './ai/sermons';
 export { search } from './ai/search';
 export { saveImageProxy } from './media/images';
+export { fetchUrlContent } from './media/reader';

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Send, Sparkles, Plus, Image as ImageIcon, Search, FileText } from 'lucide-react';
+import { X, Send, Sparkles, Plus, Image as ImageIcon, Search, FileText, Globe } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
@@ -26,7 +26,9 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
 
     // Initial Query Handling
     useEffect(() => {
+        console.error('AiNotesModal mounted/updated. isOpen:', isOpen, 'initialQuery:', initialQuery);
         if (isOpen && initialQuery) {
+            console.log('Triggering handleSendMessage with initialQuery:', initialQuery);
             handleSendMessage(undefined, initialQuery);
         }
     }, [isOpen, initialQuery]);
@@ -159,50 +161,63 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
                         </div>
                     )}
 
-                    {messages.map((msg, idx) => (
-                        <div key={idx} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} space-y-2`}>
-                            <div className={`max-w-[90%] rounded-2xl px-4 py-2.5 text-sm shadow-sm ${msg.role === 'user'
-                                ? 'bg-purple-600 text-white rounded-br-none'
-                                : 'bg-white dark:bg-zinc-800 text-gray-800 dark:text-gray-200 border border-gray-100 dark:border-zinc-700 rounded-bl-none'
-                                }`}>
-                                {msg.role === 'model' ? (
-                                    <>
-                                        {/* Debug Log */}
-                                        {console.log('AI Msg Content:', msg.content)}
-                                        <div dangerouslySetInnerHTML={{ __html: formatAiResponse(msg.content) }} />
-                                    </>
-                                ) : (
-                                    msg.content
-                                )}
+                    {messages.map((msg, idx) => {
+                        // Hide system messages used for synthesis trigger
+                        if (msg.role === 'user' && (msg.content.startsWith('System:') || msg.content.startsWith('Context:'))) return null;
 
-                                {/* Search Results (If search tag detected) */}
-                                {msg.role === 'model' && msg.content.includes('<SEARCH>') && (
-                                    <div className="mt-4">
-                                        <SearchResults
-                                            initialQuery={msg.content.match(/<SEARCH>([\s\S]*?)<\/SEARCH>/)?.[1]?.trim() || ''}
-                                            onInsertToNotes={onInsertToNotes}
-                                            onRefine={(text) => setInput(text)}
-                                        />
-                                    </div>
+                        return (
+                            <div key={idx} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} space-y-2`}>
+                                <div className={`max-w-[90%] rounded-2xl px-4 py-2.5 text-sm shadow-sm ${msg.role === 'user'
+                                    ? 'bg-purple-600 text-white rounded-br-none'
+                                    : 'bg-white dark:bg-zinc-800 text-gray-800 dark:text-gray-200 border border-gray-100 dark:border-zinc-700 rounded-bl-none'
+                                    }`}>
+                                    {msg.role === 'model' ? (
+                                        <>
+                                            {/* Debug Log */}
+                                            {console.log('AI Msg Content:', msg.content)}
+                                            <div dangerouslySetInnerHTML={{ __html: formatAiResponse(msg.content) }} />
+                                        </>
+                                    ) : (
+                                        msg.content
+                                    )}
+
+                                    {/* Search Results (If search tag detected) */}
+                                    {msg.role === 'model' && msg.content.includes('<SEARCH>') && (
+                                        <div className="mt-4">
+                                            <SearchResults
+                                                initialQuery={msg.content.match(/<SEARCH>([\s\S]*?)<\/SEARCH>/)?.[1]?.trim() || ''}
+                                                onInsertToNotes={onInsertToNotes}
+                                                onRefine={(text) => {
+                                                    if (text.startsWith('Search Results:')) {
+                                                        // Handle automatic synthesis
+                                                        const context = text.replace('Search Results:', '').trim();
+                                                        handleSendMessage(undefined, `Context: Here are the search results. Please synthesize an answer to the user's previous question using these sources. Cite them using [1], [2], etc.\n\n${context}`);
+                                                    } else {
+                                                        // Normal refine click
+                                                        setInput(text);
+                                                    }
+                                                }}
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Insert Button for AI messages */}
+                                {msg.role === 'model' && (
+                                    <button
+                                        onClick={() => {
+                                            onInsertToNotes(msg.content);
+                                            // Optional: Show toast or feedback
+                                        }}
+                                        className="text-xs flex items-center gap-1 text-gray-500 hover:text-purple-600 transition-colors px-2"
+                                    >
+                                        <Plus className="w-3 h-3" />
+                                        Insert into Notes
+                                    </button>
                                 )}
                             </div>
-
-                            {/* Insert Button for AI messages */}
-                            {msg.role === 'model' && (
-                                <button
-                                    onClick={() => {
-                                        onInsertToNotes(msg.content);
-                                        // Optional: Show toast or feedback
-                                    }}
-                                    className="text-xs flex items-center gap-1 text-gray-500 hover:text-purple-600 transition-colors px-2"
-                                >
-                                    <Plus className="w-3 h-3" />
-                                    Insert into Notes
-                                </button>
-                            )}
-                        </div>
-                    ))}
-
+                        );
+                    })}
                     {isLoading && (
                         <div className="flex justify-start">
                             <div className="bg-white dark:bg-zinc-800 rounded-2xl rounded-bl-none px-4 py-2.5 text-sm border border-gray-100 dark:border-zinc-700 text-gray-500 flex items-center gap-2">
@@ -243,23 +258,81 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
 
 // Perplexity-style Search Results Component
 function SearchResults({ initialQuery, onInsertToNotes, onRefine }: { initialQuery: string, onInsertToNotes: (html: string) => void, onRefine?: (query: string) => void }) {
+    const { user } = useAuth();
     const [results, setResults] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [processingImage, setProcessingImage] = useState<string | null>(null);
 
+    const hasSynthesized = useRef(false);
+
     useEffect(() => {
-        if (initialQuery) {
+        if (initialQuery && !hasSynthesized.current) {
             handleSearch();
         }
     }, [initialQuery]);
 
+    const [readerContent, setReaderContent] = useState<{ title: string; content: string; siteName: string } | null>(null);
+    const [isLoadingReader, setIsLoadingReader] = useState(false);
+    const [readerError, setReaderError] = useState<string | null>(null);
+
+    const handleSourceClick = async (url: string) => {
+        setIsLoadingReader(true);
+        setReaderError(null);
+        setPreviewUrl(url); // Keep this for fallback or "Open Original"
+        setReaderContent(null);
+
+        try {
+            const response = await fetch('https://us-central1-bethel-metro-social.cloudfunctions.net/fetchUrlContent', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success) {
+                    setReaderContent({
+                        title: data.title,
+                        content: data.content,
+                        siteName: data.siteName
+                    });
+                } else {
+                    setReaderError(data.error || 'Failed to load content');
+                }
+            } else {
+                setReaderError(`Server error: ${response.status}`);
+            }
+        } catch (error) {
+            console.error('Failed to load reader view:', error);
+            setReaderError('Network error or content blocked');
+        } finally {
+            setIsLoadingReader(false);
+        }
+    };
     const handleSearch = async () => {
+        if (hasSynthesized.current) return;
         setLoading(true);
         try {
             const searchFn = httpsCallable(functions, 'search');
             const res = await searchFn({ query: initialQuery }) as any;
-            setResults(res.data.results || []);
+            const results = res.data.results || [];
+            setResults(results);
+
+            // Trigger synthesis if results found
+            if (results.length > 0 && onRefine) {
+                hasSynthesized.current = true;
+                // We use onRefine as a callback to parent to trigger the synthesis
+                // Construct a context string from results
+                const context = results.slice(0, 4).map((r: any, i: number) => `Source [${i + 1}]: ${r.title} (${r.link})\nSnippet: ${r.snippet}`).join('\n\n');
+
+                // Check if we have images
+                const imageCount = results.filter((r: any) => r.thumbnail).length;
+                const imageContext = imageCount > 0 ? `\n\n[Found ${imageCount} images. The user can see them in the UI.]` : '';
+
+                onRefine(`Search Results: ${context}${imageContext}`);
+            }
+
         } catch (err) {
             console.error("Search failed", err);
         } finally {
@@ -320,7 +393,7 @@ function SearchResults({ initialQuery, onInsertToNotes, onRefine }: { initialQue
 
     return (
         <div className="space-y-4 w-full bg-gray-50 dark:bg-zinc-900/50 p-3 rounded-xl border border-gray-100 dark:border-zinc-800 relative">
-            {/* Preview Overlay */}
+            {/* Preview Overlay (Reader View) */}
             <AnimatePresence>
                 {previewUrl && (
                     <motion.div
@@ -329,30 +402,86 @@ function SearchResults({ initialQuery, onInsertToNotes, onRefine }: { initialQue
                         exit={{ opacity: 0, y: 10 }}
                         className="absolute inset-0 z-10 bg-white dark:bg-zinc-900 rounded-xl overflow-hidden flex flex-col shadow-lg border border-gray-200 dark:border-zinc-700"
                     >
-                        <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-800">
-                            <div className="flex items-center gap-2 truncate flex-1">
-                                <FileText className="w-3 h-3 text-gray-500" />
-                                <span className="text-xs text-gray-500 truncate">{previewUrl}</span>
+                        <div className="flex-1 bg-white relative overflow-hidden flex flex-col">
+                            <div className="p-4 border-b border-gray-200 dark:border-zinc-700 flex justify-between items-center bg-gray-100 dark:bg-zinc-800">
+                                <div className="flex items-center gap-3 overflow-hidden bg-white dark:bg-zinc-900 py-1.5 px-3 rounded-full border border-gray-200 dark:border-zinc-700 flex-1 mr-4 shadow-sm">
+                                    <Globe className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                                    <span className="text-xs text-gray-600 dark:text-gray-300 truncate font-mono">{previewUrl}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <a
+                                        href={previewUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="p-2 text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 hover:bg-gray-200 dark:hover:bg-zinc-700 rounded-full transition-colors"
+                                        title="Open in new tab"
+                                    >
+                                        <Send className="w-4 h-4" />
+                                    </a>
+                                    <button
+                                        onClick={() => setPreviewUrl(null)}
+                                        className="p-2 text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 hover:bg-gray-200 dark:hover:bg-zinc-700 rounded-full transition-colors"
+                                    >
+                                        <X className="w-5 h-5" />
+                                    </button>
+                                </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                                <a href={previewUrl} target="_blank" rel="noopener noreferrer" className="p-1 hover:bg-gray-200 dark:hover:bg-zinc-700 rounded text-gray-500" title="Open in New Tab">
-                                    <Send className="w-3 h-3" />
-                                </a>
-                                <button onClick={() => setPreviewUrl(null)} className="p-1 hover:bg-gray-200 dark:hover:bg-zinc-700 rounded text-gray-500">
-                                    <X className="w-3 h-3" />
-                                </button>
-                            </div>
-                        </div>
-                        <div className="flex-1 bg-white relative">
-                            <iframe
-                                src={previewUrl}
-                                className="w-full h-full border-none"
-                                title="Preview"
-                                sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
-                            />
-                            {/* Fallback/Loading indicator behind iframe */}
-                            <div className="absolute inset-0 flex items-center justify-center -z-10 text-gray-400 text-xs">
-                                Loading preview...
+
+                            <div className="flex-1 overflow-y-auto p-8 prose prose-sm max-w-none dark:prose-invert prose-headings:text-gray-900 dark:prose-headings:text-gray-100 prose-p:text-gray-700 dark:prose-p:text-gray-300 prose-a:text-blue-600 dark:prose-a:text-blue-400 prose-img:rounded-xl bg-white dark:bg-zinc-900">
+                                {isLoadingReader ? (
+                                    <div className="flex flex-col items-center justify-center h-full space-y-4">
+                                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+                                        <p className="text-gray-500 dark:text-gray-400">Generating Reader View...</p>
+                                    </div>
+                                ) : readerError ? (
+                                    <div className="flex flex-col items-center justify-center h-full text-center p-8 space-y-4">
+                                        <div className="p-3 rounded-full bg-orange-50 dark:bg-orange-900/20">
+                                            <Globe className="w-8 h-8 text-orange-500" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                                                {readerError.includes('Reddit') ? 'Reddit Access Error' : 'Content Protected'}
+                                            </h3>
+                                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 max-w-xs mx-auto">
+                                                {readerError}
+                                            </p>
+                                        </div>
+                                        <a
+                                            href={previewUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors flex items-center gap-2"
+                                        >
+                                            Open Original Site
+                                            <Send className="w-3 h-3" />
+                                        </a>
+                                    </div>
+                                ) : readerContent ? (
+                                    <div>
+                                        <h1 className="text-2xl font-bold mb-2 text-gray-900 dark:text-white">{readerContent.title}</h1>
+                                        {readerContent.siteName && <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">{readerContent.siteName}</p>}
+                                        <div
+                                            dangerouslySetInnerHTML={{ __html: readerContent.content }}
+                                            onClick={(e) => {
+                                                // Handle image clicks in the reader view
+                                                const target = e.target as HTMLElement;
+                                                if (target.tagName === 'IMG') {
+                                                    const img = target as HTMLImageElement;
+                                                    // Use the image proxy to save it
+                                                    handleAddImage({ thumbnail: img.src, title: img.alt || 'Image from article' });
+                                                }
+                                            }}
+                                            className="reader-content text-gray-800 dark:text-gray-200"
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center h-full text-gray-500 dark:text-gray-400">
+                                        <p>Could not generate reader view.</p>
+                                        <a href={previewUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline mt-2">
+                                            Open in New Tab
+                                        </a>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </motion.div>
@@ -382,14 +511,15 @@ function SearchResults({ initialQuery, onInsertToNotes, onRefine }: { initialQue
                     <FileText className="w-3 h-3 text-gray-400" />
                     <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Sources</h3>
                 </div>
-                <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar -mx-1 px-1">
+                {/* Grid Layout for Sources */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {results.map((result, idx) => (
                         <div
                             key={idx}
-                            className="flex-shrink-0 w-[160px] p-3 bg-white dark:bg-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-700 border border-gray-200 dark:border-zinc-700 rounded-xl transition-all flex flex-col gap-2 group relative"
+                            className="p-3 bg-white dark:bg-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-700 border border-gray-200 dark:border-zinc-700 rounded-xl transition-all flex flex-col gap-2 group relative h-full"
                         >
                             <button
-                                onClick={() => setPreviewUrl(result.link)}
+                                onClick={() => handleSourceClick(result.link)}
                                 className="flex-1 flex flex-col gap-2 text-left w-full"
                             >
                                 <div className="flex items-center gap-2">
@@ -406,7 +536,7 @@ function SearchResults({ initialQuery, onInsertToNotes, onRefine }: { initialQue
                             </button>
                             <button
                                 onClick={() => onInsertToNotes(`<blockquote><strong><a href="${result.link}">${result.title}</a></strong><br/>${result.snippet || ''}</blockquote><p></p>`)}
-                                className="mt-1 w-full py-1 bg-gray-100 dark:bg-zinc-700 hover:bg-purple-100 dark:hover:bg-purple-900/30 text-gray-500 hover:text-purple-600 text-[10px] font-medium rounded opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-1"
+                                className="mt-auto w-full py-1 bg-gray-100 dark:bg-zinc-700 hover:bg-purple-100 dark:hover:bg-purple-900/30 text-gray-500 hover:text-purple-600 text-[10px] font-medium rounded opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-1"
                             >
                                 <Plus className="w-3 h-3" />
                                 Add to Notes
@@ -423,9 +553,10 @@ function SearchResults({ initialQuery, onInsertToNotes, onRefine }: { initialQue
                         <ImageIcon className="w-3 h-3 text-gray-400" />
                         <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Images</h3>
                     </div>
-                    <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar -mx-1 px-1">
+                    {/* Grid Layout for Images */}
+                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                         {images.map((img, idx) => (
-                            <div key={idx} className="group relative flex-shrink-0 w-[120px] aspect-square bg-gray-100 dark:bg-zinc-800 rounded-xl overflow-hidden cursor-pointer hover:ring-2 hover:ring-purple-500 transition-all">
+                            <div key={idx} className="group relative aspect-square bg-gray-100 dark:bg-zinc-800 rounded-xl overflow-hidden cursor-pointer hover:ring-2 hover:ring-purple-500 transition-all">
                                 <img src={img.thumbnail} alt={img.title} className="w-full h-full object-cover" />
                                 <button
                                     onClick={() => handleAddImage(img)}
