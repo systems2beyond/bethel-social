@@ -260,6 +260,14 @@ function UserSection() {
             )}
 
             <button
+                onClick={() => router.push('/settings')}
+                className="p-1.5 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+                title="Settings"
+            >
+                <Settings className="w-4 h-4 text-gray-500 hover:text-blue-600" />
+            </button>
+
+            <button
                 onClick={signOut}
                 className="p-1.5 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
                 title="Sign Out"

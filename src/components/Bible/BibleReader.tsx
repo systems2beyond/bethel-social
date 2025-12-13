@@ -151,11 +151,20 @@ export default function BibleReader() {
             const verseEl = document.getElementById(`verse-${reference.verse}`);
             if (verseEl) {
                 verseEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                // Auto-select the verse if it was deep-linked
-                setSelectedVerses([reference.verse]);
+
+                // Auto-select the verse range if deep-linked
+                if (reference.endVerse) {
+                    const range = [];
+                    for (let i = reference.verse; i <= reference.endVerse; i++) {
+                        range.push(i);
+                    }
+                    setSelectedVerses(range);
+                } else {
+                    setSelectedVerses([reference.verse]);
+                }
             }
         }
-    }, [loading, reference.verse]);
+    }, [loading, reference.verse, reference.endVerse]);
 
     const handleVerseClick = (verseNum: number) => {
         if (selectedVerses.includes(verseNum)) {

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Sparkles, BookOpen, Search as SearchIcon, Maximize2, Minimize2, Loader2, ChevronDown, Edit3 } from 'lucide-react';
+import { X, Sparkles, BookOpen, Search as SearchIcon, Maximize2, Minimize2, Loader2, ChevronDown, Edit3, RotateCw, History, TrendingUp, Clock, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -12,7 +12,8 @@ import TiptapEditor, { EditorToolbar } from '../Editor/TiptapEditor';
 import { cn } from '@/lib/utils';
 import { useMediaQuery } from '@/lib/hooks/useMediaQuery';
 import BibleReader from './BibleReader';
-import AiNotesModal from '../Sermons/AiNotesModal';
+import BibleAiChatModal from './BibleAiChatModal';
+import { bibleSearch } from '@/lib/search/bible-index'; // Import Service
 
 interface BibleStudyModalProps {
     onClose: () => void;
@@ -24,25 +25,128 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
         isStudyOpen, closeStudy,
         onInsertNote, registerInsertHandler,
         openBible,
-        tabs, activeTabId
+        tabs,
+        activeTabId,
+        searchVersion,
+        setSearchVersion
     } = useBible();
     const [editor, setEditor] = useState<any>(null);
     const [notes, setNotes] = useState('');
+    const [noteTitle, setNoteTitle] = useState('General Bible Study');
     const [savingNotes, setSavingNotes] = useState(false);
+
 
     // Search State
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [isSearching, setIsSearching] = useState(false);
+    const [isIndexing, setIsIndexing] = useState(false); // New state for loading index
     const [showResults, setShowResults] = useState(false);
 
-    const handleSaveNotes = async (content: string) => {
+    // Autocomplete & History
+    const [searchHistory, setSearchHistory] = useState<string[]>([]);
+    const [showSuggestions, setShowSuggestions] = useState(false);
+    const searchInputRef = useRef<HTMLInputElement>(null);
+
+    // Load history on mount
+    useEffect(() => {
+        setSearchHistory(bibleSearch.getSearchHistory());
+    }, []);
+
+    // Debounced Search
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (searchQuery.trim()) {
+                performSearch(searchQuery);
+            }
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
+
+    const performSearch = async (query: string) => {
+        if (!query.trim()) return;
+        setIsSearching(true);
+        // setIsIndexing(true); // Only needed for initial load really
+        try {
+            const results = await bibleSearch.search(query, searchVersion);
+            setSearchResults(results.map(hit => ({
+                reference: `${hit.book} ${hit.chapter}:${hit.verse}`,
+                text: hit.text,
+                book: hit.book,
+                chapter: hit.chapter, // Store raw for grouping
+                verse: hit.verse,
+                version: searchVersion.toUpperCase()
+            })));
+            setShowResults(true); // Auto-show results when they come in
+        } catch (error) {
+            console.error('Search error:', error);
+        } finally {
+            setIsSearching(false);
+            setIsIndexing(false);
+        }
+    };
+
+    const handleSearchSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (searchQuery.trim()) {
+            bibleSearch.saveSearchToHistory(searchQuery);
+            setSearchHistory(bibleSearch.getSearchHistory());
+            performSearch(searchQuery);
+            setShowSuggestions(false);
+            searchInputRef.current?.blur();
+        }
+    };
+
+    const handleHistoryClick = (term: string) => {
+        setSearchQuery(term);
+        bibleSearch.saveSearchToHistory(term);
+        setSearchHistory(bibleSearch.getSearchHistory());
+        performSearch(term);
+        setShowSuggestions(false);
+    };
+
+    const toggleSuggestions = (show: boolean) => {
+        // slight delay to allow click events to propagate
+        setTimeout(() => setShowSuggestions(show), 200);
+    };
+
+    const { userData } = useAuth(); // Need to see available custom sources
+
+
+    // Load Notes on Mount
+    useEffect(() => {
+        if (!user) return;
+        const notesRef = doc(db, 'users', user.uid, 'notes', 'bible-study-general');
+        const unsubscribe = onSnapshot(notesRef, (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                if (data.content && data.content !== notes) {
+                    // Only update if significantly different to avoid cursor jumps?
+                    // Tiptap handles content updates well if we don't force it on every keystroke.
+                    // But for initial load, it's fine.
+                    // actually, we should only setNotes if we don't have local changes?
+                    // For now, let's just set on initial load.
+                    if (!editor) setNotes(data.content);
+                }
+                if (data.title) setNoteTitle(data.title);
+            } else {
+                // If new, set default title based on current context
+                const activeTab = tabs.find(t => t.id === activeTabId);
+                if (activeTab) {
+                    setNoteTitle(`Study: ${activeTab.reference.book} ${activeTab.reference.chapter}`);
+                }
+            }
+        });
+        return () => unsubscribe();
+    }, [user, editor]); // Depend on editor so we don't overwrite user typing if we add conflict logic later
+
+    const handleSaveNotes = async (content: string, titleOverride?: string) => {
         if (!user) return;
         setSavingNotes(true);
         try {
             const notesRef = doc(db, 'users', user.uid, 'notes', 'bible-study-general');
             await setDoc(notesRef, {
-                title: 'General Bible Study', // Ensure it has a title for the list
+                title: titleOverride || noteTitle,
                 content,
                 updatedAt: serverTimestamp()
             }, { merge: true });
@@ -53,24 +157,19 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
         }
     };
 
-    const handleSearch = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!searchQuery.trim()) return;
-
-        setIsSearching(true);
-        setShowResults(true);
-        try {
-            const res = await fetch(`/api/bible?search=${encodeURIComponent(searchQuery)}`);
-            if (!res.ok) throw new Error('Failed');
-            const data = await res.json();
-            setSearchResults(data.verses || []);
-        } catch (error) {
-            console.error(error);
-            setSearchResults([]);
-        } finally {
-            setIsSearching(false);
+    const handleTitleChange = (newTitle: string) => {
+        setNoteTitle(newTitle);
+        // Save immediately (debounced ideally, but direct for now)
+        if (editor) {
+            handleSaveNotes(editor.getHTML(), newTitle);
         }
     };
+
+    // Old handleSearch removed in favor of proper separate functions
+    // kept performSearch above
+
+    // Get custom sources for dropdown
+    const customSources: any[] = userData?.customBibleSources || [];
 
     const clearSearch = () => {
         setSearchQuery('');
@@ -168,7 +267,7 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
             window.addEventListener('mouseup', handleDragEnd);
             window.addEventListener('touchmove', handleDrag);
             window.addEventListener('touchend', handleDragEnd);
-        }
+        };
 
         return () => {
             window.removeEventListener('mousemove', handleDrag);
@@ -210,7 +309,7 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                className="relative w-full max-w-5xl max-h-[90vh] bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+                className="relative w-full max-w-5xl h-[85vh] bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
             >
                 {/* Fixed Header with Search */}
                 <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 z-20 shrink-0 relative gap-4">
@@ -223,26 +322,174 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                         <h2 className="font-semibold text-gray-900 dark:text-white">Bible Study</h2>
                     </div>
 
-                    {/* Centered Search Bar */}
-                    <form onSubmit={handleSearch} className="flex-1 max-w-xl mx-auto relative">
-                        <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                        <input
-                            type="text"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            placeholder="Search verses (e.g., 'love', 'John 3:16')..."
-                            className="w-full pl-9 pr-10 py-2 bg-gray-100 dark:bg-zinc-800 border-transparent focus:bg-white dark:focus:bg-zinc-900 border focus:border-blue-500/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-gray-900 dark:text-white placeholder-gray-500 transition-all"
-                        />
-                        {searchQuery && (
-                            <button
-                                type="button"
-                                onClick={clearSearch}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 hover:bg-gray-200 dark:hover:bg-zinc-700 rounded-full transition-colors"
-                            >
-                                <X className="w-3 h-3 text-gray-500" />
-                            </button>
-                        )}
-                    </form>
+                    {/* Centered Search Bar with "Google-Like" Dropdown */}
+                    <div className="flex-1 max-w-xl mx-auto relative z-50">
+                        <form onSubmit={handleSearchSubmit} className="relative shadow-sm rounded-lg">
+                            <div className="flex items-center gap-2 relative bg-gray-100 dark:bg-zinc-800 rounded-lg pr-2 border-transparent focus-within:bg-white dark:focus-within:bg-zinc-900 focus-within:shadow-md focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
+                                {/* Version Selector */}
+                                <div className="relative border-r border-gray-300 dark:border-zinc-700">
+                                    <select
+                                        value={searchVersion}
+                                        onChange={(e) => setSearchVersion(e.target.value)}
+                                        className="text-xs font-bold bg-transparent border-none focus:ring-0 text-gray-700 dark:text-gray-300 cursor-pointer py-2.5 pl-3 pr-7 appearance-none outline-none"
+                                    >
+                                        <option value="kjv" className="text-black dark:text-white">KJV</option>
+                                        <option value="web" className="text-black dark:text-white">WEB</option>
+                                        {customSources.map((s: any) => (
+                                            <option key={s.name} value={s.name} className="text-black dark:text-white">
+                                                {s.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
+                                </div>
+
+                                {/* Input */}
+                                <div className="relative flex-1">
+                                    <SearchIcon className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                    <input
+                                        ref={searchInputRef}
+                                        type="text"
+                                        value={searchQuery}
+                                        onChange={(e) => {
+                                            setSearchQuery(e.target.value);
+                                            setShowSuggestions(true);
+                                        }}
+                                        onFocus={() => setShowSuggestions(true)}
+                                        onBlur={() => toggleSuggestions(false)} // Delay hide
+                                        placeholder="Search verses..."
+                                        className="w-full pl-9 pr-10 py-2.5 bg-transparent border-none outline-none text-sm text-gray-900 dark:text-white placeholder-gray-500"
+                                        autoComplete="off"
+                                    />
+                                    {searchQuery && (
+                                        <button
+                                            type="button"
+                                            onClick={clearSearch}
+                                            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-200 dark:hover:bg-zinc-700 rounded-full transition-colors"
+                                        >
+                                            <X className="w-3 h-3 text-gray-500" />
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        </form>
+
+                        {/* Dropdown Predictions / History */}
+                        <AnimatePresence>
+                            {showSuggestions && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 5 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: 5 }}
+                                    transition={{ duration: 0.15 }}
+                                    className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-zinc-900 rounded-xl shadow-xl border border-gray-100 dark:border-zinc-800 overflow-hidden z-[60]"
+                                >
+                                    {/* STATE 1: Empty Query -> History & Quick Filters */}
+                                    {!searchQuery.trim() && (
+                                        <div className="p-2">
+                                            {searchHistory.length > 0 && (
+                                                <div className="mb-3">
+                                                    <div className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                                                        <History className="w-3 h-3" />
+                                                        Recent Searches
+                                                    </div>
+                                                    {searchHistory.map((term, i) => (
+                                                        <button
+                                                            key={i}
+                                                            onClick={(e) => {
+                                                                e.preventDefault(); // Prevent blur from closing immediately
+                                                                handleHistoryClick(term);
+                                                            }}
+                                                            className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-zinc-800/50 rounded-lg group transition-colors text-left"
+                                                        >
+                                                            <div className="flex items-center gap-3">
+                                                                <Clock className="w-4 h-4 text-gray-400 group-hover:text-blue-500 transition-colors" />
+                                                                <span>{term}</span>
+                                                            </div>
+                                                            <ArrowRight className="w-3 h-3 text-gray-300 opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all" />
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+
+                                            {/* Quick Filters */}
+                                            <div>
+                                                <div className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                                                    <TrendingUp className="w-3 h-3" />
+                                                    Quick Access
+                                                </div>
+                                                <div className="flex flex-wrap gap-2 px-3 pb-2">
+                                                    {['Gospels', 'Paul\'s Letters', 'Psalms', 'Proverbs', 'Genesis'].map(tag => (
+                                                        <button
+                                                            key={tag}
+                                                            onMouseDown={(e) => {
+                                                                e.preventDefault();
+                                                                handleHistoryClick(tag);
+                                                            }}
+                                                            className="px-3 py-1.5 bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-400 text-xs font-medium rounded-full hover:bg-blue-100 hover:text-blue-600 dark:hover:bg-blue-900/30 dark:hover:text-blue-400 transition-colors"
+                                                        >
+                                                            {tag}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* STATE 2: Typing -> Live Results Preview */}
+                                    {searchQuery.trim() && (
+                                        <div className="py-2">
+                                            {isSearching ? (
+                                                <div className="flex items-center justify-center py-4 text-gray-400 gap-2">
+                                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                                    <span className="text-sm">Searching...</span>
+                                                </div>
+                                            ) : searchResults.length > 0 ? (
+                                                <>
+                                                    <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider flex justify-between items-center bg-gray-50/50 dark:bg-zinc-800/50 border-b border-gray-100 dark:border-zinc-800/50">
+                                                        <span>Top Matches</span>
+                                                        <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-[10px] px-1.5 py-0.5 rounded-full">{searchResults.length}</span>
+                                                    </div>
+                                                    <div className="max-h-[300px] overflow-y-auto custom-scrollbar p-2">
+                                                        {searchResults.slice(0, 5).map((hit, i) => (
+                                                            <button
+                                                                key={i}
+                                                                onClick={() => {
+                                                                    openBible({ book: hit.book, chapter: hit.chapter, verse: hit.verse }, true);
+                                                                    setShowSuggestions(false);
+                                                                    bibleSearch.saveSearchToHistory(searchQuery);
+                                                                }}
+                                                                className="w-full text-left p-3 hover:bg-blue-50 dark:hover:bg-blue-900/10 rounded-xl transition-colors group mb-1"
+                                                            >
+                                                                <div className="flex items-center gap-2 mb-1">
+                                                                    <span className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30 px-2 py-0.5 rounded-md">
+                                                                        {hit.reference}
+                                                                    </span>
+                                                                </div>
+                                                                <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 leading-relaxed">
+                                                                    {hit.text}
+                                                                </p>
+                                                            </button>
+                                                        ))}
+                                                        <button
+                                                            onClick={handleSearchSubmit}
+                                                            className="w-full text-center py-3 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline border-t border-gray-100 dark:border-zinc-800 mt-2"
+                                                        >
+                                                            View all {searchResults.length} results
+                                                        </button>
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <div className="text-center py-8 text-gray-400">
+                                                    <p className="text-sm">No matches found for "{searchQuery}"</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
 
                     {/* Actions */}
                     <div className="flex items-center gap-2 shrink-0">
@@ -277,7 +524,8 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                     <div
                         style={{ height: `${splitRatio * 100}%`, minHeight: 0 }}
                         className={cn(
-                            "w-full border-b border-gray-200 dark:border-zinc-800 transition-[height] duration-75 ease-out overflow-hidden relative",
+                            "w-full border-b border-gray-200 dark:border-zinc-800 overflow-hidden relative",
+                            !isDragging && "transition-[height] duration-75 ease-out", // Only animate when NOT dragging
                             splitRatio === 0 && "invisible border-none" // Completely hide if ratio is 0
                         )}
                     >
@@ -351,8 +599,9 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                 </div>
 
                                 {isSearching ? (
-                                    <div className="flex items-center justify-center py-20">
-                                        <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+                                    <div className="flex flex-col items-center justify-center py-12 gap-3 text-gray-500">
+                                        <RotateCw className="w-6 h-6 animate-spin" />
+                                        <p>{isIndexing ? `Indexing ${searchVersion.toUpperCase()}... (First run only)` : 'Searching...'}</p>
                                     </div>
                                 ) : searchResults.length > 0 ? (
                                     <div className="grid grid-cols-1 gap-4">
@@ -360,14 +609,14 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                             const activeTab = tabs.find(t => t.id === activeTabId);
                                             const currentBook = activeTab?.reference.book || '';
 
-                                            // Explicitly group results
-                                            const currentBookResults = searchResults.filter(v => (v.book_name || v.book_id) === currentBook);
-                                            const otherResults = searchResults.filter(v => (v.book_name || v.book_id) !== currentBook);
+                                            // Explicitly group results (use verse.book from Orama)
+                                            const currentBookResults = searchResults.filter(v => v.book === currentBook);
+                                            const otherResults = searchResults.filter(v => v.book !== currentBook);
 
                                             const renderVerse = (verse: any, idx: number, isRelevant: boolean) => (
                                                 <div
                                                     key={idx}
-                                                    onClick={() => openBible({ book: verse.book_name || verse.book_id, chapter: verse.chapter, verse: verse.verse }, true)}
+                                                    onClick={() => openBible({ book: verse.book, chapter: verse.chapter, verse: verse.verse }, true)}
                                                     className={cn(
                                                         "relative p-4 rounded-2xl border cursor-pointer transition-all hover:shadow-md group",
                                                         isRelevant
@@ -387,7 +636,7 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                                                 ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300"
                                                                 : "bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-zinc-700"
                                                         )}>
-                                                            {verse.reference}
+                                                            {verse.book} {verse.chapter}:{verse.verse}
                                                         </span>
                                                     </div>
                                                     <p className="text-gray-700 dark:text-gray-300 text-sm leading-relaxed font-serif">
@@ -433,12 +682,18 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                             <div className="h-full flex flex-col">
                                 {/* Toolbar Header */}
                                 <div className="sticky top-0 z-10 bg-white dark:bg-zinc-900 border-b border-gray-100 dark:border-zinc-800 px-4 py-2 flex items-center justify-between shrink-0">
-                                    <div className="flex flex-col gap-0.5">
-                                        <h2 className="text-sm font-bold text-gray-800 dark:text-white flex items-center gap-2">
-                                            <Edit3 className="w-4 h-4 text-blue-500" />
-                                            My Notes
-                                        </h2>
-                                        {savingNotes && <span className="text-[10px] text-green-600 animate-pulse font-medium">Saving...</span>}
+                                    <div className="flex flex-col gap-0.5 flex-1 mr-4">
+                                        <div className="flex items-center gap-2">
+                                            <Edit3 className="w-4 h-4 text-blue-500 shrink-0" />
+                                            <input
+                                                type="text"
+                                                value={noteTitle}
+                                                onChange={(e) => handleTitleChange(e.target.value)}
+                                                className="bg-transparent border-none p-0 text-sm font-bold text-gray-800 dark:text-white focus:ring-0 w-full placeholder-gray-400"
+                                                placeholder="Note Title..."
+                                            />
+                                        </div>
+                                        {savingNotes && <span className="text-[10px] text-green-600 animate-pulse font-medium ml-6">Saving...</span>}
                                     </div>
                                     <div className="flex items-center gap-2">
                                         {/* Toggle Full Screen for Notes */}
@@ -478,11 +733,11 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                 </div>
             </motion.div>
 
-            <AiNotesModal
+            <BibleAiChatModal
                 isOpen={isAiOpen}
                 onClose={() => setIsAiOpen(false)}
-                sermonId="bible-study-general"
-                sermonTitle="General Bible Study"
+                contextId={`${tabs.find(t => t.id === activeTabId)?.reference.book} ${tabs.find(t => t.id === activeTabId)?.reference.chapter}`}
+                contextTitle={`Bible Study: ${tabs.find(t => t.id === activeTabId)?.reference.book} ${tabs.find(t => t.id === activeTabId)?.reference.chapter}`}
                 initialQuery={initialAiQuery}
                 messages={aiMessages}
                 onMessagesChange={setAiMessages}

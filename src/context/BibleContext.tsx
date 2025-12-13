@@ -1,6 +1,10 @@
 'use client';
 
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { useAuth } from './AuthContext';
+import { bibleSearch } from '@/lib/search/bible-index';
 
 export interface BibleReference {
     book: string;
@@ -34,12 +38,26 @@ interface BibleContextType {
     addTab: () => void;
     closeTab: (id: string) => void;
     setActiveTab: (id: string) => void;
+    // Search Config
+    searchVersion: string;
+    setSearchVersion: (version: string) => void;
 }
 
 const BibleContext = createContext<BibleContextType | undefined>(undefined);
 
 export function BibleProvider({ children }: { children: ReactNode }) {
     const [isOpen, setIsOpen] = useState(false);
+    const { user, userData } = useAuth();
+
+    // Sync Custom Sources from User Data
+    useEffect(() => {
+        if (userData?.customBibleSources && Array.isArray(userData.customBibleSources)) {
+            userData.customBibleSources.forEach((source: { name: string, url: string }) => {
+                bibleSearch.registerCustomSource(source.name, source.url).catch(console.error);
+            });
+        }
+    }, [userData?.customBibleSources]);
+
     // Tabs State
     const [tabs, setTabs] = useState<Tab[]>([
         { id: '1', reference: { book: 'John', chapter: 3, verse: 16 } }
@@ -47,6 +65,7 @@ export function BibleProvider({ children }: { children: ReactNode }) {
     const [activeTabId, setActiveTabId] = useState<string>('1');
 
     const [version, setVersion] = useState('kjv');
+    const [searchVersion, setSearchVersion] = useState('kjv'); // Default to KJV
     const [onInsertNote, setOnInsertNote] = useState<((text: string) => void) | null>(null);
     const [isStudyOpen, setIsStudyOpen] = useState(false);
 
@@ -107,6 +126,34 @@ export function BibleProvider({ children }: { children: ReactNode }) {
         setOnInsertNote(() => handler);
     };
 
+    // Load tabs from Firestore
+    useEffect(() => {
+        if (!user) return;
+        const unsubscribe = onSnapshot(doc(db, 'users', user.uid, 'settings', 'bible-tabs'), (doc) => {
+            if (doc.exists()) {
+                const data = doc.data();
+                if (data.tabs) setTabs(data.tabs);
+                if (data.activeTabId) setActiveTabId(data.activeTabId);
+                // Also restore search version if saved
+                if (data.searchVersion) setSearchVersion(data.searchVersion);
+            }
+        });
+        return () => unsubscribe();
+    }, [user]);
+
+    // Save tabs/state
+    useEffect(() => {
+        if (!user) return;
+        const saveState = setTimeout(() => {
+            setDoc(doc(db, 'users', user.uid, 'settings', 'bible-tabs'), {
+                tabs,
+                activeTabId,
+                searchVersion: searchVersion || 'kjv' // persist version preference
+            }, { merge: true });
+        }, 1000);
+        return () => clearTimeout(saveState);
+    }, [tabs, activeTabId, user, searchVersion]);
+
     return (
         <BibleContext.Provider value={{
             isOpen,
@@ -125,7 +172,9 @@ export function BibleProvider({ children }: { children: ReactNode }) {
             activeTabId,
             addTab,
             closeTab,
-            setActiveTab
+            setActiveTab,
+            searchVersion,
+            setSearchVersion
         }}>
             {children}
         </BibleContext.Provider>
