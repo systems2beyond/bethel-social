@@ -5,13 +5,19 @@ export async function GET(request: NextRequest) {
     const version = searchParams.get('version') || 'kjv';
     const book = searchParams.get('book');
     const chapter = searchParams.get('chapter');
+    const search = searchParams.get('search');
 
-    if (!book || !chapter) {
-        return NextResponse.json({ error: 'Missing book or chapter' }, { status: 400 });
+    let url = '';
+
+    if (search) {
+        url = `https://bible-api.com/?search=${encodeURIComponent(search)}`;
+    } else if (book && chapter) {
+        url = `https://bible-api.com/${encodeURIComponent(book)}+${chapter}?translation=${version.toLowerCase()}`;
+    } else {
+        return NextResponse.json({ error: 'Missing book+chapter OR search parameter' }, { status: 400 });
     }
 
     try {
-        const url = `https://bible-api.com/${encodeURIComponent(book)}+${chapter}?translation=${version.toLowerCase()}`;
         console.log(`Proxying Bible request to: ${url}`);
 
         const res = await fetch(url);

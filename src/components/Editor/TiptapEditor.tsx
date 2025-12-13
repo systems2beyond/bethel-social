@@ -48,7 +48,7 @@ export const EditorToolbar = ({ editor, className = '', onTogglePaperStyle, isPa
     if (!editor) return null;
 
     return (
-        <div className={cn("flex items-center gap-1 border-b border-gray-100 dark:border-zinc-800 pb-2 mb-2 bg-white dark:bg-zinc-950 shadow-sm", className)}>
+        <div className={cn("flex items-center justify-center gap-1 border-b border-gray-100 dark:border-zinc-800 pb-2 mb-2 bg-white dark:bg-zinc-950 shadow-sm", className)}>
             <button
                 onClick={() => editor.chain().focus().toggleBold().run()}
                 className={`p-1.5 rounded hover:bg-gray-100 dark:hover:bg-zinc-800 ${editor.isActive('bold') ? 'bg-gray-100 dark:bg-zinc-800 text-blue-600' : 'text-gray-500'}`}

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Loader2, Copy, Edit3, Check, BookOpen } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2, Copy, Edit3, Check, BookOpen, PenLine } from 'lucide-react';
 import { useBible } from '@/context/BibleContext';
 import { cn } from '@/lib/utils';
 
@@ -90,11 +90,26 @@ const BIBLE_VERSIONS = [
 ];
 
 export default function BibleReader() {
-    const { reference, setReference, version, setVersion, onInsertNote, openStudy, isStudyOpen } = useBible();
+    const {
+        reference, setReference, version, setVersion,
+        onInsertNote, openStudy, isStudyOpen,
+        tabs, activeTabId, setActiveTab, addTab, closeTab
+    } = useBible();
+
     const [text, setText] = useState<{ verse: number, text: string }[]>([]);
     const [loading, setLoading] = useState(false);
     const [selectedVerses, setSelectedVerses] = useState<number[]>([]);
     const scrollRef = useRef<HTMLDivElement>(null);
+    const contentRef = useRef<HTMLDivElement>(null);
+
+    // Persist scroll position when switching tabs
+    useEffect(() => {
+        // Restore scroll when active tab changes
+        const currentTab = tabs.find(t => t.id === activeTabId);
+        if (currentTab && currentTab.scrollPosition && contentRef.current) {
+            contentRef.current.scrollTop = currentTab.scrollPosition;
+        }
+    }, [activeTabId, tabs]);
 
     // Fetch Bible Text
     useEffect(() => {
@@ -128,7 +143,7 @@ export default function BibleReader() {
 
         fetchChapter();
         setSelectedVerses([]);
-    }, [reference.book, reference.chapter, version]);
+    }, [reference.book, reference.chapter, version, activeTabId]); // Re-fetch on tab switch if needed (ref changes)
 
     // Scroll to specific verse if requested
     useEffect(() => {
@@ -181,25 +196,62 @@ export default function BibleReader() {
         // Format selected verses
         const selectedText = text
             .filter(t => selectedVerses.includes(t.verse))
-            .map(t => `<sup style="font-size: 0.7em; color: #9ca3af; margin-right: 4px;">${t.verse}</sup>${t.text}`)
+            .map(t => `<sup style="font-size: 0.7em; color: #9ca3af;">${t.verse}</sup> ${t.text}`)
             .join(' ');
 
         const referenceText = `${reference.book} ${reference.chapter}:${selectedVerses[0]}${selectedVerses.length > 1 ? `-${selectedVerses[selectedVerses.length - 1]}` : ''}`;
 
-        const html = `
-            <blockquote style="border-left: 4px solid #eab308; padding-left: 16px; margin: 16px 0; color: #374151; font-style: italic; background: rgba(254, 252, 232, 0.5); padding: 12px; border-radius: 0 8px 8px 0;">
-                ${selectedText}
-                <footer style="margin-top: 8px; font-size: 0.85em; font-weight: 600; color: #854d0e;">— ${referenceText} (${version.toUpperCase()})</footer>
-            </blockquote>
-            <p></p>
-        `;
+        const html = `<blockquote><p>${selectedText}</p><p><strong>— ${referenceText} (${version.toUpperCase()})</strong></p></blockquote><p></p>`;
 
+        // Open in new tab implicitly by inserting (user might want to keep reading)
+        // But for now just insert
         onInsertNote(html);
         setSelectedVerses([]); // Clear selection after adding
     };
 
     return (
         <div className="flex flex-col h-full">
+            {/* Tab Bar */}
+            <div className="flex items-center overflow-x-auto bg-gray-100 dark:bg-zinc-950/50 border-b border-gray-200 dark:border-zinc-800 px-1 pt-1 hide-scrollbar">
+                {tabs.map(tab => (
+                    <div
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={cn(
+                            "group flex items-center gap-2 px-3 py-1.5 min-w-[120px] max-w-[200px] text-xs font-medium cursor-pointer select-none rounded-t-lg transition-colors border-t border-x border-transparent mt-1",
+                            activeTabId === tab.id
+                                ? "bg-white dark:bg-zinc-900 text-gray-900 dark:text-white border-gray-200 dark:border-zinc-800 border-b-white dark:border-b-zinc-900 translate-y-[1px]"
+                                : "text-gray-500 hover:text-gray-900 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-zinc-800/50"
+                        )}
+                    >
+                        <span className="truncate flex-1">
+                            {tab.reference.book} {tab.reference.chapter}
+                        </span>
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                closeTab(tab.id);
+                            }}
+                            className={cn(
+                                "p-0.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-gray-200 dark:hover:bg-zinc-700 text-gray-400 hover:text-red-500",
+                                tabs.length === 1 && "hidden" // Can't close last tab
+                            )}
+                        >
+                            <span className="sr-only">Close</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+                        </button>
+                    </div>
+                ))}
+
+                {/* New Tab Button */}
+                <button
+                    onClick={() => addTab()}
+                    className="ml-1 p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-zinc-800 rounded-md transition-colors"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14" /><path d="M12 5v14" /></svg>
+                </button>
+            </div>
+
             {/* Navigation Bar */}
             <div className="flex items-center justify-between px-4 py-2 bg-white dark:bg-zinc-900 border-b border-gray-100 dark:border-zinc-800 shadow-sm z-10">
                 <div className="flex items-center gap-2">
@@ -256,35 +308,41 @@ export default function BibleReader() {
             </div>
 
             {/* Text Display */}
-            <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 scroll-smooth custom-scrollbar bg-white dark:bg-zinc-900">
+            <div ref={contentRef} className="flex-1 overflow-y-auto p-6 scroll-smooth custom-scrollbar bg-white dark:bg-zinc-900">
                 {loading ? (
                     <div className="flex items-center justify-center h-full text-gray-400">
                         <Loader2 className="w-8 h-8 animate-spin" />
                     </div>
                 ) : (
-                    <div className="max-w-xl mx-auto space-y-1">
-                        <h3 className="text-2xl font-serif font-bold text-center mb-8 text-gray-900 dark:text-white">
+                    <div className="max-w-4xl mx-auto space-y-1">
+                        <h3 className="text-3xl font-serif font-bold text-center mb-10 text-gray-900 dark:text-white">
                             {reference.book} {reference.chapter}
                         </h3>
-                        {text.map((verse) => {
-                            const isSelected = selectedVerses.includes(verse.verse);
-                            return (
-                                <span
-                                    key={verse.verse}
-                                    id={`verse-${verse.verse}`}
-                                    onClick={() => handleVerseClick(verse.verse)}
-                                    className={cn(
-                                        "inline leading-loose text-lg font-serif cursor-pointer transition-colors duration-200 px-0.5 rounded",
-                                        isSelected
-                                            ? "bg-amber-200 dark:bg-amber-900/50 text-gray-900 dark:text-white decoration-clone"
-                                            : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-zinc-800"
-                                    )}
-                                >
-                                    <sup className="text-xs font-sans text-gray-400 mr-1 select-none font-medium">{verse.verse}</sup>
-                                    {verse.text}{' '}
-                                </span>
-                            );
-                        })}
+                        <div className="leading-[2.2] text-xl font-serif text-gray-800 dark:text-gray-200">
+                            {text.map((verse) => {
+                                const isSelected = selectedVerses.includes(verse.verse);
+                                // Check for paragraph breaks (double newline usually means new paragraph)
+                                const parts = verse.text.split(/\n\s*\n/);
+
+                                return (
+                                    <React.Fragment key={verse.verse}>
+                                        <span
+                                            id={`verse-${verse.verse}`}
+                                            onClick={() => handleVerseClick(verse.verse)}
+                                            className={cn(
+                                                "relative cursor-pointer transition-colors duration-200 px-1 rounded hover:bg-gray-100 dark:hover:bg-zinc-800",
+                                                isSelected && "bg-amber-200 dark:bg-amber-900/50 text-gray-900 dark:text-white decoration-clone"
+                                            )}
+                                        >
+                                            <sup className="text-[0.6em] font-sans text-gray-400 mr-1 select-none font-bold align-top top-[-0.2em] relative">{verse.verse}</sup>
+                                            {verse.text}
+                                        </span>
+                                        {/* Add spacing if the verse text ends with a newline or has one */}
+                                        {verse.text.includes('\n') && <span className="block h-4" />}
+                                    </React.Fragment>
+                                );
+                            })}
+                        </div>
                     </div>
                 )}
 
@@ -318,7 +376,7 @@ export default function BibleReader() {
                             onClick={handleAddToNotes}
                             className="flex items-center gap-2 text-sm font-medium hover:text-amber-400 dark:hover:text-amber-600 transition-colors"
                         >
-                            <Edit3 className="w-4 h-4" />
+                            <PenLine className="w-4 h-4" />
                             Add to Notes
                         </button>
                     )}
