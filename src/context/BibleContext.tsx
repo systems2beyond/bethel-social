@@ -145,11 +145,26 @@ export function BibleProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         if (!user) return;
         const saveState = setTimeout(() => {
+            // Sanitize tabs to remove undefined values which Firebase rejects
+            const sanitizedTabs = tabs.map(tab => ({
+                id: tab.id,
+                reference: {
+                    book: tab.reference.book,
+                    chapter: tab.reference.chapter,
+                    verse: tab.reference.verse ?? null, // specific replacement: undefined -> null
+                    endVerse: tab.reference.endVerse ?? null
+                },
+                scrollPosition: tab.scrollPosition ?? 0
+            }));
+
+            // Ensure searchVersion is never undefined
+            const safeSearchVersion = searchVersion || 'kjv';
+
             setDoc(doc(db, 'users', user.uid, 'settings', 'bible-tabs'), {
-                tabs,
+                tabs: sanitizedTabs,
                 activeTabId,
-                searchVersion: searchVersion || 'kjv' // persist version preference
-            }, { merge: true });
+                searchVersion: safeSearchVersion
+            }, { merge: true }).catch(err => console.error('Error saving bible tabs:', err));
         }, 1000);
         return () => clearTimeout(saveState);
     }, [tabs, activeTabId, user, searchVersion]);

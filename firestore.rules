@@ -59,6 +59,11 @@ service cloud.firestore {
         }
       }
 
+      // Settings (Bible, Theme, etc.)
+      match /settings/{settingId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
       // Unified Notes
       match /notes/{noteId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
