@@ -6,9 +6,6 @@ import { X, Calendar, PlayCircle, Sparkles, Send, ChevronDown, ChevronUp, Edit3,
 import { motion, AnimatePresence, useDragControls, useMotionValue } from 'framer-motion';
 import { format } from 'date-fns';
 import { doc, onSnapshot, query, collection, orderBy, addDoc, serverTimestamp, setDoc } from 'firebase/firestore';
-import { useBible } from '@/context/BibleContext';
-import VerseLink from '../Bible/VerseLink';
-
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
@@ -28,9 +25,6 @@ interface SermonModalProps {
 
 export default function SermonModal({ sermon, initialMode, onClose }: SermonModalProps) {
     const { user, userData } = useAuth();
-    const { createNewChat } = useChat();
-    const { registerInsertHandler } = useBible();
-
     const [isAiOpen, setIsAiOpen] = useState(initialMode === 'ai');
 
     // "Always Portal" strategy for Desktop/Tablet (min-width: 768px)
@@ -56,22 +50,6 @@ export default function SermonModal({ sermon, initialMode, onClose }: SermonModa
     const [isAiNotesModalOpen, setIsAiNotesModalOpen] = useState(false);
     const [initialAiQuery, setInitialAiQuery] = useState('');
     const [editor, setEditor] = useState<any>(null);
-
-    // Register Bible Insert Handler
-    useEffect(() => {
-        registerInsertHandler((html) => {
-            if (editor) {
-                editor.chain().focus().insertContent(html).run();
-                // Ensure notes are saved
-                const newContent = editor.getHTML();
-                handleSaveNotes(newContent);
-            }
-        });
-
-        return () => {
-            registerInsertHandler(null);
-        };
-    }, [editor, registerInsertHandler]);
     const [isNotesMaximized, setIsNotesMaximized] = useState(false);
 
     // Helper to get YouTube ID
@@ -701,9 +679,7 @@ export default function SermonModal({ sermon, initialMode, onClose }: SermonModa
                                                 : format(new Date(sermon.date.seconds * 1000), 'MMMM d, yyyy')
                                         ) : 'Unknown Date'}
                                     </div>
-                                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                                        <VerseLink text={sermon.summary || ''} />
-                                    </p>
+                                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed">{sermon.summary}</p>
                                 </div>
 
                                 {/* Outline */}
@@ -719,7 +695,7 @@ export default function SermonModal({ sermon, initialMode, onClose }: SermonModa
                                                     <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xs font-bold mt-0.5">
                                                         {idx + 1}
                                                     </span>
-                                                    <span><VerseLink text={point} /></span>
+                                                    <span>{point}</span>
                                                 </li>
                                             ))}
                                         </ul>

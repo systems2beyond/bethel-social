@@ -65,12 +65,12 @@ export function BottomBar() {
 
     return (
         <>
-            <div className="absolute bottom-0 left-0 right-0 bg-white dark:bg-zinc-900 border-t border-gray-200 dark:border-zinc-800 p-4">
+            <div id="main-bottom-bar" className="bottom-bar absolute bottom-0 left-0 right-0 bg-white dark:bg-zinc-900 border-t border-gray-200 dark:border-zinc-800 p-4 z-10">
                 <div className="max-w-4xl mx-auto">
                     <form onSubmit={handleSubmit} className="relative flex items-center">
 
                         {/* Plus Button & Menu */}
-                        <div className="absolute left-4 z-50" ref={menuRef}>
+                        <div className="absolute left-4 z-20" ref={menuRef}>
                             <button
                                 type="button"
                                 onClick={() => setIsMenuOpen(!isMenuOpen)}

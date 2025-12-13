@@ -1,12 +1,14 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Send, Sparkles, Plus, Image as ImageIcon, Search, FileText, Globe } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
 import { formatAiResponse } from '@/lib/utils/ai-formatting';
+import { useBible } from '@/context/BibleContext';
 
 interface AiNotesModalProps {
     isOpen: boolean;
@@ -22,6 +24,7 @@ interface AiNotesModalProps {
 
 export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, initialQuery, messages, onMessagesChange, onInsertToNotes, onSaveMessage }: AiNotesModalProps) {
     const { user, userData } = useAuth();
+    const { openBible } = useBible();
     // Removed local messages state
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -97,6 +100,13 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
             // Strip SUGGEST_SUMMARY tag if present (though less likely to be used here, good to be safe)
             aiResponse = aiResponse.replace(/<SUGGEST_SUMMARY>/g, '').trim();
 
+            // Check for "context missing" error from the AI itself (if it returns it as text)
+            if (aiResponse.includes("The provided context does not contain the answer") || aiResponse.includes("I am not able to answer this question")) {
+                console.log("Context missing, triggering fallback search...");
+                triggerSearchFallback(msgText);
+                return;
+            }
+
             const aiMsg = { role: 'model', content: aiResponse };
             onMessagesChange([...newMessages, aiMsg]);
 
@@ -115,6 +125,13 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
         } finally {
             setIsLoading(false);
         }
+    };
+
+    // Helper to trigger search from error fallback
+    const triggerSearchFallback = (query: string) => {
+        const cleanQuery = query.replace(/^Explain:\s*/i, '');
+        const systemMsg = { role: 'model', content: `I couldn't find the answer in the sermon context. Searching the web for "${cleanQuery}"... <SEARCH>${cleanQuery}</SEARCH>` };
+        onMessagesChange([...messages, { role: 'user', content: query }, systemMsg]);
     };
 
     const handleSummarize = async () => {
@@ -145,8 +162,8 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
 
     if (!isOpen) return null;
 
-    return (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6">
+    const modalContent = (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 sm:p-6">
             <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -173,7 +190,7 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
                             <div className="flex items-center gap-1">
                                 <button
                                     onClick={handleSummarize}
-                                    className="flex items-center gap-1 px-3 py-1.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs font-medium rounded-l-full hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors"
+                                    className="flex items-center gap-1 px-3 py-1.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs font-medium rounded-l-full hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors touch-manipulation cursor-pointer"
                                     title="Generate a structured summary"
                                 >
                                     <Sparkles className="w-3 h-3" />
@@ -181,7 +198,7 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
                                 </button>
                             </div>
                         )}
-                        <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors">
+                        <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors touch-manipulation cursor-pointer">
                             <X className="w-5 h-5 text-gray-500" />
                         </button>
                     </div>
@@ -197,7 +214,7 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
                             <div className="flex justify-center gap-2">
                                 <button
                                     onClick={handleSummarize}
-                                    className="px-4 py-2 bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-lg text-sm text-purple-600 hover:bg-purple-50 dark:hover:bg-zinc-700 transition-colors flex items-center gap-2"
+                                    className="px-4 py-2 bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-lg text-sm text-purple-600 hover:bg-purple-50 dark:hover:bg-zinc-700 transition-colors flex items-center gap-2 touch-manipulation cursor-pointer"
                                 >
                                     <FileText className="w-4 h-4" />
                                     Summarize Sermon
@@ -220,7 +237,29 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
                                         <>
                                             {/* Debug Log */}
                                             {console.log('AI Msg Content:', msg.content)}
-                                            <div dangerouslySetInnerHTML={{ __html: formatAiResponse(msg.content) }} />
+                                            <div
+                                                dangerouslySetInnerHTML={{ __html: formatAiResponse(msg.content || '') }}
+                                                onClick={(e) => {
+                                                    const target = e.target as HTMLElement;
+                                                    const verseLink = target.closest('.verse-link');
+                                                    if (verseLink) {
+                                                        e.stopPropagation();
+                                                        const ref = verseLink.getAttribute('data-verse');
+                                                        if (ref) {
+                                                            const match = ref.match(/((?:[123]\s)?[A-Z][a-z]+\.?)\s(\d+):(\d+)/);
+                                                            if (match) {
+                                                                openBible({
+                                                                    book: match[1].trim(),
+                                                                    chapter: parseInt(match[2]),
+                                                                    verse: parseInt(match[3])
+                                                                });
+                                                            } else {
+                                                                openBible();
+                                                            }
+                                                        }
+                                                    }
+                                                }}
+                                            />
                                         </>
                                     ) : (
                                         msg.content
@@ -255,7 +294,7 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
                                             onInsertToNotes(msg.content);
                                             // Optional: Show toast or feedback
                                         }}
-                                        className="text-xs flex items-center gap-1 text-gray-500 hover:text-purple-600 transition-colors px-2"
+                                        className="text-xs flex items-center gap-1 text-gray-500 hover:text-purple-600 transition-colors px-2 touch-manipulation cursor-pointer"
                                     >
                                         <Plus className="w-3 h-3" />
                                         Insert into Notes
@@ -291,7 +330,7 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
                         <button
                             type="submit"
                             disabled={!input.trim() || isLoading}
-                            className="absolute right-1.5 top-1.5 p-2 bg-purple-600 text-white rounded-full hover:bg-purple-700 disabled:opacity-50 transition-colors shadow-sm"
+                            className="absolute right-1.5 top-1.5 p-2 bg-purple-600 text-white rounded-full hover:bg-purple-700 disabled:opacity-50 transition-colors shadow-sm touch-manipulation cursor-pointer"
                         >
                             <Send className="w-4 h-4" />
                         </button>
@@ -300,6 +339,11 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
             </motion.div>
         </div>
     );
+
+    if (typeof document !== 'undefined') {
+        return createPortal(modalContent, document.body);
+    }
+    return null;
 }
 
 // Perplexity-style Search Results Component
@@ -463,14 +507,14 @@ function SearchResults({ initialQuery, onInsertToNotes, onRefine, isLast }: { in
                                         href={previewUrl}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="p-2 text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 hover:bg-gray-200 dark:hover:bg-zinc-700 rounded-full transition-colors"
+                                        className="p-2 text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 hover:bg-gray-200 dark:hover:bg-zinc-700 rounded-full transition-colors touch-manipulation cursor-pointer"
                                         title="Open in new tab"
                                     >
                                         <Send className="w-4 h-4" />
                                     </a>
                                     <button
                                         onClick={() => setPreviewUrl(null)}
-                                        className="p-2 text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 hover:bg-gray-200 dark:hover:bg-zinc-700 rounded-full transition-colors"
+                                        className="p-2 text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 hover:bg-gray-200 dark:hover:bg-zinc-700 rounded-full transition-colors touch-manipulation cursor-pointer"
                                     >
                                         <X className="w-5 h-5" />
                                     </button>
@@ -547,7 +591,7 @@ function SearchResults({ initialQuery, onInsertToNotes, onRefine, isLast }: { in
                 {onRefine && (
                     <button
                         onClick={() => onRefine(`About the search result "${initialQuery}": `)}
-                        className="px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs font-bold rounded-md hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors flex items-center gap-1"
+                        className="px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs font-bold rounded-md hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors flex items-center gap-1 touch-manipulation cursor-pointer"
                     >
                         <Sparkles className="w-3 h-3" />
                         Refine / Ask
@@ -570,7 +614,7 @@ function SearchResults({ initialQuery, onInsertToNotes, onRefine, isLast }: { in
                         >
                             <button
                                 onClick={() => handleSourceClick(result.link)}
-                                className="flex-1 flex flex-col gap-2 text-left w-full"
+                                className="flex-1 flex flex-col gap-2 text-left w-full touch-manipulation cursor-pointer"
                             >
                                 <div className="flex items-center gap-2">
                                     <img
@@ -586,7 +630,7 @@ function SearchResults({ initialQuery, onInsertToNotes, onRefine, isLast }: { in
                             </button>
                             <button
                                 onClick={() => onInsertToNotes(`<blockquote><strong><a href="${result.link}">${result.title}</a></strong><br/>${result.snippet || ''}</blockquote><p></p>`)}
-                                className="mt-auto w-full py-1 bg-gray-100 dark:bg-zinc-700 hover:bg-purple-100 dark:hover:bg-purple-900/30 text-gray-500 hover:text-purple-600 text-[10px] font-medium rounded opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-1"
+                                className="mt-auto w-full py-1 bg-gray-100 dark:bg-zinc-700 hover:bg-purple-100 dark:hover:bg-purple-900/30 text-gray-500 hover:text-purple-600 text-[10px] font-medium rounded opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-1 touch-manipulation cursor-pointer"
                             >
                                 <Plus className="w-3 h-3" />
                                 Add to Notes
@@ -611,7 +655,7 @@ function SearchResults({ initialQuery, onInsertToNotes, onRefine, isLast }: { in
                                 <button
                                     onClick={() => handleAddImage(img)}
                                     disabled={processingImage === img.thumbnail}
-                                    className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity text-white font-bold text-sm backdrop-blur-[2px] disabled:opacity-100 disabled:bg-black/60"
+                                    className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity text-white font-bold text-sm backdrop-blur-[2px] disabled:opacity-100 disabled:bg-black/60 touch-manipulation cursor-pointer"
                                 >
                                     {processingImage === img.thumbnail ? (
                                         <Sparkles className="w-5 h-5 animate-spin" />

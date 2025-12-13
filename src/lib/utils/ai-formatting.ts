@@ -32,6 +32,15 @@ export const formatAiResponse = (text: string) => {
         // Italic
         processedLine = processedLine.replace(/\*(.*?)\*/g, '<em>$1</em>');
 
+        // Bible Verses (e.g. "John 3:16", "1 Cor 13:4")
+        // Wrap in a span that we can target with a click handler in the parent
+        const verseRegex = /((?:[123]\s)?[A-Z][a-z]+\.?\s\d+:\d+(?:-\d+)?)/g;
+        processedLine = processedLine.replace(verseRegex, (match) => {
+            // Clean up the match for the data attribute (remove periods, extra spaces)
+            const cleanRef = match.replace(/\.$/, '');
+            return `<span class="verse-link text-blue-600 dark:text-blue-400 hover:underline cursor-pointer font-medium" data-verse="${cleanRef}">${match}</span>`;
+        });
+
         // Headers (Highlighter Style + Spacing)
         if (processedLine.startsWith('### ')) {
             if (inList) { html += '</ul>'; inList = false; }

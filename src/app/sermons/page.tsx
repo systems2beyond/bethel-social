@@ -135,16 +135,11 @@ export default function SermonsPage() {
                                 <div className="mt-auto pt-3 border-t border-gray-100 dark:border-zinc-800 flex gap-2">
                                     <button
                                         onClick={() => openSermon(sermon, 'watch')}
-                                        className="flex-1 text-center py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-zinc-800 hover:bg-gray-100 dark:hover:bg-zinc-700 rounded-lg transition-colors"
+                                        className="w-full py-2.5 text-sm font-medium text-blue-600 dark:text-blue-400 bg-blue-500/10 dark:bg-blue-500/20 backdrop-blur-md border border-blue-500/20 dark:border-blue-500/30 hover:bg-blue-500/20 dark:hover:bg-blue-500/30 rounded-lg transition-all shadow-[0_0_15px_rgba(59,130,246,0.1)] hover:shadow-[0_0_20px_rgba(59,130,246,0.3)] flex items-center justify-center gap-2 group-hover:border-blue-500/40"
                                     >
-                                        Watch
-                                    </button>
-                                    <button
-                                        onClick={() => openSermon(sermon, 'ai')}
-                                        className="flex-1 text-center py-2 text-sm font-medium text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-900/20 hover:bg-purple-100 dark:hover:bg-purple-900/30 rounded-lg transition-colors flex items-center justify-center gap-1.5"
-                                    >
-                                        <Sparkles className="w-3.5 h-3.5" />
-                                        Ask AI
+                                        <PlayCircle className="w-4 h-4" />
+                                        <span>Watch & Study</span>
+                                        <Sparkles className="w-3.5 h-3.5 opacity-70" />
                                     </button>
                                 </div>
                             </div>

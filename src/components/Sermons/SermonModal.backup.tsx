@@ -6,9 +6,6 @@ import { X, Calendar, PlayCircle, Sparkles, Send, ChevronDown, ChevronUp, Edit3,
 import { motion, AnimatePresence, useDragControls, useMotionValue } from 'framer-motion';
 import { format } from 'date-fns';
 import { doc, onSnapshot, query, collection, orderBy, addDoc, serverTimestamp, setDoc } from 'firebase/firestore';
-import { useBible } from '@/context/BibleContext';
-import VerseLink from '../Bible/VerseLink';
-
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
@@ -28,9 +25,6 @@ interface SermonModalProps {
 
 export default function SermonModal({ sermon, initialMode, onClose }: SermonModalProps) {
     const { user, userData } = useAuth();
-    const { createNewChat } = useChat();
-    const { registerInsertHandler } = useBible();
-
     const [isAiOpen, setIsAiOpen] = useState(initialMode === 'ai');
 
     // "Always Portal" strategy for Desktop/Tablet (min-width: 768px)
@@ -56,22 +50,6 @@ export default function SermonModal({ sermon, initialMode, onClose }: SermonModa
     const [isAiNotesModalOpen, setIsAiNotesModalOpen] = useState(false);
     const [initialAiQuery, setInitialAiQuery] = useState('');
     const [editor, setEditor] = useState<any>(null);
-
-    // Register Bible Insert Handler
-    useEffect(() => {
-        registerInsertHandler((html) => {
-            if (editor) {
-                editor.chain().focus().insertContent(html).run();
-                // Ensure notes are saved
-                const newContent = editor.getHTML();
-                handleSaveNotes(newContent);
-            }
-        });
-
-        return () => {
-            registerInsertHandler(null);
-        };
-    }, [editor, registerInsertHandler]);
     const [isNotesMaximized, setIsNotesMaximized] = useState(false);
 
     // Helper to get YouTube ID
@@ -120,10 +98,13 @@ export default function SermonModal({ sermon, initialMode, onClose }: SermonModa
         const updateRect = () => {
             if (videoPlaceholderRef.current) {
                 const rect = videoPlaceholderRef.current.getBoundingClientRect();
-                // Use viewport coordinates directly for fixed positioning
+                // Calculate absolute position relative to document
+                const scrollY = window.scrollY || document.documentElement.scrollTop;
+                const scrollX = window.scrollX || document.documentElement.scrollLeft;
+
                 setDockedRect({
-                    top: rect.top,
-                    left: rect.left,
+                    top: rect.top + scrollY,
+                    left: rect.left + scrollX,
                     width: rect.width,
                     height: rect.height
                 });
@@ -133,11 +114,10 @@ export default function SermonModal({ sermon, initialMode, onClose }: SermonModa
         // Initial update
         updateRect();
 
-        // Listen for resize (layout changes) and scroll (viewport changes)
+        // Listen for resize (layout changes)
         window.addEventListener('resize', updateRect);
-        window.addEventListener('scroll', updateRect, { capture: true }); // Capture scroll to catch all scrolls
 
-        // Listen for scroll on the modal container specifically
+        // Listen for scroll on the modal container to update absolute position
         const scrollContainer = scrollContainerRef.current;
         if (scrollContainer) {
             scrollContainer.addEventListener('scroll', updateRect);
@@ -145,7 +125,6 @@ export default function SermonModal({ sermon, initialMode, onClose }: SermonModa
 
         return () => {
             window.removeEventListener('resize', updateRect);
-            window.removeEventListener('scroll', updateRect, { capture: true });
             if (scrollContainer) {
                 scrollContainer.removeEventListener('scroll', updateRect);
             }
@@ -200,14 +179,11 @@ export default function SermonModal({ sermon, initialMode, onClose }: SermonModa
         return () => observer.disconnect();
     }, []);
 
-    // Force floating when notes are maximized
-    const shouldFloat = isFloating || isNotesMaximized;
-
     // Constraints for floating video
     const [constraints, setConstraints] = useState<any>(modalContainerRef);
 
     useEffect(() => {
-        if (shouldFloat) {
+        if (isFloating) {
             // Use extremely large values to effectively remove constraints while keeping the "rubber band" effect at extreme edges
             const hugeBuffer = 5000;
             setConstraints({
@@ -219,7 +195,7 @@ export default function SermonModal({ sermon, initialMode, onClose }: SermonModa
         } else {
             setConstraints(modalContainerRef);
         }
-    }, [shouldFloat]);
+    }, [isFloating]);
 
     // Smart Tab Logic
     const [activeTabs, setActiveTabs] = useState<('left' | 'right' | 'top' | 'bottom')[]>([]);
@@ -258,7 +234,7 @@ export default function SermonModal({ sermon, initialMode, onClose }: SermonModa
         },
     }), [videoId]);
 
-    // ... (rest of code)
+    // ...
 
 
     // Fetch User Notes & Chat History
@@ -505,12 +481,12 @@ export default function SermonModal({ sermon, initialMode, onClose }: SermonModa
 
 
 
-    const isMobileDocked = !useAlwaysPortal && !shouldFloat;
+    const isMobileDocked = !useAlwaysPortal && !isFloating;
 
     const videoContent = (
         <motion.div
             ref={videoRef}
-            drag={shouldFloat}
+            drag={isFloating}
             dragControls={dragControls}
             dragListener={false}
             dragMomentum={false}
@@ -519,7 +495,7 @@ export default function SermonModal({ sermon, initialMode, onClose }: SermonModa
             onDrag={handleDrag}
             onDragEnd={handleDrag}
             initial={false}
-            animate={shouldFloat ? {
+            animate={isFloating ? {
                 position: 'fixed',
                 top: floatingTop,
                 left: floatingLeft,
@@ -533,9 +509,9 @@ export default function SermonModal({ sermon, initialMode, onClose }: SermonModa
             } : {
                 // Docked State
                 // Mobile: Absolute (Natural Scroll inside placeholder)
-                // Desktop: Fixed (Manually positioned in Portal using viewport coords)
-                position: isMobileDocked ? 'absolute' : 'fixed', // Fixed for Desktop/Tablet to match viewport coords
-                top: isMobileDocked ? 0 : dockedRect.top, // Desktop uses viewport top
+                // Desktop: Absolute (Manually positioned in Portal)
+                position: isMobileDocked ? 'absolute' : 'absolute', // Always absolute when docked (Desktop uses manual coords)
+                top: isMobileDocked ? 0 : dockedRect.top, // Desktop uses calculated absolute top
                 left: isMobileDocked ? 0 : dockedRect.left,
                 width: isMobileDocked ? '100%' : dockedRect.width,
                 height: isMobileDocked ? '100%' : dockedRect.height,
@@ -560,7 +536,7 @@ export default function SermonModal({ sermon, initialMode, onClose }: SermonModa
             {/* Smart Drag Tabs */}
             <AnimatePresence>
                 {
-                    shouldFloat && activeTabs.map(tab => (
+                    isFloating && activeTabs.map(tab => (
                         <motion.div
                             key={tab}
                             initial={{ opacity: 0, scale: 0.8 }}
@@ -594,12 +570,12 @@ export default function SermonModal({ sermon, initialMode, onClose }: SermonModa
             < div className={
                 cn(
                     "w-full h-full overflow-hidden bg-black relative z-10",
-                    shouldFloat && "rounded-xl border border-gray-200 dark:border-zinc-700 shadow-2xl"
+                    isFloating && "rounded-xl border border-gray-200 dark:border-zinc-700 shadow-2xl"
                 )}>
                 {/* Drag Handle / Header */}
                 <AnimatePresence>
                     {
-                        shouldFloat && (
+                        isFloating && (
                             <motion.div
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
@@ -674,7 +650,7 @@ export default function SermonModal({ sermon, initialMode, onClose }: SermonModa
                 </div>
 
                 {/* Scrollable Content */}
-                <div ref={scrollContainerRef} className="flex-1 overflow-y-auto custom-scrollbar overscroll-contain">
+                <div ref={scrollContainerRef} className="flex-1 overflow-y-auto custom-scrollbar">
                     <div className="flex flex-col min-h-full">
                         {/* Layout: Video/Info Top, Notes/Chat Bottom */}
 
@@ -682,7 +658,7 @@ export default function SermonModal({ sermon, initialMode, onClose }: SermonModa
                         <div className="bg-black/5 dark:bg-black/20">
                             {/* Video Player Section with Floating Capability */}
                             <div ref={videoPlaceholderRef} className="aspect-video bg-black w-full mx-auto max-w-5xl relative z-50">
-                                {(shouldFloat || useAlwaysPortal) && typeof document !== 'undefined' ? createPortal(
+                                {(isFloating || useAlwaysPortal) && typeof document !== 'undefined' ? createPortal(
                                     <div className="fixed inset-0 z-[100000] pointer-events-none">
                                         {videoContent}
                                     </div>,
@@ -701,9 +677,7 @@ export default function SermonModal({ sermon, initialMode, onClose }: SermonModa
                                                 : format(new Date(sermon.date.seconds * 1000), 'MMMM d, yyyy')
                                         ) : 'Unknown Date'}
                                     </div>
-                                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                                        <VerseLink text={sermon.summary || ''} />
-                                    </p>
+                                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed">{sermon.summary}</p>
                                 </div>
 
                                 {/* Outline */}
@@ -719,7 +693,7 @@ export default function SermonModal({ sermon, initialMode, onClose }: SermonModa
                                                     <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xs font-bold mt-0.5">
                                                         {idx + 1}
                                                     </span>
-                                                    <span><VerseLink text={point} /></span>
+                                                    <span>{point}</span>
                                                 </li>
                                             ))}
                                         </ul>

@@ -7,6 +7,7 @@ import { Bot, User, Calendar, Mail, X, ImageIcon } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Post } from '@/types';
+import VerseLink from '../Bible/VerseLink';
 
 import { useSearchParams, useRouter } from 'next/navigation';
 
@@ -56,7 +57,11 @@ export function ChatInterface() {
         while ((match = actionRegex.exec(cleanContent)) !== null) {
             // Add text before the match
             if (match.index > lastIndex) {
-                parts.push(<p key={`text-${lastIndex}`} className="whitespace-pre-wrap leading-relaxed mb-4">{cleanContent.substring(lastIndex, match.index)}</p>);
+                parts.push(
+                    <p key={`text-${lastIndex}`} className="whitespace-pre-wrap leading-relaxed mb-4">
+                        <VerseLink text={cleanContent.substring(lastIndex, match.index)} />
+                    </p>
+                );
             }
 
             const type = match[1];
@@ -72,7 +77,7 @@ export function ChatInterface() {
                         href={googleCalendarUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center space-x-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors group my-2"
+                        className="flex items-center space-x-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors group my-2 touch-manipulation cursor-pointer"
                     >
                         <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-800 flex items-center justify-center text-blue-600 dark:text-blue-400">
                             <Calendar className="w-5 h-5" />
@@ -91,7 +96,7 @@ export function ChatInterface() {
                     <a
                         key={`action-${match.index}`}
                         href={mailtoUrl}
-                        className="flex items-center space-x-3 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-xl border border-purple-100 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors group my-2"
+                        className="flex items-center space-x-3 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-xl border border-purple-100 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors group my-2 touch-manipulation cursor-pointer"
                     >
                         <div className="w-10 h-10 rounded-full bg-purple-100 dark:bg-purple-800 flex items-center justify-center text-purple-600 dark:text-purple-400">
                             <Mail className="w-5 h-5" />
@@ -109,10 +114,18 @@ export function ChatInterface() {
 
         // Add remaining text
         if (lastIndex < cleanContent.length) {
-            parts.push(<p key={`text-${lastIndex}`} className="whitespace-pre-wrap leading-relaxed">{cleanContent.substring(lastIndex)}</p>);
+            parts.push(
+                <p key={`text-${lastIndex}`} className="whitespace-pre-wrap leading-relaxed">
+                    <VerseLink text={cleanContent.substring(lastIndex)} />
+                </p>
+            );
         }
 
-        return parts.length > 0 ? parts : <p className="whitespace-pre-wrap leading-relaxed">{cleanContent}</p>;
+        return parts.length > 0 ? parts : (
+            <p className="whitespace-pre-wrap leading-relaxed">
+                <VerseLink text={cleanContent} />
+            </p>
+        );
     };
 
     useEffect(() => {
@@ -189,7 +202,7 @@ export function ChatInterface() {
                             params.delete('postId');
                             router.replace(`/chat?${params.toString()}`);
                         }}
-                        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+                        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors touch-manipulation cursor-pointer"
                     >
                         <X className="w-5 h-5" />
                     </button>
@@ -226,7 +239,7 @@ export function ChatInterface() {
                                         navigator.clipboard.writeText(msg.content);
                                         alert('Draft copied to clipboard! (Post Composer coming soon)');
                                     }}
-                                    className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
+                                    className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2 touch-manipulation cursor-pointer"
                                 >
                                     <span>Use Draft</span>
                                 </button>
@@ -235,7 +248,7 @@ export function ChatInterface() {
                                         // TODO: Open composer with empty state?
                                         alert('Create your own post (Coming soon)');
                                     }}
-                                    className="px-4 py-2 bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors"
+                                    className="px-4 py-2 bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors touch-manipulation cursor-pointer"
                                 >
                                     <span>Edit / Post Manually</span>
                                 </button>

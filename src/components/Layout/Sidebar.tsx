@@ -3,9 +3,10 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Compass, Calendar, Users, MessageSquare, Bell, User, LogOut, Settings, PlayCircle, Sun, Moon } from 'lucide-react';
+import { Home, Compass, Calendar, Users, MessageSquare, Bell, User, LogOut, Settings, PlayCircle, Sun, Moon, Book, BookOpen } from 'lucide-react';
 import { useTheme } from 'next-themes';
-import { cn } from '@/lib/utils'; // Assuming utils exists, or I'll use clsx/twMerge directly if not
+import { cn } from '@/lib/utils';
+import { useBible } from '@/context/BibleContext';
 
 // Mock data for recent chats
 const recentChats = [
@@ -14,10 +15,31 @@ const recentChats = [
     { id: 3, title: "Prayer Request", date: '2d ago' },
 ];
 
+import { motion, AnimatePresence } from 'framer-motion';
+import { useMediaQuery } from '@/lib/hooks/useMediaQuery';
+import { Menu, GripVertical } from 'lucide-react';
+
 export function Sidebar() {
     const pathname = usePathname();
     const { theme, setTheme } = useTheme();
+    const { openBible, openStudy } = useBible();
     const [mounted, setMounted] = React.useState(false);
+
+    // Responsive Breakpoints
+    const isDesktop = useMediaQuery('(min-width: 1024px)');
+    const isTabletLandscape = useMediaQuery('(min-width: 768px) and (orientation: landscape)');
+    const isMobileOrTabletPortrait = !isDesktop && !isTabletLandscape;
+
+    const [isOpen, setIsOpen] = React.useState(true);
+
+    // Auto-close on mobile/tablet portrait, auto-open on desktop/landscape
+    React.useEffect(() => {
+        if (isMobileOrTabletPortrait) {
+            setIsOpen(false);
+        } else {
+            setIsOpen(true);
+        }
+    }, [isMobileOrTabletPortrait]);
 
     React.useEffect(() => {
         setMounted(true);
@@ -27,62 +49,136 @@ export function Sidebar() {
         { icon: Home, label: 'Home', href: '/' },
         { icon: PlayCircle, label: 'Sermons', href: '/sermons' },
         { icon: MessageSquare, label: 'Notes', href: '/notes' },
+        { icon: Book, label: 'Bible', onClick: () => openStudy() },
         { icon: Calendar, label: 'Events', href: '/events' },
         { icon: Users, label: 'Groups', href: '/groups' },
     ];
 
     return (
-        <div className="w-64 h-screen bg-gray-50 dark:bg-zinc-900 border-r border-gray-200 dark:border-zinc-800 flex flex-col flex-shrink-0 transition-colors duration-300">
-            {/* Logo */}
-            <div className="p-6">
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                    Bethel Social
-                </h1>
-            </div>
+        <>
+            {/* Vertical Hamburger Trigger (Mobile/Tablet Portrait) */}
+            <AnimatePresence>
+                {!isOpen && isMobileOrTabletPortrait && (
+                    <motion.button
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -20 }}
+                        drag="y"
+                        dragConstraints={{ top: 100, bottom: 600 }} // Avoid toolbar (top) and bottom nav
+                        dragElastic={0.1}
+                        dragMomentum={false}
+                        onClick={() => setIsOpen(true)}
+                        className="fixed top-4 left-0 z-[20001] p-2 bg-white dark:bg-zinc-900 border-y border-r border-gray-200 dark:border-zinc-800 rounded-r-lg shadow-md touch-manipulation cursor-pointer"
+                    >
+                        <GripVertical className="w-6 h-6 text-gray-600 dark:text-gray-400" />
+                    </motion.button>
+                )}
+            </AnimatePresence>
 
-            {/* Navigation */}
-            <nav className="px-4 space-y-1">
-                {navItems.map((item) => {
-                    const isActive = pathname === item.href;
-                    return (
-                        <Link
-                            key={item.href}
-                            href={item.href}
+            {/* Sidebar Container */}
+            <AnimatePresence mode="wait">
+                {isOpen && (
+                    <>
+                        {/* Overlay for Mobile/Tablet Portrait */}
+                        {isMobileOrTabletPortrait && (
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 0.5 }}
+                                exit={{ opacity: 0 }}
+                                onClick={() => setIsOpen(false)}
+                                className="fixed inset-0 bg-black/50 z-[19999]"
+                            />
+                        )}
+
+                        <motion.div
+                            initial={isMobileOrTabletPortrait ? { x: -280 } : false}
+                            animate={{ x: 0 }}
+                            exit={isMobileOrTabletPortrait ? { x: -280 } : undefined}
+                            transition={{ type: "spring", bounce: 0, duration: 0.3 }}
                             className={cn(
-                                "flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors",
-                                isActive
-                                    ? "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400"
-                                    : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-zinc-800"
+                                "w-64 h-screen bg-gray-50 dark:bg-zinc-900 border-r border-gray-200 dark:border-zinc-800 flex flex-col flex-shrink-0 transition-colors duration-300",
+                                isMobileOrTabletPortrait ? "fixed top-0 left-0 z-[20000] shadow-2xl" : "relative"
                             )}
                         >
-                            <item.icon className="w-5 h-5" />
-                            <span className="font-medium">{item.label}</span>
-                        </Link>
-                    );
-                })}
-            </nav>
+                            {/* Logo */}
+                            <div className="p-6 flex items-center justify-between">
+                                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                                    Bethel Social
+                                </h1>
+                                {isMobileOrTabletPortrait && (
+                                    <button onClick={() => setIsOpen(false)} className="md:hidden">
+                                        <Menu className="w-5 h-5 text-gray-500" />
+                                    </button>
+                                )}
+                            </div>
 
-            {/* Recent Chats Section */}
-            <RecentChats />
+                            {/* Navigation */}
+                            <nav className="px-4 space-y-1">
+                                {navItems.map((item) => {
+                                    if (item.onClick) {
+                                        return (
+                                            <button
+                                                key={item.label}
+                                                onClick={() => {
+                                                    item.onClick();
+                                                    if (isMobileOrTabletPortrait) setIsOpen(false);
+                                                }}
+                                                className={cn(
+                                                    "flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors w-full text-left",
+                                                    "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-zinc-800"
+                                                )}
+                                            >
+                                                <item.icon className="w-5 h-5" />
+                                                <span className="font-medium">{item.label}</span>
+                                            </button>
+                                        );
+                                    }
 
-            {/* Spacer */}
-            <div className="flex-1" />
+                                    const isActive = pathname === item.href;
+                                    return (
+                                        <Link
+                                            key={item.href || item.label}
+                                            href={item.href || '#'}
+                                            onClick={() => isMobileOrTabletPortrait && setIsOpen(false)}
+                                            className={cn(
+                                                "flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors",
+                                                isActive
+                                                    ? "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400"
+                                                    : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-zinc-800"
+                                            )}
+                                        >
+                                            <item.icon className="w-5 h-5" />
+                                            <span className="font-medium">{item.label}</span>
+                                        </Link>
+                                    );
+                                })}
+                            </nav>
 
-            {/* User & Settings */}
-            <div className="p-4 border-t border-gray-200 dark:border-zinc-800 space-y-2">
-                <button
-                    onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                    className="flex items-center space-x-3 px-4 py-3 w-full rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
-                >
-                    {mounted && theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-                    <span className="font-medium">
-                        {mounted && theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
-                    </span>
-                </button>
+                            {/* Recent Chats Section */}
+                            <RecentChats />
 
-                <UserSection />
-            </div>
-        </div>
+                            {/* Spacer */}
+                            <div className="flex-1" />
+
+                            {/* User & Settings */}
+                            <div className="p-4 border-t border-gray-200 dark:border-zinc-800 space-y-2">
+                                <button
+                                    onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                                    className="flex items-center space-x-3 px-4 py-3 w-full rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
+                                >
+                                    {mounted && theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+                                    <span className="font-medium">
+                                        {mounted && theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+                                    </span>
+                                </button>
+
+                                <UserSection />
+                            </div>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
+        </>
     );
 }
 
