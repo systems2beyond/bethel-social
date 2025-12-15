@@ -19,7 +19,7 @@ export const createMeeting = onCall({ timeoutSeconds: 60 }, async (request) => {
     }
 
     try {
-        const { topic, startTime, requestId } = request.data;
+        const { topic, startTime, requestId, attendees } = request.data;
         const startDateTime = new Date(startTime).toISOString();
         const endDateTime = new Date(new Date(startTime).getTime() + 60 * 60 * 1000).toISOString(); // Default 1h
 
@@ -30,7 +30,7 @@ export const createMeeting = onCall({ timeoutSeconds: 60 }, async (request) => {
             const client = await auth.getClient();
             const calendar = google.calendar({ version: 'v3', auth: client as any });
 
-            const event = {
+            const eventBody: any = {
                 summary: topic || 'New Meeting',
                 start: { dateTime: startDateTime },
                 end: { dateTime: endDateTime },
@@ -42,10 +42,16 @@ export const createMeeting = onCall({ timeoutSeconds: 60 }, async (request) => {
                 }
             };
 
+            // Add attendees if present
+            if (attendees && Array.isArray(attendees) && attendees.length > 0) {
+                eventBody.attendees = attendees.map((email: string) => ({ email: email.trim() }));
+            }
+
             const res = await calendar.events.insert({
                 calendarId: 'primary',
-                requestBody: event,
-                conferenceDataVersion: 1
+                requestBody: eventBody,
+                conferenceDataVersion: 1,
+                sendUpdates: 'all' // CRITICAL: This triggers Google to send email invitations
             });
 
             meetLink = res.data.hangoutLink || '';

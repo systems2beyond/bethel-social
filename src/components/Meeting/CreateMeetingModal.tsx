@@ -16,6 +16,7 @@ interface CreateMeetingModalProps {
 export default function CreateMeetingModal({ isOpen, onClose, initialTopic = '', initialDate }: CreateMeetingModalProps) {
     const [topic, setTopic] = useState(initialTopic);
     const [startTime, setStartTime] = useState('');
+    const [attendeesText, setAttendeesText] = useState('');
     const [loading, setLoading] = useState(false);
     const [successLink, setSuccessLink] = useState<string | null>(null);
     const [error, setError] = useState('');
@@ -23,6 +24,7 @@ export default function CreateMeetingModal({ isOpen, onClose, initialTopic = '',
     useEffect(() => {
         if (isOpen) {
             setTopic(initialTopic);
+            setAttendeesText('');
             // Format initialDate to datetime-local friendly string (YYYY-MM-DDThh:mm)
             if (initialDate) {
                 try {
@@ -46,11 +48,19 @@ export default function CreateMeetingModal({ isOpen, onClose, initialTopic = '',
         e.preventDefault();
         setLoading(true);
         setError('');
+
+        // Parse attendees
+        const attendees = attendeesText
+            .split(/[,\n;]/) // split by comma, newline, or semicolon
+            .map(email => email.trim())
+            .filter(email => email.length > 0 && email.includes('@'));
+
         try {
             const createMeetingFn = httpsCallable(functions, 'createMeeting');
             const result: any = await createMeetingFn({
                 topic,
-                startTime: new Date(startTime).toISOString()
+                startTime: new Date(startTime).toISOString(),
+                attendees
             });
 
             const { meetLink } = result.data;
@@ -136,6 +146,19 @@ export default function CreateMeetingModal({ isOpen, onClose, initialTopic = '',
                                     onChange={(e) => setStartTime(e.target.value)}
                                     className="w-full px-4 py-2.5 bg-gray-50 dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-700 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all dark:[color-scheme:dark]"
                                 />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                                    <Type className="w-3.5 h-3.5" /> Attendees (optional)
+                                </label>
+                                <textarea
+                                    value={attendeesText}
+                                    onChange={(e) => setAttendeesText(e.target.value)}
+                                    placeholder="Enter email addresses separated by commas..."
+                                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-700 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all min-h-[80px] text-sm"
+                                />
+                                <p className="text-xs text-gray-400 mt-1">They will receive a Google Calendar invitation.</p>
                             </div>
 
                             {error && (
