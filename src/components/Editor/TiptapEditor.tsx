@@ -215,12 +215,13 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
     // Manage Provider lifecycle
     useEffect(() => {
         if (!yDoc || !collaborationId) return;
-        console.log('[Tiptap] Initializing Provider for:', collaborationId);
+        const signalingServers = ['wss://signaling.yjs.dev'];
+        console.log('[Tiptap] Initializing Provider for:', collaborationId, 'with signaling:', signalingServers);
 
         // Use public signaling servers for WebrtcProvider
         // Removed heroku servers as they are often down/unreliable
         const provider = new WebrtcProvider(collaborationId, yDoc, {
-            signaling: ['wss://signaling.yjs.dev']
+            signaling: signalingServers
         });
 
         // Add user awareness

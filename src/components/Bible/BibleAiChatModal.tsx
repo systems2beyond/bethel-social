@@ -12,27 +12,34 @@ import { useBible } from '@/context/BibleContext';
 import AiLessonCreator from './AiLessonCreator';
 
 // Helper component to handle native DOM events for AI messages
-function AiMessageContent({ content, openBible, onClose, onAction }: { content: string, openBible: any, onClose: () => void, onAction?: (action: string, data: string) => void }) {
+function AiMessageContent({ content, openBible, onClose, onAction, isLast }: { content: string, openBible: any, onClose: () => void, onAction?: (action: string, data: string) => void, isLast?: boolean }) {
     const containerRef = useRef<HTMLDivElement>(null);
 
-    // Parse Actions
+    // Robust Regex: Matches [ACTION:...] optionally surrounded by quotes or whitespace
+    // Capture groups: 1=ActionType, 2=ActionData
+    const actionRegex = /['"`]?\s*\[ACTION:([A-Z_]+)\s*\|\s*(.*?)\]\s*['"`]?/;
+
+    const actionMatch = content.match(actionRegex);
+
+    // Auto-trigger action if it's the latest message
     useEffect(() => {
-        // [ACTION:CREATE_MEETING | Topic | DateTime]
-        const actionMatch = content.match(/\[ACTION:([A-Z_]+)\s*\|\s*(.*?)\]/);
-        if (actionMatch && onAction) {
+        if (actionMatch && onAction && isLast) {
             const actionType = actionMatch[1];
             const actionData = actionMatch[2];
-            // We strip the action tag from the visual display below, but we trigger the handler here
-            // onAction(actionType, actionData); 
-            // Better to render a button for the action so the user confirms it
+            console.log(`Auto-triggering action (Latest Message): ${actionType}`, actionData);
+
+            // Small delay to ensure render is stable and user sees the context
+            const timer = setTimeout(() => {
+                onAction(actionType, actionData);
+            }, 1500); // 1.5s delay so they can read "Great, scheduling it..."
+            return () => clearTimeout(timer);
         }
-    }, [content, onAction]);
+    }, [actionMatch, onAction, isLast]);
 
+    // Clean content for display
     const displayContent = content
-        .replace(/\[ACTION:.*?\]/g, '') // Hide action tags
+        .replace(actionRegex, '') // Remove the tag
         .replace(/<SUGGEST_SUMMARY>/g, '');
-
-    const actionMatch = content.match(/\[ACTION:([A-Z_]+)\s*\|\s*(.*?)\]/);
 
     useEffect(() => {
         const container = containerRef.current;
@@ -112,12 +119,12 @@ function AiMessageContent({ content, openBible, onClose, onAction }: { content: 
                 <div className="mt-3">
                     <button
                         onClick={() => onAction && onAction(actionMatch[1], actionMatch[2])}
-                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-sm text-sm font-medium w-full justify-center"
+                        className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all shadow-md text-sm font-medium w-full justify-center animate-pulse"
                     >
                         {actionMatch[1] === 'CREATE_MEETING' ? (
                             <>
                                 <Calendar className="w-4 h-4" />
-                                Schedule Meeting: {actionMatch[2].split('|')[0]}
+                                Review Meeting: {actionMatch[2].split('|')[0]}
                             </>
                         ) : (
                             <>
@@ -126,6 +133,9 @@ function AiMessageContent({ content, openBible, onClose, onAction }: { content: 
                             </>
                         )}
                     </button>
+                    {isLast && (
+                        <p className="text-xs text-center text-gray-500 mt-1 dark:text-gray-400">Opening automatically...</p>
+                    )}
                 </div>
             )}
         </div>
@@ -432,7 +442,13 @@ export default function BibleAiChatModal({ isOpen, onClose, contextId, contextTi
                                     }`}>
                                     {msg.role === 'model' ? (
                                         <>
-                                            <AiMessageContent content={msg.content || ''} openBible={openBible} onClose={onClose} onAction={handleAction} />
+                                            <AiMessageContent
+                                                content={msg.content || ''}
+                                                openBible={openBible}
+                                                onClose={onClose}
+                                                onAction={handleAction}
+                                                isLast={idx === messages.length - 1}
+                                            />
                                         </>
                                     ) : (
                                         msg.content
