@@ -890,9 +890,10 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
 
                 <CreateMeetingModal
                     isOpen={createMeetingState.isOpen}
-                    onClose={() => setCreateMeetingState({ ...createMeetingState, isOpen: false })}
-                    initialTopic={createMeetingState.topic}
+                    onClose={() => setCreateMeetingState({ isOpen: false })}
+                    initialTopic={createMeetingState.topic || createMeetingDefaultTopic}
                     initialDate={createMeetingState.date}
+                    initialDescription={editor ? editor.getHTML() : ''}
                 />
 
             </motion.div >

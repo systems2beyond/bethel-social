@@ -11,9 +11,10 @@ interface CreateMeetingModalProps {
     onClose: () => void;
     initialTopic?: string;
     initialDate?: string; // ISO string or similar
+    initialDescription?: string;
 }
 
-export default function CreateMeetingModal({ isOpen, onClose, initialTopic = '', initialDate }: CreateMeetingModalProps) {
+export default function CreateMeetingModal({ isOpen, onClose, initialTopic = '', initialDate, initialDescription = '' }: CreateMeetingModalProps) {
     const [topic, setTopic] = useState(initialTopic);
     const [startTime, setStartTime] = useState('');
     const [attendeesText, setAttendeesText] = useState('');
@@ -60,7 +61,8 @@ export default function CreateMeetingModal({ isOpen, onClose, initialTopic = '',
             const result: any = await createMeetingFn({
                 topic,
                 startTime: new Date(startTime).toISOString(),
-                attendees
+                attendees,
+                description: initialDescription // Pass notes context
             });
 
             const { meetLink } = result.data;

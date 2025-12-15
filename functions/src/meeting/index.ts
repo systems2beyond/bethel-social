@@ -19,7 +19,7 @@ export const createMeeting = onCall({ timeoutSeconds: 60 }, async (request) => {
     }
 
     try {
-        const { topic, startTime, requestId, attendees } = request.data;
+        const { topic, startTime, requestId, attendees, description } = request.data;
         const startDateTime = new Date(startTime).toISOString();
         const endDateTime = new Date(new Date(startTime).getTime() + 60 * 60 * 1000).toISOString(); // Default 1h
 
@@ -30,8 +30,18 @@ export const createMeeting = onCall({ timeoutSeconds: 60 }, async (request) => {
             const client = await auth.getClient();
             const calendar = google.calendar({ version: 'v3', auth: client as any });
 
+            // Basic HTML strip for description context (Note: Google Calendar description supports limited HTML, but safer to be clean or raw)
+            // For now, we'll prefix it.
+            let finalDescription = '';
+            if (description) {
+                // Simple regex strip (not perfect but decent for context)
+                const stripped = description.replace(/<[^>]+>/g, '\n').replace(/\n+/g, '\n').trim();
+                finalDescription = `\n\n--- Meeting Context (Notes) ---\n${stripped}`;
+            }
+
             const eventBody: any = {
                 summary: topic || 'New Meeting',
+                description: finalDescription,
                 start: { dateTime: startDateTime },
                 end: { dateTime: endDateTime },
                 conferenceData: {
