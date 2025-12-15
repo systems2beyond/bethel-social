@@ -4,6 +4,7 @@ import * as admin from 'firebase-admin';
 import { genkit } from 'genkit';
 import { vertexAI } from '@genkit-ai/vertexai';
 import { FieldValue } from 'firebase-admin/firestore';
+import axios from 'axios';
 import { routeQuery } from './router';
 
 // Initialize Genkit with Vertex AI (uses Project Quota/Blaze)
@@ -317,22 +318,30 @@ export const chatWithBibleBot = async (request: any) => {
         if (lowerUrl.includes('youtube.com') || lowerUrl.includes('youtu.be') || lowerUrl.includes('vimeo.com') || lowerUrl.includes('.mp4') || lowerUrl.includes('.mov')) {
             logger.info('Skipping media attachment (video domain)', { imageUrl });
         } else {
-            // 2. Try to detect extension
-            const cleanUrl = imageUrl.split('?')[0];
-            const extension = cleanUrl.split('.').pop()?.toLowerCase();
+            // 2. Check accessibility (prevent crash if URL is expired)
+            try {
+                await axios.head(imageUrl, { timeout: 3000 });
 
-            let contentType = 'image/jpeg'; // Default fallback
+                // 3. Try to detect extension
+                const cleanUrl = imageUrl.split('?')[0];
+                const extension = cleanUrl.split('.').pop()?.toLowerCase();
 
-            if (extension === 'png') contentType = 'image/png';
-            if (extension === 'webp') contentType = 'image/webp';
-            if (extension === 'heic') contentType = 'image/heic';
-            if (extension === 'heif') contentType = 'image/heif';
-            // If extension is 'jpg' or 'jpeg' or unknown, we use 'image/jpeg'
+                let contentType = 'image/jpeg'; // Default fallback
 
-            logger.info('Attaching media to prompt', { imageUrl, contentType, inferredFrom: extension || 'fallback' });
-            prompt.push({ media: { url: imageUrl, contentType } });
+                if (extension === 'png') contentType = 'image/png';
+                if (extension === 'webp') contentType = 'image/webp';
+                if (extension === 'heic') contentType = 'image/heic';
+                if (extension === 'heif') contentType = 'image/heif';
+                // If extension is 'jpg' or 'jpeg' or unknown, we use 'image/jpeg'
+
+                logger.info('Attaching media to prompt', { imageUrl, contentType, inferredFrom: extension || 'fallback' });
+                prompt.push({ media: { url: imageUrl, contentType } });
+            } catch (err: any) {
+                logger.warn(`Skipping inaccessible media URL: ${imageUrl}`, { error: err.message });
+            }
         }
     }
+
 
     logger.info('Sending prompt to Gemini', {
         promptLength: JSON.stringify(prompt).length,
