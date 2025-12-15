@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Sparkles, BookOpen, Search as SearchIcon, Maximize2, Minimize2, Loader2, ChevronDown, Edit3, RotateCw, History, TrendingUp, Clock, ArrowRight, Youtube, Globe } from 'lucide-react';
+import { X, Sparkles, BookOpen, Search as SearchIcon, Maximize2, Minimize2, Loader2, ChevronDown, Edit3, RotateCw, History, TrendingUp, Clock, ArrowRight, Youtube, Globe, Users, Plus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -13,8 +13,10 @@ import { cn } from '@/lib/utils';
 import { useMediaQuery } from '@/lib/hooks/useMediaQuery';
 import BibleReader from './BibleReader';
 import BibleAiChatModal from './BibleAiChatModal';
-import { bibleSearch } from '@/lib/search/bible-index'; // Import Service
+import { bibleSearch } from '@/lib/search/bible-index';
 import { unifiedSearch, type UnifiedSearchResults } from '@/lib/search/unified-search';
+import AiLessonCreator from './AiLessonCreator';
+import CreateMeetingModal from '../Meeting/CreateMeetingModal';
 
 interface BibleStudyModalProps {
     onClose: () => void;
@@ -22,6 +24,7 @@ interface BibleStudyModalProps {
 
 export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
     const { user } = useAuth();
+    const [isLessonCreatorOpen, setIsLessonCreatorOpen] = useState(false);
     const {
         isStudyOpen, closeStudy,
         onInsertNote, registerInsertHandler,
@@ -55,6 +58,9 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]); // Deprecated, but keeping for compatibility if needed? No, let's switch.
     const [detailedResults, setDetailedResults] = useState<UnifiedSearchResults>({ bible: [], sermons: [], notes: [] });
+    // UI State
+    const [isPlusMenuOpen, setIsPlusMenuOpen] = useState(false); // Kept for legacy ref, can remove if unused
+    const [createMeetingState, setCreateMeetingState] = useState<{ isOpen: boolean, topic?: string, date?: string }>({ isOpen: false });
 
     const [isSearching, setIsSearching] = useState(false);
     const [isIndexing, setIsIndexing] = useState(false); // New state for loading index
@@ -308,13 +314,18 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
         };
     }, [isDragging]);
 
-    const [isAiOpen, setIsAiOpen] = useState(false);
-    const [aiMessages, setAiMessages] = useState<any[]>([]);
-    const [initialAiQuery, setInitialAiQuery] = useState('');
+    const [isFellowshipMode, setIsFellowshipMode] = useState(false);
+    const [isAiChatOpen, setIsAiChatOpen] = useState(false);
+    const [aiQuery, setAiQuery] = useState('');
+    const [aiAutoSend, setAiAutoSend] = useState(false);
+    const [aiMessages, setAiMessages] = useState<any[]>([]); // Restored for chat persistence
+    const [isCreateMeetingOpen, setIsCreateMeetingOpen] = useState(false);
+    const [createMeetingDefaultTopic, setCreateMeetingDefaultTopic] = useState('');
 
-    const handleOpenAiNotes = (query?: string) => {
-        if (query) setInitialAiQuery(query);
-        setIsAiOpen(true);
+    const handleAskAi = (query: string, autoSend: boolean = false) => {
+        setAiQuery(query);
+        setAiAutoSend(autoSend);
+        setIsAiChatOpen(true);
     };
 
     const handleAddToNotes = (text: string) => {
@@ -566,13 +577,30 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
 
                     {/* Actions */}
                     <div className="flex items-center gap-2 shrink-0">
+
                         <button
-                            onClick={() => handleOpenAiNotes()}
+                            onClick={() => handleAskAi('')}
                             className="flex items-center gap-2 px-3 py-1.5 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded-full hover:bg-purple-200 dark:hover:bg-purple-900/60 transition-colors font-medium text-xs sm:text-sm"
                         >
                             <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                             <span className="hidden sm:inline">Ask AI</span>
                             <span className="inline sm:hidden">AI</span>
+                        </button>
+
+                        <div className="w-px h-6 bg-gray-200 dark:bg-zinc-800 mx-1" />
+
+                        <button
+                            onClick={() => {
+                                console.log('[BibleStudyModal] Toggling Fellowship. Current:', isFellowshipMode);
+                                setIsFellowshipMode(!isFellowshipMode);
+                            }}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-all duration-300 font-medium text-xs sm:text-sm shadow-sm ${isFellowshipMode
+                                ? 'bg-gradient-to-r from-cyan-500 to-purple-600 text-white shadow-cyan-500/20 hover:shadow-cyan-500/40 animate-pulse-slow'
+                                : 'hover:bg-gray-100 dark:hover:bg-zinc-800 text-gray-700 dark:text-gray-300'
+                                }`}
+                        >
+                            <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                            <span className="hidden sm:inline">{isFellowshipMode ? 'Fellowshipping...' : 'Fellowship'}</span>
                         </button>
 
                         <div className="w-px h-6 bg-gray-200 dark:bg-zinc-800 mx-1" />
@@ -603,7 +631,7 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                 splitRatio === 0 && "invisible border-none" // Completely hide if ratio is 0
                             )}
                     >
-                        <BibleReader />
+                        <BibleReader onInsertNote={onInsertNote || undefined} onAskAi={handleAskAi} />
 
                         {/* Visual Cue for Search Results when Reader is dominant */}
                         <AnimatePresence>
@@ -816,8 +844,10 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                                 className="p-6 min-h-[500px] prose dark:prose-invert max-w-none focus:outline-none"
                                                 showToolbar={false}
                                                 onEditorReady={setEditor}
-                                                onAskAi={handleOpenAiNotes}
+                                                onAskAi={handleAskAi}
                                                 onLinkClick={handleLinkClick}
+                                                collaborationId={isFellowshipMode ? `fellowship-${tabs.find(t => t.id === activeTabId)?.reference.book}-${tabs.find(t => t.id === activeTabId)?.reference.chapter}` : undefined}
+                                                user={{ name: userData?.displayName || 'Anonymous', color: '#3b82f6' }}
                                             />
                                         </div>
                                     </div>
@@ -828,17 +858,44 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                 </div>
 
                 <BibleAiChatModal
-                    isOpen={isAiOpen}
-                    onClose={() => setIsAiOpen(false)}
+                    isOpen={isAiChatOpen}
+                    onClose={() => {
+                        setIsAiChatOpen(false);
+                        setAiAutoSend(false);
+                    }}
                     contextId={`${tabs.find(t => t.id === activeTabId)?.reference.book} ${tabs.find(t => t.id === activeTabId)?.reference.chapter}`}
                     contextTitle={`Bible Study: ${tabs.find(t => t.id === activeTabId)?.reference.book} ${tabs.find(t => t.id === activeTabId)?.reference.chapter}`}
-                    initialQuery={initialAiQuery}
+                    initialQuery={aiQuery}
+                    autoSend={aiAutoSend}
                     messages={aiMessages}
                     onMessagesChange={setAiMessages}
                     onInsertToNotes={handleAddToNotes}
+                    onCreateMeeting={(topic) => {
+                        setCreateMeetingDefaultTopic(topic || '');
+                        setIsCreateMeetingOpen(true);
+                    }}
                     preserveScrollLockOnClose={true}
                 />
-            </motion.div>
-        </div>
+
+                <AnimatePresence>
+                    {isLessonCreatorOpen && (
+                        <AiLessonCreator
+                            isOpen={isLessonCreatorOpen}
+                            onClose={() => setIsLessonCreatorOpen(false)}
+                            contextTitle={`${tabs.find(t => t.id === activeTabId)?.reference.book} ${tabs.find(t => t.id === activeTabId)?.reference.chapter}`}
+                            onInsert={handleAddToNotes}
+                        />
+                    )}
+                </AnimatePresence>
+
+                <CreateMeetingModal
+                    isOpen={createMeetingState.isOpen}
+                    onClose={() => setCreateMeetingState({ ...createMeetingState, isOpen: false })}
+                    initialTopic={createMeetingState.topic}
+                    initialDate={createMeetingState.date}
+                />
+
+            </motion.div >
+        </div >
     );
 }

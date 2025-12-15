@@ -98,6 +98,7 @@ export const debugPosts = onRequest(async (req, res) => {
 import { chatWithBibleBot, ingestSermon } from './ai/chatbot';
 export { ingestContent, scheduledWebsiteCrawl, ingestSocialPost } from './ai/knowledge_base';
 export * from './ai/comments';
+export * from './meeting'; // Export meeting functions
 
 
 export const syncFacebook = onSchedule('every 10 minutes', async (event) => {

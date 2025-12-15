@@ -198,6 +198,11 @@ export const chatWithBibleBot = async (request: any) => {
     4. **Summary Suggestion:**
        If the conversation reaches a "noteworthy" moment (deep theology, practical application) OR if the user explicitly asks to "save this", "add to notes", or "remember this", output the tag \`<SUGGEST_SUMMARY>\` at the very end of your response.
 
+    5. **Meeting Action:**
+       If the user wants to schedule a meeting or event, ask for the **Topic** and **Date/Time**. Once you have this info, output:
+       \`[ACTION:CREATE_MEETING | Topic | DateTime]\`
+       Example: \`[ACTION:CREATE_MEETING | Planning Session | 2025-10-12T14:30:00]\`
+
     **Sermon Context:**
     ${context || "No specific sermon context available for this query."}
     `;

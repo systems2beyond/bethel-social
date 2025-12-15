@@ -62,3 +62,24 @@ export interface Sermon {
     transcript?: string;
     createdAt?: any;
 }
+
+export interface Meeting {
+    id: string;
+    hostId: string;
+    hostName: string;
+    topic: string;
+    description?: string;
+    type: 'bible-study' | 'fellowship' | 'prayer' | 'general';
+    startTime: number; // Unix timestamp
+    durationMinutes: number;
+    meetLink?: string; // Google Meet URL
+    meetCode?: string; // For joining
+    participants: string[]; // User IDs (rsvps)
+    files: string[]; // URLs of shared files in "Lobby"
+    bibleReference?: {
+        book: string;
+        chapter: number;
+        verse?: number;
+    };
+    createdAt: number;
+}

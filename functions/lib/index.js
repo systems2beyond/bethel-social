@@ -126,6 +126,7 @@ Object.defineProperty(exports, "ingestContent", { enumerable: true, get: functio
 Object.defineProperty(exports, "scheduledWebsiteCrawl", { enumerable: true, get: function () { return knowledge_base_1.scheduledWebsiteCrawl; } });
 Object.defineProperty(exports, "ingestSocialPost", { enumerable: true, get: function () { return knowledge_base_1.ingestSocialPost; } });
 __exportStar(require("./ai/comments"), exports);
+__exportStar(require("./meeting"), exports); // Export meeting functions
 exports.syncFacebook = (0, scheduler_1.onSchedule)('every 10 minutes', async (event) => {
     await (0, facebook_1.syncFacebookPosts)();
     await (0, facebook_1.syncFacebookLiveStatus)();

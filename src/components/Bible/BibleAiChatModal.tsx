@@ -2,17 +2,37 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Send, Sparkles, Plus, Image as ImageIcon, Search, FileText, Globe } from 'lucide-react';
+import { X, Send, Sparkles, Plus, Image as ImageIcon, Search, FileText, Globe, Trash2, Calendar } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
 import { formatAiResponse } from '@/lib/utils/ai-formatting';
 import { useBible } from '@/context/BibleContext';
+import AiLessonCreator from './AiLessonCreator';
 
 // Helper component to handle native DOM events for AI messages
-function AiMessageContent({ content, openBible, onClose }: { content: string, openBible: any, onClose: () => void }) {
+function AiMessageContent({ content, openBible, onClose, onAction }: { content: string, openBible: any, onClose: () => void, onAction?: (action: string, data: string) => void }) {
     const containerRef = useRef<HTMLDivElement>(null);
+
+    // Parse Actions
+    useEffect(() => {
+        // [ACTION:CREATE_MEETING | Topic | DateTime]
+        const actionMatch = content.match(/\[ACTION:([A-Z_]+)\s*\|\s*(.*?)\]/);
+        if (actionMatch && onAction) {
+            const actionType = actionMatch[1];
+            const actionData = actionMatch[2];
+            // We strip the action tag from the visual display below, but we trigger the handler here
+            // onAction(actionType, actionData); 
+            // Better to render a button for the action so the user confirms it
+        }
+    }, [content, onAction]);
+
+    const displayContent = content
+        .replace(/\[ACTION:.*?\]/g, '') // Hide action tags
+        .replace(/<SUGGEST_SUMMARY>/g, '');
+
+    const actionMatch = content.match(/\[ACTION:([A-Z_]+)\s*\|\s*(.*?)\]/);
 
     useEffect(() => {
         const container = containerRef.current;
@@ -75,18 +95,40 @@ function AiMessageContent({ content, openBible, onClose }: { content: string, op
     }, [content, openBible, onClose]);
 
     return (
-        <div
-            ref={containerRef}
-            className="prose dark:prose-invert max-w-none text-sm [&>p]:mb-2 [&>ul]:mb-2 relative"
-            style={{
-                touchAction: 'manipulation',
-                cursor: 'auto',
-                WebkitUserSelect: 'text',
-                userSelect: 'text'
-            }}
-            // Use hybrid mode: buttons for this modal
-            dangerouslySetInnerHTML={{ __html: formatAiResponse(content, { useButtons: true }) }}
-        />
+        <div>
+            <div
+                ref={containerRef}
+                className="prose dark:prose-invert max-w-none text-sm [&>p]:mb-2 [&>ul]:mb-2 relative"
+                style={{
+                    touchAction: 'manipulation',
+                    cursor: 'auto',
+                    WebkitUserSelect: 'text',
+                    userSelect: 'text'
+                }}
+                // Use hybrid mode: buttons for this modal
+                dangerouslySetInnerHTML={{ __html: formatAiResponse(displayContent, { useButtons: true }) }}
+            />
+            {actionMatch && (
+                <div className="mt-3">
+                    <button
+                        onClick={() => onAction && onAction(actionMatch[1], actionMatch[2])}
+                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-sm text-sm font-medium w-full justify-center"
+                    >
+                        {actionMatch[1] === 'CREATE_MEETING' ? (
+                            <>
+                                <Calendar className="w-4 h-4" />
+                                Schedule Meeting: {actionMatch[2].split('|')[0]}
+                            </>
+                        ) : (
+                            <>
+                                <Sparkles className="w-4 h-4" />
+                                Perform Action
+                            </>
+                        )}
+                    </button>
+                </div>
+            )}
+        </div>
     );
 }
 
@@ -102,15 +144,19 @@ interface BibleAiChatModalProps {
     onInsertToNotes: (content: string) => void;
     onSaveMessage?: (role: string, content: string) => Promise<void>;
     preserveScrollLockOnClose?: boolean;
+    onCreateMeeting?: (topic?: string, date?: string) => void;
+    autoSend?: boolean; // New prop
 }
 
-export default function BibleAiChatModal({ isOpen, onClose, contextId, contextTitle, initialQuery, messages, onMessagesChange, onInsertToNotes, onSaveMessage, preserveScrollLockOnClose = false }: BibleAiChatModalProps) {
+export default function BibleAiChatModal({ isOpen, onClose, contextId, contextTitle, initialQuery, messages, onMessagesChange, onInsertToNotes, onSaveMessage, preserveScrollLockOnClose = false, onCreateMeeting, autoSend }: BibleAiChatModalProps) {
     const { user, userData } = useAuth();
     const { openBible } = useBible();
     // Removed local messages state
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const [isLessonCreatorOpen, setIsLessonCreatorOpen] = useState(false); // Local state for lesson creator overlay
 
     useEffect(() => {
         if (isOpen) {
@@ -128,21 +174,29 @@ export default function BibleAiChatModal({ isOpen, onClose, contextId, contextTi
     }, [isOpen, preserveScrollLockOnClose]);
 
     // Initial Query Handling
+    const hasAutoSentRef = useRef(false);
+
     useEffect(() => {
-        if (isOpen && initialQuery && initialQuery.trim().length > 0) {
-            // Check if we already asked this recently
-            const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
-
-            if (lastUserMsg && lastUserMsg.content.trim() === initialQuery.trim()) {
-                return; // Already asked
-            }
-            if (isLoading) {
-                return; // Prevent double-fire
-            }
-
-            handleSendMessage(undefined, initialQuery);
+        if (isOpen) {
+            // Reset auto-sent ref when opened
+            hasAutoSentRef.current = false;
         }
-    }, [isOpen, initialQuery]);
+
+        if (isOpen && initialQuery && initialQuery.trim().length > 0) {
+            // Check if we already asked this recently or pre-filled
+            // Allow update if the query changed
+            if (input !== initialQuery) {
+                setInput(initialQuery);
+            }
+
+            if (autoSend && !hasAutoSentRef.current && !isLoading) {
+                console.log('Auto-sending query:', initialQuery);
+                hasAutoSentRef.current = true;
+                // Defer slightly to ensure state is ready? No, direct call is better.
+                handleSendMessage(undefined, initialQuery);
+            }
+        }
+    }, [isOpen, initialQuery, autoSend]);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -183,8 +237,8 @@ export default function BibleAiChatModal({ isOpen, onClose, contextId, contextTi
 
             let aiResponse = result.data.response;
 
-            // Strip SUGGEST_SUMMARY tag if present
-            aiResponse = aiResponse.replace(/<SUGGEST_SUMMARY>/g, '').trim();
+            // Strip SUGGEST_SUMMARY tag if present (handled in render now, but good to clean)
+            // aiResponse = aiResponse.replace(/<SUGGEST_SUMMARY>/g, '').trim();
 
             // Detect if this was a system-generated context prompt (Synthesis)
             // If so, we SKIP the refusal check to avoid infinite loops (Refusal -> Search -> Synthesis -> Refusal...)
@@ -302,6 +356,19 @@ export default function BibleAiChatModal({ isOpen, onClose, contextId, contextTi
         }
     };
 
+    const handleAction = (actionType: string, actionData: string) => {
+        if (actionType === 'CREATE_MEETING') {
+            // actionData: Topic | DateTime
+            const parts = actionData.split('|').map(s => s.trim());
+            const topic = parts[0];
+            const date = parts[1];
+            if (onCreateMeeting) {
+                onCreateMeeting(topic, date);
+                onClose(); // Close chat when opening meeting modal
+            }
+        }
+    };
+
     if (!isOpen) return null;
 
     const modalContent = (
@@ -327,19 +394,6 @@ export default function BibleAiChatModal({ isOpen, onClose, contextId, contextTi
                         <h2 className="font-semibold text-gray-900 dark:text-white">Bible Study Assistant</h2>
                     </div>
                     <div className="flex items-center gap-2">
-                        {messages.length > 0 && (
-                            <div className="flex items-center gap-1">
-                                <button
-                                    onPointerDown={(e) => { e.preventDefault(); handleSummarize(); }}
-                                    onClick={handleSummarize}
-                                    className="flex items-center gap-1 px-3 py-1.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs font-medium rounded-l-full hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors touch-manipulation cursor-pointer"
-                                    title="Generate a chapter summary"
-                                >
-                                    <Sparkles className="w-3 h-3" />
-                                    Summarize Chapter
-                                </button>
-                            </div>
-                        )}
                         <button onPointerDown={(e) => { e.preventDefault(); onClose(); }} onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors touch-manipulation cursor-pointer">
                             <X className="w-5 h-5 text-gray-500" />
                         </button>
@@ -378,7 +432,7 @@ export default function BibleAiChatModal({ isOpen, onClose, contextId, contextTi
                                     }`}>
                                     {msg.role === 'model' ? (
                                         <>
-                                            <AiMessageContent content={msg.content || ''} openBible={openBible} onClose={onClose} />
+                                            <AiMessageContent content={msg.content || ''} openBible={openBible} onClose={onClose} onAction={handleAction} />
                                         </>
                                     ) : (
                                         msg.content
@@ -440,33 +494,122 @@ export default function BibleAiChatModal({ isOpen, onClose, contextId, contextTi
                     <div ref={messagesEndRef} />
                 </div>
 
-                {/* Input */}
-                <div className="p-4 bg-white dark:bg-zinc-900 border-t border-gray-100 dark:border-zinc-800">
-                    <form onSubmit={(e) => handleSendMessage(e)} className="relative">
-                        <input
-                            id="bible-ai-input"
-                            name="bible-ai-input"
-                            type="text"
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            placeholder="Ask a question..."
-                            className="w-full pl-4 pr-10 py-3 bg-gray-100 dark:bg-zinc-800 rounded-full border-none focus:ring-2 focus:ring-amber-500 text-sm touch-manipulation"
-                            onPointerDown={(e) => {
-                                // Explicitly focus on pointerdown to bypass 300ms delay logic on iOS
-                                e.currentTarget.focus();
-                            }}
-                        // autoFocus removed to prevent keyboard popup on mobile causing "double-tap" to dismiss behavior
-                        />
+                {/* Input Area */}
+                <div className="p-4 bg-white dark:bg-zinc-900 border-t border-gray-100 dark:border-zinc-800 relative z-30">
+                    {/* Plus Menu Popup (Absolute) */}
+                    <AnimatePresence>
+                        {isMenuOpen && (
+                            <>
+                                {/* Backdrop to close */}
+                                <div className="fixed inset-0 z-10 bg-transparent" onClick={() => setIsMenuOpen(false)} />
+
+                                <motion.div
+                                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                    exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                                    className="absolute left-4 bottom-20 w-56 bg-white dark:bg-zinc-800 rounded-xl shadow-xl border border-gray-100 dark:border-zinc-700 z-50 overflow-hidden py-1"
+                                >
+                                    <button
+                                        onClick={() => {
+                                            setIsMenuOpen(false);
+                                            setIsLessonCreatorOpen(true);
+                                        }}
+                                        className="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-zinc-700 flex items-center gap-2"
+                                    >
+                                        <Sparkles className="w-4 h-4 text-purple-500" />
+                                        Lesson Planner
+                                    </button>
+
+                                    <button
+                                        onClick={() => {
+                                            setIsMenuOpen(false);
+                                            handleSummarize();
+                                        }}
+                                        className="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-zinc-700 flex items-center gap-2"
+                                    >
+                                        <FileText className="w-4 h-4 text-amber-500" />
+                                        Summarize Chapter
+                                    </button>
+
+                                    <button
+                                        onClick={() => {
+                                            setIsMenuOpen(false);
+                                            if (onCreateMeeting) {
+                                                onCreateMeeting();
+                                                onClose();
+                                            }
+                                        }}
+                                        className="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-zinc-700 flex items-center gap-2"
+                                    >
+                                        <Calendar className="w-4 h-4 text-green-500" />
+                                        Create Event
+                                    </button>
+
+                                    <div className="h-px bg-gray-100 dark:bg-zinc-700 my-1" />
+
+                                    <button
+                                        onClick={() => {
+                                            setIsMenuOpen(false);
+                                            onMessagesChange([]); // Clear chat
+                                        }}
+                                        className="w-full text-left px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 flex items-center gap-2"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                        Clear Chat
+                                    </button>
+                                </motion.div>
+                            </>
+                        )}
+                    </AnimatePresence>
+
+                    <form onSubmit={(e) => handleSendMessage(e)} className="flex items-center gap-2 relative">
+                        {/* Plus Button */}
                         <button
-                            type="submit"
-                            disabled={!input.trim() || isLoading}
-                            onPointerDown={(e) => { e.preventDefault(); handleSendMessage(); }}
-                            className="absolute right-1.5 top-1.5 p-2 bg-purple-600 text-white rounded-full hover:bg-purple-700 disabled:opacity-50 transition-colors shadow-sm touch-manipulation cursor-pointer"
+                            type="button"
+                            onClick={() => setIsMenuOpen(!isMenuOpen)}
+                            className={`p-3 rounded-full transition-colors flex-shrink-0 touch-manipulation ${isMenuOpen ? 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-300' : 'bg-gray-100 dark:bg-zinc-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-zinc-700'}`}
                         >
-                            <Send className="w-4 h-4" />
+                            <Plus className={`w-5 h-5 transition-transform ${isMenuOpen ? 'rotate-45' : ''}`} />
                         </button>
+
+                        <div className="relative flex-1">
+                            <input
+                                id="bible-ai-input"
+                                name="bible-ai-input"
+                                type="text"
+                                value={input}
+                                onChange={(e) => setInput(e.target.value)}
+                                placeholder="Ask a question..."
+                                className="w-full pl-4 pr-10 py-3 bg-gray-100 dark:bg-zinc-800 rounded-full border-none focus:ring-2 focus:ring-amber-500 text-sm touch-manipulation"
+                                onPointerDown={(e) => {
+                                    // Explicitly focus on pointerdown to bypass 300ms delay logic on iOS
+                                    e.currentTarget.focus();
+                                }}
+                            />
+                            <button
+                                type="submit"
+                                disabled={!input.trim() || isLoading}
+                                onPointerDown={(e) => { e.preventDefault(); handleSendMessage(); }}
+                                className="absolute right-1.5 top-1.5 p-2 bg-purple-600 text-white rounded-full hover:bg-purple-700 disabled:opacity-50 transition-colors shadow-sm touch-manipulation cursor-pointer"
+                            >
+                                <Send className="w-4 h-4" />
+                            </button>
+                        </div>
                     </form>
                 </div>
+
+                {/* Overlays */}
+                <AnimatePresence>
+                    {isLessonCreatorOpen && (
+                        <AiLessonCreator
+                            isOpen={isLessonCreatorOpen}
+                            onClose={() => setIsLessonCreatorOpen(false)}
+                            contextTitle={contextTitle}
+                            onInsert={onInsertToNotes}
+                        />
+                    )}
+                </AnimatePresence>
+
             </motion.div>
         </div>
     );
@@ -477,7 +620,7 @@ export default function BibleAiChatModal({ isOpen, onClose, contextId, contextTi
     return null;
 }
 
-// Perplexity-style Search Results Component (Copied from AiNotesModal, essentially same logic)
+// Perplexity-style Search Results Component (Refined)
 function SearchResults({ initialQuery, onInsertToNotes, onRefine, isLast }: { initialQuery: string, onInsertToNotes: (html: string) => void, onRefine?: (query: string) => void, isLast?: boolean }) {
     const { user } = useAuth();
     const [results, setResults] = useState<any[]>([]);

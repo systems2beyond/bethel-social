@@ -7,6 +7,9 @@ import { useFeed } from '@/context/FeedContext';
 import { collection, query, orderBy, limit, getDocs, startAfter, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { LiveStreamBanner } from './LiveStreamBanner';
+import MeetingInviteCard from '../Meeting/MeetingInviteCard';
+import MeetingLobby from '../Meeting/MeetingLobby';
+import { Meeting } from '@/types';
 
 export const SocialFeed: React.FC = () => {
     const [posts, setPosts] = useState<Post[]>([]);
@@ -19,6 +22,8 @@ export const SocialFeed: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
 
     const [livePost, setLivePost] = useState<Post | null>(null);
+    const [nextMeeting, setNextMeeting] = useState<Meeting | null>(null);
+    const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
 
     // Fetch Live Post
     useEffect(() => {
@@ -39,6 +44,35 @@ export const SocialFeed: React.FC = () => {
         fetchLivePost();
         // Poll for live status every minute
         const interval = setInterval(fetchLivePost, 60000);
+        return () => clearInterval(interval);
+    }, []);
+
+    // Fetch Next Meeting
+    useEffect(() => {
+        const fetchNextMeeting = async () => {
+            try {
+                const now = Date.now();
+                // Query for meetings starting soon or live (start time > 2 hours ago to catch ongoing, up to future)
+                // Actually, just get the next one that hasn't ended.
+                // Meeting end = startTime + duration * 60 * 1000.
+                // This is hard to query perfectly with just startTime index.
+                // Let's just get meetings where startTime >= now - 2h (approx max duration)
+                // We'll filter in memory or refine query.
+                // Simple version: startTime >= now
+                const q = query(collection(db, 'meetings'), where('startTime', '>=', now), orderBy('startTime', 'asc'), limit(1));
+                const snapshot = await getDocs(q);
+                if (!snapshot.empty) {
+                    setNextMeeting({ id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as Meeting);
+                } else {
+                    setNextMeeting(null);
+                }
+            } catch (e) {
+                console.error("Error fetching meetings:", e);
+            }
+        };
+
+        fetchNextMeeting();
+        const interval = setInterval(fetchNextMeeting, 60000);
         return () => clearInterval(interval);
     }, []);
 
@@ -155,6 +189,25 @@ export const SocialFeed: React.FC = () => {
             </div>
 
             {livePost && <LiveStreamBanner post={livePost} />}
+
+            {nextMeeting && (
+                <div className="mb-6">
+                    <MeetingInviteCard
+                        meeting={nextMeeting}
+                        onJoin={() => window.open(nextMeeting.meetLink, '_blank')}
+                        onViewDetails={() => setSelectedMeeting(nextMeeting)}
+                    />
+                </div>
+            )}
+
+            {/* Meeting Lobby Modal */}
+            {selectedMeeting && (
+                <MeetingLobby
+                    meeting={selectedMeeting}
+                    onClose={() => setSelectedMeeting(null)}
+                    onJoin={() => window.open(selectedMeeting.meetLink, '_blank')}
+                />
+            )}
 
             {error && (
                 <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-6" role="alert">

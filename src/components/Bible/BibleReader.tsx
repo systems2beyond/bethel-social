@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Loader2, Copy, Edit3, Check, BookOpen, PenLine, X, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2, Copy, Edit3, Check, BookOpen, PenLine, X, Plus, Sparkles } from 'lucide-react';
 import { useBible } from '@/context/BibleContext';
 import { cn } from '@/lib/utils';
 
@@ -89,10 +89,15 @@ const BIBLE_VERSIONS = [
     { id: 'asv', name: 'American Standard Version (ASV)' },
 ];
 
-export default function BibleReader() {
+interface BibleReaderProps {
+    onInsertNote?: (text: string) => void;
+    onAskAi?: (query: string) => void;
+}
+
+export default function BibleReader({ onInsertNote, onAskAi }: BibleReaderProps) {
     const {
         reference, setReference, version, setVersion,
-        onInsertNote, openStudy, isStudyOpen, openBible,
+        openStudy, isStudyOpen, openBible,
         tabs, activeTabId, setActiveTab, addTab, closeTab
     } = useBible();
 
@@ -399,6 +404,26 @@ export default function BibleReader() {
                             Add to Notes
                         </button>
                     )}
+
+                    <button
+                        onClick={() => {
+                            const selectedText = text
+                                .filter(t => selectedVerses.includes(t.verse))
+                                .map(t => `${t.verse} ${t.text}`)
+                                .join(' ');
+
+                            // Call parent handler
+                            if (onAskAi) {
+                                onAskAi(`"${selectedText}"\n\n`);
+                            }
+                        }}
+                        className="flex items-center gap-2 text-sm font-medium hover:text-purple-400 dark:hover:text-purple-300 transition-colors"
+                    >
+                        <Sparkles className="w-4 h-4" />
+                        Ask AI
+                    </button>
+
+                    <div className="h-4 w-px bg-white/20 dark:bg-black/10" />
 
                     <button
                         onClick={() => {
