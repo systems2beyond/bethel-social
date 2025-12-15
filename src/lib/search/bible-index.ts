@@ -106,16 +106,55 @@ class BibleSearchService {
         const db = this.indexes.get(version);
         if (!db) return []; // Should not happen
 
-        const results = await search(db, {
-            term: query,
-            limit: options.limit || 10,
-            tolerance: 1, // Typo tolerance
-            threshold: options.threshold || 0,
-            properties: ['text', 'book'], // Search in text and book name
-            boost: {
-                book: 2 // Boost book name matches
-            }
-        });
+        // 1. Try to parse as reference (e.g. "Psalm 23", "John 3:16")
+        // Regex: (Optional Number + Name) + Chapter + (Optional :Verse)
+        // Group 1: Book Name (e.g. "Psalm", "1 John")
+        // Group 2: Chapter
+        // Group 3: Verse (Optional)
+        const refRegex = /^((?:\d\s*)?[a-zA-Z]+(?:\s+[a-zA-Z]+)*)\s+(\d+)(?::(\d+))?$/;
+        const match = query.trim().match(refRegex);
+
+        let results;
+
+        if (match) {
+            const [_, bookName, chapterStr, verseStr] = match;
+            const chapter = parseInt(chapterStr);
+            const verse = verseStr ? parseInt(verseStr) : undefined;
+
+            // Orama 'where' clause was causing crashes (likely version/schema issue).
+            // Workaround: Search for book name (fuzzy) and filter by chapter/verse manually.
+            const searchParams: any = {
+                term: bookName,
+                properties: ['book'],
+                limit: 5000, // Fetch enough to cover even Psalms matches
+                threshold: 0.2 // Allow "Psalm" to match "Psalms"
+            };
+
+            results = await search(db, searchParams);
+
+            // Manual Filter
+            const filteredHits = results.hits.filter(hit => {
+                const doc = hit.document as any;
+                if (doc.chapter !== chapter) return false;
+                if (verse && doc.verse !== verse) return false;
+                return true;
+            });
+
+            // Replace results.hits with filtered ones
+            results = { ...results, hits: filteredHits.slice(0, 100) }; // Cap result size
+        } else {
+            // 2. Fallback to full text search
+            results = await search(db, {
+                term: query,
+                limit: options.limit || 10,
+                tolerance: 1, // Typo tolerance
+                threshold: options.threshold || 0,
+                properties: ['text', 'book'], // Search in text and book name
+                boost: {
+                    book: 2 // Boost book name matches
+                }
+            });
+        }
 
         return results.hits.map(hit => ({
             ...(hit.document as any), // Cast to any or helper type

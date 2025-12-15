@@ -182,6 +182,11 @@ const chatWithBibleBot = async (request) => {
     - **Handoff:** If the user seems distressed, asks for prayer, or wants to speak to a pastor, suggest they contact the church office or use the "Talk to a Human" feature.
     - **Visuals:** The user is looking at the image provided in the context. ALWAYS use this image to answer questions about dates, times, locations, visual details, or text contained within the image. Assume the user's question refers to this image unless specified otherwise.
     - **Image Context:** If the context contains "[Image Analysis]" or "[Extracted Text]", treat this as high-priority information. This text comes directly from images in the post and often contains vital details not present in the main post text.
+    - **Linking Scripture:** CRITICAL: When you discuss a specific Bible chapter or verse, you MUST wrap explicitly the reference in double brackets to create a clickable link.
+      - Format: \`[[Book Chapter]]\` or \`[[Book Chapter:Verse]]\`
+      - Example: "Psalm 23 is a beautiful chapter ([[Psalm 23]]) that speaks of..."
+      - Example: "As it says in [[John 3:16]], 'For God so loved...'"
+      - ALWAYS include a clickable link like \`[[Psalm 23]]\` if the user asks about a specific passage.
     
     **Tools & Actions:**
     If the user asks to add an event to their calendar or send an email, output a specific ACTION tag at the end of your response.
@@ -247,7 +252,21 @@ const chatWithBibleBot = async (request) => {
            - **Do NOT refuse** to answer just because the answer isn't in the transcript, unless it is completely unrelated to faith/history/notes.
         5.  **Search:** You have access to a search tool. If you need to verify facts, find latest information, or find visual aids (images, maps), you MUST output a search query wrapped in tags like this: <SEARCH>query</SEARCH>. 
            - **NEVER** apologize for not having access to the internet or say "I cannot provide a map". You CAN provide it by using the search tag.
+           - **NEVER** apologize for not having access to the internet or say "I cannot provide a map". You CAN provide it by using the search tag.
            - Do not describe the image or fact, just output the tag.
+        6. **Bible Links:** CRITICAL: Always wrap Bible references in double brackets to make them clickable.
+           - CORRECT: "See [[John 3:16]] for more."
+           - INCORRECT: "See John 3:16 for more."
+           - If the user asks about a chapter (e.g. "Psalm 23"), Start your answer with a link: "Read [[Psalm 23]]: ..."
+        
+        **Special Instructions for Summarization:**
+        If the user asks to "summarize", "recap", or "save this":
+        - Create a structured summary with:
+          - **Title** (H1)
+          - **Key Points** (Bulleted list)
+          - **Scripture References** (List)
+          - **Actionable Takeaways** (Bulleted list)
+        - Keep it concise but comprehensive.
         
         Example User: "Can you find a map of Paul's journey?"
         Example Output: <SEARCH>map of Paul's missionary journeys</SEARCH>
@@ -256,7 +275,8 @@ const chatWithBibleBot = async (request) => {
         Example Output: <SEARCH>historical context of Ephesus first century</SEARCH>
         
         Example User: "Summarize the main point."
-        Example Output: **The Main Point**
+        Example Output: 
+        # The Main Point
         The central theme of this sermon is...
         
         **Input Context:**
@@ -317,8 +337,15 @@ const chatWithBibleBot = async (request) => {
         partsCount: prompt.length
     });
     // 4. Smart Routing
-    const selectedModel = await (0, router_1.routeQuery)(message, !!imageUrl);
-    logger.info(`Using model: ${selectedModel} `);
+    let selectedModel = await (0, router_1.routeQuery)(message, !!imageUrl);
+    // Allow forcing a specific model (e.g., for retries/fallbacks)
+    if (request.data.forceModel) {
+        selectedModel = request.data.forceModel;
+        logger.info(`Force Model override: ${selectedModel}`);
+    }
+    else {
+        logger.info(`Using routed model: ${selectedModel}`);
+    }
     let response;
     try {
         response = await getAi().generate({
@@ -330,7 +357,7 @@ const chatWithBibleBot = async (request) => {
         });
     }
     catch (e) {
-        logger.error('Vertex AI Gemini 1.5 Flash failed:', {
+        logger.error(`Generation failed with model ${selectedModel}:`, {
             message: e.message,
             status: e.status,
             details: e.errorDetails

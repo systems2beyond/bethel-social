@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from './AuthContext';
@@ -69,7 +69,7 @@ export function BibleProvider({ children }: { children: ReactNode }) {
     const [onInsertNote, setOnInsertNote] = useState<((text: string) => void) | null>(null);
     const [isStudyOpen, setIsStudyOpen] = useState(false);
 
-    const openBible = (ref?: BibleReference, newTab = false) => {
+    const openBible = useCallback((ref?: BibleReference, newTab = false) => {
         if (newTab) {
             const newId = Date.now().toString();
             setTabs(prev => [...prev, { id: newId, reference: ref || { book: 'John', chapter: 3, verse: 16 } }]);
@@ -80,8 +80,9 @@ export function BibleProvider({ children }: { children: ReactNode }) {
                 tab.id === activeTabId ? { ...tab, reference: ref } : tab
             ));
         }
+
         setIsOpen(true);
-    };
+    }, [activeTabId]);
 
     const addTab = () => {
         const newId = Date.now().toString();
@@ -147,12 +148,12 @@ export function BibleProvider({ children }: { children: ReactNode }) {
         const saveState = setTimeout(() => {
             // Sanitize tabs to remove undefined values which Firebase rejects
             const sanitizedTabs = tabs.map(tab => ({
-                id: tab.id,
+                id: tab.id || 'tab-' + Date.now(),
                 reference: {
-                    book: tab.reference.book,
-                    chapter: tab.reference.chapter,
-                    verse: tab.reference.verse ?? null, // specific replacement: undefined -> null
-                    endVerse: tab.reference.endVerse ?? null
+                    book: tab.reference?.book || 'Genesis',
+                    chapter: tab.reference?.chapter || '1',
+                    verse: tab.reference?.verse ?? null,
+                    endVerse: tab.reference?.endVerse ?? null
                 },
                 scrollPosition: tab.scrollPosition ?? 0
             }));
@@ -162,7 +163,7 @@ export function BibleProvider({ children }: { children: ReactNode }) {
 
             setDoc(doc(db, 'users', user.uid, 'settings', 'bible-tabs'), {
                 tabs: sanitizedTabs,
-                activeTabId,
+                activeTabId: activeTabId || '1', // Ensure activeTabId is never undefined
                 searchVersion: safeSearchVersion
             }, { merge: true }).catch(err => console.error('Error saving bible tabs:', err));
         }, 1000);

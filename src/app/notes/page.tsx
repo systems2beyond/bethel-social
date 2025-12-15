@@ -6,6 +6,7 @@ import { db } from '@/lib/firebase';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { Plus, Trash2, Save, MessageSquare, Maximize2, Minimize2, ChevronLeft, Search, FileText } from 'lucide-react';
 import { useChat } from '@/context/ChatContext';
+import { useBible } from '@/context/BibleContext';
 import TiptapEditor, { TiptapEditorRef } from '@/components/Editor/TiptapEditor';
 import AiNotesModal from '@/components/Sermons/AiNotesModal';
 import { useMediaQuery } from '@/lib/hooks/useMediaQuery';
@@ -37,6 +38,23 @@ export default function NotesPage() {
 
     // Register Context Handler for Global Chat
     const { registerContextHandler } = useChat();
+    const { openBible } = useBible();
+
+    const handleLinkClick = (href: string) => {
+        if (href.startsWith('verse://')) {
+            const ref = decodeURIComponent(href.replace('verse://', ''));
+            const match = ref.match(/((?:[123]\s)?[A-Z][a-z]+\.?)\s(\d+):(\d+)(?:-(\d+))?/);
+            if (match) {
+                const book = match[1].trim();
+                const chapter = parseInt(match[2]);
+                const startVerse = parseInt(match[3]);
+                const endVerse = match[4] ? parseInt(match[4]) : undefined;
+                openBible({ book, chapter, verse: startVerse, endVerse }, true);
+            }
+        } else {
+            window.open(href, '_blank');
+        }
+    };
 
     const editorRef = React.useRef<TiptapEditorRef>(null);
 
@@ -377,6 +395,7 @@ export default function NotesPage() {
                                     placeholder="Start typing your notes here..."
                                     className="min-h-[calc(100vh-200px)]"
                                     onAskAi={handleOpenAiNotes}
+                                    onLinkClick={handleLinkClick}
                                 />
                             </div>
                         </div>

@@ -13,12 +13,18 @@ export default function BibleModal() {
     // Prevent background scroll when open
     React.useEffect(() => {
         if (isOpen) {
-            document.body.style.overflow = 'hidden';
+            document.body.classList.add('prevent-scroll');
         } else {
-            document.body.style.overflow = '';
+            // Only remove if we are not "nested" inside another modal (marked by modal-open)
+            if (!document.body.classList.contains('modal-open')) {
+                document.body.classList.remove('prevent-scroll');
+            }
         }
         return () => {
-            document.body.style.overflow = '';
+            // Cleanup: same check
+            if (!document.body.classList.contains('modal-open')) {
+                document.body.classList.remove('prevent-scroll');
+            }
         };
     }, [isOpen]);
 
@@ -32,6 +38,7 @@ export default function BibleModal() {
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         onClick={closeBible}
+                        onTouchMove={(e) => e.preventDefault()}
                         className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[150] touch-none" // Higher than SermonModal (100)
                     />
 
@@ -67,7 +74,7 @@ export default function BibleModal() {
                             </div>
 
                             {/* Content Area */}
-                            <div className="flex-1 overflow-hidden relative bg-amber-50/30 dark:bg-zinc-950/50">
+                            <div className="flex-1 overflow-hidden relative bg-amber-50/30 dark:bg-zinc-950/50 overscroll-contain">
                                 <BibleReader />
                             </div>
                         </motion.div>

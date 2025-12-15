@@ -10,6 +10,86 @@ import { useAuth } from '@/context/AuthContext';
 import { formatAiResponse } from '@/lib/utils/ai-formatting';
 import { useBible } from '@/context/BibleContext';
 
+// Helper component to handle native DOM events for AI messages
+function AiMessageContent({ content, openBible, onClose }: { content: string, openBible: any, onClose: () => void }) {
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const container = containerRef.current;
+        if (!container) return;
+
+        const handleVerseAction = (target: HTMLElement, e: Event) => {
+            // Support both button and anchor (via class)
+            const verseLink = target.closest('.verse-link');
+
+            if (verseLink) {
+                console.log("BibleAiChatModal: Pointer Capture", e.type, verseLink);
+                // CRITICAL: preventDefault needs to happen immediately on pointerdown 
+                // to stop focus/hover logic and the iOS 'double tap' requirement.
+                e.preventDefault();
+                e.stopPropagation();
+
+                // Blur active element to prevent virtual keyboard adjustments
+                (document.activeElement as HTMLElement)?.blur();
+
+                // Buttons use data-verse, anchors might use href
+                let ref = verseLink.getAttribute('data-verse');
+                const href = verseLink.getAttribute('href');
+
+                if (!ref && href && href.startsWith('verse://')) {
+                    ref = decodeURIComponent(href.replace('verse://', ''));
+                }
+
+                if (ref) {
+                    const match = ref.trim().match(/(.+?)\s(\d+)(?::(\d+)(?:-(\d+))?)?$/);
+                    if (match) {
+                        const book = match[1].trim();
+                        const chapter = parseInt(match[2]);
+                        const startVerse = match[3] ? parseInt(match[3]) : undefined;
+                        const endVerse = match[4] ? parseInt(match[4]) : undefined;
+
+                        openBible({ book, chapter, verse: startVerse, endVerse }, true);
+                        onClose();
+                    } else {
+                        openBible(undefined, true);
+                        onClose();
+                    }
+                }
+            }
+        };
+
+        const handlePointerDown = (e: PointerEvent) => {
+            // Only capture primary button (touch or left click)
+            if (!e.isPrimary) return;
+            handleVerseAction(e.target as HTMLElement, e);
+        };
+
+        // We use pointerdown to mimic the success of the 'Insert' button fix.
+        // This is aggressive and might block scrolling if starting exactly on a link,
+        // but it guarantees the "one tap" behavior requested.
+        container.addEventListener('pointerdown', handlePointerDown as EventListener, true);
+
+        return () => {
+            container.removeEventListener('pointerdown', handlePointerDown as EventListener, true);
+        };
+    }, [content, openBible, onClose]);
+
+    return (
+        <div
+            ref={containerRef}
+            className="prose dark:prose-invert max-w-none text-sm [&>p]:mb-2 [&>ul]:mb-2 relative"
+            style={{
+                touchAction: 'manipulation',
+                cursor: 'auto',
+                WebkitUserSelect: 'text',
+                userSelect: 'text'
+            }}
+            // Use hybrid mode: buttons for this modal
+            dangerouslySetInnerHTML={{ __html: formatAiResponse(content, { useButtons: true }) }}
+        />
+    );
+}
+
 interface BibleAiChatModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -21,15 +101,31 @@ interface BibleAiChatModalProps {
     onMessagesChange: (messages: any[]) => void;
     onInsertToNotes: (content: string) => void;
     onSaveMessage?: (role: string, content: string) => Promise<void>;
+    preserveScrollLockOnClose?: boolean;
 }
 
-export default function BibleAiChatModal({ isOpen, onClose, contextId, contextTitle, initialQuery, messages, onMessagesChange, onInsertToNotes, onSaveMessage }: BibleAiChatModalProps) {
+export default function BibleAiChatModal({ isOpen, onClose, contextId, contextTitle, initialQuery, messages, onMessagesChange, onInsertToNotes, onSaveMessage, preserveScrollLockOnClose = false }: BibleAiChatModalProps) {
     const { user, userData } = useAuth();
     const { openBible } = useBible();
     // Removed local messages state
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (isOpen) {
+            document.body.classList.add('prevent-scroll');
+        } else {
+            if (!preserveScrollLockOnClose) {
+                document.body.classList.remove('prevent-scroll');
+            }
+        }
+        return () => {
+            if (!preserveScrollLockOnClose) {
+                document.body.classList.remove('prevent-scroll');
+            }
+        };
+    }, [isOpen, preserveScrollLockOnClose]);
 
     // Initial Query Handling
     useEffect(() => {
@@ -90,8 +186,65 @@ export default function BibleAiChatModal({ isOpen, onClose, contextId, contextTi
             // Strip SUGGEST_SUMMARY tag if present
             aiResponse = aiResponse.replace(/<SUGGEST_SUMMARY>/g, '').trim();
 
+            // Detect if this was a system-generated context prompt (Synthesis)
+            // If so, we SKIP the refusal check to avoid infinite loops (Refusal -> Search -> Synthesis -> Refusal...)
+            // The prompt used for synthesis starts with "Context: Here are..."
+            const isSynthesis = msgText.startsWith("Context:");
+
             // Check for "context missing" error
-            if (aiResponse.includes("The provided context does not contain the answer") || aiResponse.includes("I am not able to answer this question")) {
+            // Expanded to catch more variations of refusal
+            let isRefusal =
+                aiResponse.includes("The provided context does not contain the answer") ||
+                aiResponse.includes("I am not able to answer this question") ||
+                aiResponse.includes("I am sorry, I can not search the web") ||
+                aiResponse.includes("I cannot use the search tool") || // Catch specific phrase from screenshot
+                aiResponse.includes("I am unable to use the search") ||
+                aiResponse.includes("I cannot search the web");
+
+            if (isRefusal && isSynthesis) {
+                // If AI refuses the SEARCH CONTEXT, do not retry or search again.
+                // Just log it and show the error.
+                console.log("Synthesis refused. Loop prevention triggered.");
+                isRefusal = false; // Bypass fallback
+                aiResponse = "I analyzed the search results but couldn't synthesize a clear answer. Please review the sources directly.";
+            }
+
+            if (isRefusal) {
+                // Attempt Smart Retry with Gemini 1.5 Pro
+                try {
+                    console.log("AI refused. Retrying with stronger model (Gemini 1.5 Pro)...");
+                    const retryResult = await chatFn({
+                        message: msgText,
+                        history: messages.map(m => ({ role: m.role, content: m.content })),
+                        userName: userData?.displayName || user.displayName,
+                        intent: 'notes_assistant',
+                        forceModel: 'vertexai/gemini-1.5-pro-001' // FORCE BETTER MODEL
+                    }) as any;
+
+                    const retryResponse = retryResult.data.response;
+
+                    // Check refusal again
+                    if (
+                        !retryResponse.includes("The provided context does not contain the answer") &&
+                        !retryResponse.includes("I am not able to answer this question") &&
+                        !retryResponse.includes("I am sorry, I can not search the web") &&
+                        !retryResponse.includes("I cannot use the search tool") &&
+                        !retryResponse.includes("I am unable to use the search") &&
+                        !retryResponse.includes("I cannot search the web")
+                    ) {
+                        // Success! Use this response.
+                        aiResponse = retryResponse;
+                        isRefusal = false; // Clear refusal flag
+                        console.log("Smart retry succeeded!");
+                    } else {
+                        console.log("Smart retry also refused.");
+                    }
+                } catch (retryErr) {
+                    console.error("Smart retry failed:", retryErr);
+                }
+            }
+
+            if (isRefusal) {
                 triggerSearchFallback(msgText);
                 return;
             }
@@ -177,6 +330,7 @@ export default function BibleAiChatModal({ isOpen, onClose, contextId, contextTi
                         {messages.length > 0 && (
                             <div className="flex items-center gap-1">
                                 <button
+                                    onPointerDown={(e) => { e.preventDefault(); handleSummarize(); }}
                                     onClick={handleSummarize}
                                     className="flex items-center gap-1 px-3 py-1.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs font-medium rounded-l-full hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors touch-manipulation cursor-pointer"
                                     title="Generate a chapter summary"
@@ -186,14 +340,14 @@ export default function BibleAiChatModal({ isOpen, onClose, contextId, contextTi
                                 </button>
                             </div>
                         )}
-                        <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors touch-manipulation cursor-pointer">
+                        <button onPointerDown={(e) => { e.preventDefault(); onClose(); }} onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors touch-manipulation cursor-pointer">
                             <X className="w-5 h-5 text-gray-500" />
                         </button>
                     </div>
                 </div>
 
                 {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50 dark:bg-zinc-900/50">
+                <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50 dark:bg-zinc-900/50 overscroll-contain">
                     {messages.length === 0 && (
                         <div className="text-center space-y-4 py-8">
                             <p className="text-gray-500 dark:text-gray-400">
@@ -201,6 +355,7 @@ export default function BibleAiChatModal({ isOpen, onClose, contextId, contextTi
                             </p>
                             <div className="flex justify-center gap-2">
                                 <button
+                                    onPointerDown={(e) => { e.preventDefault(); handleSummarize(); }}
                                     onClick={handleSummarize}
                                     className="px-4 py-2 bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-lg text-sm text-purple-600 hover:bg-purple-50 dark:hover:bg-zinc-700 transition-colors flex items-center gap-2 touch-manipulation cursor-pointer"
                                 >
@@ -223,36 +378,7 @@ export default function BibleAiChatModal({ isOpen, onClose, contextId, contextTi
                                     }`}>
                                     {msg.role === 'model' ? (
                                         <>
-                                            <div
-                                                dangerouslySetInnerHTML={{ __html: formatAiResponse(msg.content || '') }}
-                                                onClick={(e) => {
-                                                    const target = e.target as HTMLElement;
-                                                    const verseLink = target.closest('.verse-link');
-                                                    if (verseLink) {
-                                                        e.stopPropagation();
-                                                        const ref = verseLink.getAttribute('data-verse');
-                                                        if (ref) {
-                                                            // Match "John 3:16" or "John 3:16-18"
-                                                            const match = ref.match(/((?:[123]\s)?[A-Z][a-z]+\.?)\s(\d+):(\d+)(?:-(\d+))?/);
-                                                            if (match) {
-                                                                const book = match[1].trim();
-                                                                const chapter = parseInt(match[2]);
-                                                                const startVerse = parseInt(match[3]);
-                                                                const endVerse = match[4] ? parseInt(match[4]) : undefined;
-
-                                                                openBible({
-                                                                    book,
-                                                                    chapter,
-                                                                    verse: startVerse,
-                                                                    endVerse
-                                                                }, true); // force new tab
-                                                            } else {
-                                                                openBible();
-                                                            }
-                                                        }
-                                                    }
-                                                }}
-                                            />
+                                            <AiMessageContent content={msg.content || ''} openBible={openBible} onClose={onClose} />
                                         </>
                                     ) : (
                                         msg.content
@@ -283,11 +409,18 @@ export default function BibleAiChatModal({ isOpen, onClose, contextId, contextTi
                                 {/* Insert Button for AI messages */}
                                 {msg.role === 'model' && (
                                     <button
-                                        onClick={() => {
-                                            onInsertToNotes(formatAiResponse(msg.content));
-                                            onClose(); // Optional: close modal after inserting? User might want to stay. Let's keep it open for now.
+                                        // Use onPointerDown to bypass any click/touch delay (aggressive fix)
+                                        onPointerDown={(e) => {
+                                            e.preventDefault(); // Prevent focus loss/keyboard dismissal logic
+                                            onInsertToNotes(formatAiResponse(msg.content, { useButtons: false })); // Keep standard links for notes
+                                            onClose();
                                         }}
-                                        className="text-xs flex items-center gap-1 text-gray-500 hover:text-purple-600 transition-colors px-2 touch-manipulation cursor-pointer"
+                                        onClick={(e) => {
+                                            // Fallback for non-pointer environments, though pointer events cover most
+                                            onInsertToNotes(formatAiResponse(msg.content, { useButtons: false }));
+                                            onClose();
+                                        }}
+                                        className="text-xs flex items-center gap-1 text-gray-500 transition-colors px-2 touch-safe-btn"
                                     >
                                         <Plus className="w-3 h-3" />
                                         Insert into Notes
@@ -316,13 +449,18 @@ export default function BibleAiChatModal({ isOpen, onClose, contextId, contextTi
                             type="text"
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
-                            placeholder="Ask a question about this chapter..."
-                            className="w-full pl-4 pr-10 py-3 bg-gray-100 dark:bg-zinc-800 rounded-full border-none focus:ring-2 focus:ring-purple-500 text-sm"
-                            autoFocus
+                            placeholder="Ask a question..."
+                            className="w-full pl-4 pr-10 py-3 bg-gray-100 dark:bg-zinc-800 rounded-full border-none focus:ring-2 focus:ring-amber-500 text-sm touch-manipulation"
+                            onPointerDown={(e) => {
+                                // Explicitly focus on pointerdown to bypass 300ms delay logic on iOS
+                                e.currentTarget.focus();
+                            }}
+                        // autoFocus removed to prevent keyboard popup on mobile causing "double-tap" to dismiss behavior
                         />
                         <button
                             type="submit"
                             disabled={!input.trim() || isLoading}
+                            onPointerDown={(e) => { e.preventDefault(); handleSendMessage(); }}
                             className="absolute right-1.5 top-1.5 p-2 bg-purple-600 text-white rounded-full hover:bg-purple-700 disabled:opacity-50 transition-colors shadow-sm touch-manipulation cursor-pointer"
                         >
                             <Send className="w-4 h-4" />
@@ -438,10 +576,12 @@ function SearchResults({ initialQuery, onInsertToNotes, onRefine, isLast }: { in
             if (!result.success) throw new Error(result.error);
 
             const finalUrl = result.url || img.thumbnail;
-            onInsertToNotes(formatAiResponse(`<img src="${finalUrl}" alt="${img.title}" style="max-width: 100%; border-radius: 8px; margin: 24px 0;" /><p class="text-xs text-gray-500 text-center mb-6">${img.title}</p><p></p>`));
+            // DIRECT INSERT: Do not run formatAiResponse on manual HTML string construction, 
+            // as it might escape the tags. Tiptap handles the HTML directly.
+            onInsertToNotes(`<img src="${finalUrl}" alt="${img.title}" style="max-width: 100%; border-radius: 8px; margin: 24px 0;" /><p class="text-xs text-gray-500 text-center mb-6">${img.title}</p><p></p>`);
         } catch (error) {
             console.error("Error saving image:", error);
-            onInsertToNotes(formatAiResponse(`<img src="${img.thumbnail}" alt="${img.title}" style="max-width: 100%; border-radius: 8px; margin: 24px 0;" /><p class="text-xs text-gray-500 text-center mb-6">${img.title}</p><p></p>`));
+            onInsertToNotes(`<img src="${img.thumbnail}" alt="${img.title}" style="max-width: 100%; border-radius: 8px; margin: 24px 0;" /><p class="text-xs text-gray-500 text-center mb-6">${img.title}</p><p></p>`);
         } finally {
             setProcessingImage(null);
         }
@@ -477,10 +617,10 @@ function SearchResults({ initialQuery, onInsertToNotes, onRefine, isLast }: { in
                                     <span className="text-xs text-gray-600 dark:text-gray-300 truncate font-mono">{previewUrl}</span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <a href={previewUrl} target="_blank" rel="noopener noreferrer" className="p-2 text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 hover:bg-gray-200 dark:hover:bg-zinc-700 rounded-full transition-colors touch-manipulation cursor-pointer">
+                                    <a href={previewUrl} target="_blank" rel="noopener noreferrer" onPointerDown={(e) => { e.preventDefault(); window.open(previewUrl!, '_blank'); }} className="p-2 text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 hover:bg-gray-200 dark:hover:bg-zinc-700 rounded-full transition-colors touch-manipulation cursor-pointer">
                                         <Send className="w-4 h-4" />
                                     </a>
-                                    <button onClick={() => setPreviewUrl(null)} className="p-2 text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 hover:bg-gray-200 dark:hover:bg-zinc-700 rounded-full transition-colors touch-manipulation cursor-pointer">
+                                    <button onPointerDown={(e) => { e.preventDefault(); setPreviewUrl(null); }} onClick={() => setPreviewUrl(null)} className="p-2 text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 hover:bg-gray-200 dark:hover:bg-zinc-700 rounded-full transition-colors touch-manipulation cursor-pointer">
                                         <X className="w-5 h-5" />
                                     </button>
                                 </div>
@@ -540,7 +680,8 @@ function SearchResults({ initialQuery, onInsertToNotes, onRefine, isLast }: { in
                 </div>
                 {onRefine && (
                     <button
-                        onClick={() => onRefine(`About the search result "${initialQuery}": `)}
+                        onPointerDown={(e) => { e.preventDefault(); if (onRefine) onRefine(`About the search result "${initialQuery}": `); }}
+                        onClick={() => onRefine && onRefine(`About the search result "${initialQuery}": `)}
                         className="px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs font-bold rounded-md hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors flex items-center gap-1 touch-manipulation cursor-pointer"
                     >
                         <Sparkles className="w-3 h-3" />
@@ -558,14 +699,14 @@ function SearchResults({ initialQuery, onInsertToNotes, onRefine, isLast }: { in
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {results.map((result, idx) => (
                         <div key={idx} className="p-3 bg-white dark:bg-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-700 border border-gray-200 dark:border-zinc-700 rounded-xl transition-all flex flex-col gap-2 group relative h-full">
-                            <button onClick={() => handleSourceClick(result.link)} className="flex-1 flex flex-col gap-2 text-left w-full touch-manipulation cursor-pointer">
+                            <button onPointerDown={(e) => { e.preventDefault(); handleSourceClick(result.link); }} onClick={() => handleSourceClick(result.link)} className="flex-1 flex flex-col gap-2 text-left w-full touch-manipulation cursor-pointer">
                                 <div className="flex items-center gap-2">
                                     <img src={`https://www.google.com/s2/favicons?domain=${result.displayLink || result.link}&sz=32`} alt="" className="w-4 h-4 rounded-sm opacity-70 group-hover:opacity-100 transition-opacity" />
                                     <span className="text-[10px] text-gray-400 truncate flex-1">{result.displayLink || new URL(result.link).hostname}</span>
                                 </div>
                                 <div className="text-xs font-medium text-gray-700 dark:text-gray-300 line-clamp-2 leading-snug">{result.title}</div>
                             </button>
-                            <button onClick={() => onInsertToNotes(formatAiResponse(`<blockquote><strong><a href="${result.link}">${result.title}</a></strong><br/>${result.snippet || ''}</blockquote><p></p>`))} className="mt-auto w-full py-1 bg-gray-100 dark:bg-zinc-700 hover:bg-purple-100 dark:hover:bg-purple-900/30 text-gray-500 hover:text-purple-600 text-[10px] font-medium rounded opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-1 touch-manipulation cursor-pointer">
+                            <button onPointerDown={(e) => { e.preventDefault(); onInsertToNotes(`<blockquote><strong><a href="${result.link}">${result.title}</a></strong><br/>${result.snippet || ''}</blockquote><p></p>`); }} onClick={() => onInsertToNotes(`<blockquote><strong><a href="${result.link}">${result.title}</a></strong><br/>${result.snippet || ''}</blockquote><p></p>`)} className="mt-auto w-full py-1 bg-gray-100 dark:bg-zinc-700 hover:bg-purple-100 dark:hover:bg-purple-900/30 text-gray-500 hover:text-purple-600 text-[10px] font-medium rounded opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-1 touch-manipulation cursor-pointer">
                                 <Plus className="w-3 h-3" />
                                 Add to Notes
                             </button>
@@ -586,6 +727,7 @@ function SearchResults({ initialQuery, onInsertToNotes, onRefine, isLast }: { in
                             <div key={idx} className="group relative aspect-square bg-gray-100 dark:bg-zinc-800 rounded-xl overflow-hidden cursor-pointer hover:ring-2 hover:ring-purple-500 transition-all">
                                 <img src={img.thumbnail} alt={img.title} className="w-full h-full object-cover" />
                                 <button
+                                    onPointerDown={(e) => { e.preventDefault(); handleAddImage(img); }}
                                     onClick={() => handleAddImage(img)}
                                     disabled={processingImage === img.thumbnail}
                                     className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity text-white font-bold text-sm backdrop-blur-[2px] disabled:opacity-100 disabled:bg-black/60 touch-manipulation cursor-pointer"

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, forwardRef, useImperativeHandle } from 'react';
+import React, { useEffect, forwardRef, useImperativeHandle, useRef } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import { BubbleMenu, FloatingMenu } from '@tiptap/react/menus';
 import ExtensionBubbleMenu from '@tiptap/extension-bubble-menu';
@@ -11,6 +11,7 @@ import ImageResize from 'tiptap-extension-resize-image';
 import Highlight from '@tiptap/extension-highlight';
 import DragHandle from 'tiptap-extension-global-drag-handle';
 import Underline from '@tiptap/extension-underline';
+import Link from '@tiptap/extension-link';
 import { Bold, Italic, Underline as UnderlineIcon, List, ListOrdered, Heading1, Heading2, Quote, Highlighter, Sparkles, FileText, Sticker } from 'lucide-react';
 import { StickerPopover } from './StickerPopover';
 
@@ -22,6 +23,7 @@ interface TiptapEditorProps {
     onAskAi?: (query: string) => void;
     showToolbar?: boolean;
     onEditorReady?: (editor: any) => void;
+    onLinkClick?: (url: string) => void;
 }
 
 export interface TiptapEditorRef {
@@ -155,22 +157,60 @@ export const EditorToolbar = ({ editor, className = '', onTogglePaperStyle, isPa
     );
 };
 
-const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, onChange, placeholder = 'Start typing...', className = '', onAskAi, showToolbar = true, onEditorReady }, ref) => {
+const CustomLink = Link.extend({
+    addAttributes() {
+        return {
+            ...this.parent?.(),
+            // DO NOT overwrite href. Inherit default parser.
+            class: {
+                default: 'verse-link text-blue-600 dark:text-blue-400 hover:underline cursor-pointer font-medium hover:text-blue-800 dark:hover:text-blue-300 transition-colors',
+                parseHTML: element => element.getAttribute('class'),
+                renderHTML: attributes => ({
+                    class: attributes.class,
+                }),
+            },
+            'data-verse': {
+                default: null,
+                parseHTML: element => element.getAttribute('data-verse'),
+                renderHTML: attributes => ({
+                    'data-verse': attributes['data-verse'],
+                }),
+            }
+        };
+    },
+    addOptions() {
+        return {
+            ...this.parent?.(),
+            openOnClick: false,
+            autolink: true,
+            // Explicitly whitelist protocols including our custom one
+            protocols: ['http', 'https', 'mailto', 'verse'],
+            validate: (href: string) => /^https?:\/\//.test(href) || href.startsWith('verse://'),
+        } as any;
+    },
+});
+
+const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, onChange, placeholder = 'Start typing...', className = '', onAskAi, showToolbar = true, onEditorReady, onLinkClick }, ref) => {
     const onAskAiRef = React.useRef(onAskAi);
+    const onLinkClickRef = React.useRef(onLinkClick);
     const [isPaperStyle, setIsPaperStyle] = React.useState(false);
 
     useEffect(() => {
         onAskAiRef.current = onAskAi;
-    }, [onAskAi]);
+        onLinkClickRef.current = onLinkClick;
+    }, [onAskAi, onLinkClick]);
 
     useEffect(() => {
-        console.log('TiptapEditor Mounted. Extensions:', [StarterKit, Placeholder, Highlight, DragHandle]);
-        console.log('Rendering TiptapEditor V2 with Highlight Button');
+        console.log('TiptapEditor Mounted. Extensions:', [StarterKit, Placeholder, Highlight, DragHandle, CustomLink]);
+        console.log('Rendering TiptapEditor V2 with Link Support (CustomLink with data-verse)');
     }, []);
 
     const editor = useEditor({
         extensions: [
-            StarterKit,
+            StarterKit.configure({
+                // @ts-ignore - Explicitly disable link in case it's included in this version
+                link: false,
+            }),
             Placeholder.configure({
                 placeholder: placeholder,
             }),
@@ -179,6 +219,9 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
                 allowBase64: true,
             }),
             Highlight.configure({ multicolor: true }),
+            CustomLink.configure({
+                openOnClick: false,
+            }),
             DragHandle.configure({
                 width: 20,
                 scrollTreshold: 100,
@@ -194,6 +237,40 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
         editorProps: {
             attributes: {
                 class: `prose dark:prose-invert max-w-none focus:outline-none min-h-[800px] ${isPaperStyle ? 'paper-lines px-6 py-4' : ''} ${className}`,
+            },
+            handleDOMEvents: {
+                click: (view, event) => {
+                    const target = event.target as HTMLElement;
+                    // Support both explicit anchors and our wrapper class
+                    const link = target.closest('a') || target.closest('.verse-link');
+
+                    if (link) {
+                        const href = link.getAttribute('href');
+                        const dataVerse = link.getAttribute('data-verse');
+
+                        if (onLinkClickRef.current) {
+                            // Check for verse link
+                            const isVerseLink = (href && href.startsWith('verse://')) || !!dataVerse;
+
+                            if (isVerseLink) {
+                                // Ensure we pass the full verse URI if missing (e.g. if href stripped)
+                                const uri = (href && href.startsWith('verse://')) ? href : `verse://${dataVerse}`;
+                                onLinkClickRef.current(uri);
+                                event.preventDefault();
+                                event.stopPropagation();
+                                return true;
+                            }
+
+                            // Handle normal links with Meta/Ctrl
+                            if (href && (event.metaKey || event.ctrlKey)) {
+                                window.open(href, '_blank');
+                                event.preventDefault();
+                                return true;
+                            }
+                        }
+                    }
+                    return false;
+                }
             },
             handleKeyDown: (view, event) => {
                 if (event.key === 'Enter') {
@@ -218,12 +295,10 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
             }
         },
         onUpdate: ({ editor }) => {
-            console.log('[Tiptap] Content updated. Length:', editor.getText().length);
             onChange(editor.getHTML());
         },
         onSelectionUpdate: ({ editor }) => {
-            const { from, to } = editor.state.selection;
-            console.log(`[Tiptap] Selection updated: ${from} to ${to}`);
+            // Optional: Handle selection updates
         },
         onCreate: ({ editor }) => {
             if (onEditorReady) {
@@ -247,12 +322,56 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
         }
     }, [content, editor]);
 
+    // Native Click Listener for robustness (Bypassing React specific event bubbling issues in Editors)
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const container = containerRef.current;
+        if (!container) return;
+
+        const handleNativeClick = (e: MouseEvent) => {
+            const target = e.target as HTMLElement;
+            const link = target.closest('a') || target.closest('.verse-link');
+
+            if (link) {
+                const href = link.getAttribute('href');
+                const dataVerse = link.getAttribute('data-verse');
+
+                // Check specifically for verse links to intercept
+                const isVerseLink = (href && href.startsWith('verse://')) || !!dataVerse;
+
+                if (isVerseLink && onLinkClickRef.current) {
+                    console.log('[Tiptap] Intercepted Native Click:', href || dataVerse);
+                    const uri = (href && href.startsWith('verse://')) ? href : `verse://${dataVerse}`;
+
+                    onLinkClickRef.current(uri);
+
+                    // Stop EVERYTHING
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    return false;
+                }
+            }
+        };
+
+        // Add listener with { capture: true } to get it before ANYONE else
+        container.addEventListener('click', handleNativeClick, { capture: true });
+
+        return () => {
+            container.removeEventListener('click', handleNativeClick, { capture: true });
+        };
+    }, []);
+
     if (!editor) {
         return null;
     }
 
     return (
-        <div className="flex flex-col gap-2 relative">
+        <div
+            ref={containerRef}
+            className="flex flex-col gap-2 relative"
+        >
             {/* Toolbar */}
             {showToolbar && <EditorToolbar
                 editor={editor}

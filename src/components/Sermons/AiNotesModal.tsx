@@ -30,6 +30,17 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
     const [isLoading, setIsLoading] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
+    useEffect(() => {
+        if (isOpen) {
+            document.body.classList.add('prevent-scroll');
+        } else {
+            document.body.classList.remove('prevent-scroll');
+        }
+        return () => {
+            document.body.classList.remove('prevent-scroll');
+        };
+    }, [isOpen]);
+
     // Initial Query Handling
     useEffect(() => {
         console.log('AiNotesModal useEffect. isOpen:', isOpen, 'initialQuery:', initialQuery);
@@ -169,7 +180,8 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 onClick={onClose}
-                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                onTouchMove={(e) => e.preventDefault()} // STOP SCROLL BLEED
+                className="absolute inset-0 bg-black/60 backdrop-blur-sm touch-none" // touch-none CSS
             />
 
             <motion.div
@@ -237,29 +249,8 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
                                         <>
                                             {/* Debug Log */}
                                             {console.log('AI Msg Content:', msg.content)}
-                                            <div
-                                                dangerouslySetInnerHTML={{ __html: formatAiResponse(msg.content || '') }}
-                                                onClick={(e) => {
-                                                    const target = e.target as HTMLElement;
-                                                    const verseLink = target.closest('.verse-link');
-                                                    if (verseLink) {
-                                                        e.stopPropagation();
-                                                        const ref = verseLink.getAttribute('data-verse');
-                                                        if (ref) {
-                                                            const match = ref.match(/((?:[123]\s)?[A-Z][a-z]+\.?)\s(\d+):(\d+)/);
-                                                            if (match) {
-                                                                openBible({
-                                                                    book: match[1].trim(),
-                                                                    chapter: parseInt(match[2]),
-                                                                    verse: parseInt(match[3])
-                                                                });
-                                                            } else {
-                                                                openBible();
-                                                            }
-                                                        }
-                                                    }
-                                                }}
-                                            />
+                                            {/* Native DOM Listener approach */}
+                                            <AiMessageContent content={msg.content || ''} openBible={openBible} onClose={onClose} />
                                         </>
                                     ) : (
                                         msg.content
@@ -288,18 +279,20 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
                                 </div>
 
                                 {/* Insert Button for AI messages */}
-                                {msg.role === 'model' && (
-                                    <button
-                                        onClick={() => {
-                                            onInsertToNotes(msg.content);
-                                            // Optional: Show toast or feedback
-                                        }}
-                                        className="text-xs flex items-center gap-1 text-gray-500 hover:text-purple-600 transition-colors px-2 touch-manipulation cursor-pointer"
-                                    >
-                                        <Plus className="w-3 h-3" />
-                                        Insert into Notes
-                                    </button>
-                                )}
+                                {
+                                    msg.role === 'model' && (
+                                        <button
+                                            onClick={() => {
+                                                onInsertToNotes(msg.content);
+                                                // Optional: Show toast or feedback
+                                            }}
+                                            className="text-xs flex items-center gap-1 text-gray-500 hover:text-purple-600 transition-colors px-2 touch-manipulation cursor-pointer"
+                                        >
+                                            <Plus className="w-3 h-3" />
+                                            Insert into Notes
+                                        </button>
+                                    )
+                                }
                             </div>
                         );
                     })}
@@ -325,7 +318,7 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
                             onChange={(e) => setInput(e.target.value)}
                             placeholder="Ask a question or type @matt..."
                             className="w-full pl-4 pr-10 py-3 bg-gray-100 dark:bg-zinc-800 rounded-full border-none focus:ring-2 focus:ring-purple-500 text-sm"
-                            autoFocus
+                        // autoFocus removed to prevent keyboard popup on mobile
                         />
                         <button
                             type="submit"
@@ -336,14 +329,83 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
                         </button>
                     </form>
                 </div>
-            </motion.div>
-        </div>
+            </motion.div >
+        </div >
     );
 
     if (typeof document !== 'undefined') {
         return createPortal(modalContent, document.body);
     }
     return null;
+}
+
+// Helper component to handle native DOM events for AI messages
+function AiMessageContent({ content, openBible, onClose }: { content: string, openBible: any, onClose: () => void }) {
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const container = containerRef.current;
+        if (!container) return;
+
+        const handleAction = (target: HTMLElement, e: Event) => {
+            const verseLink = target.closest('.verse-link');
+
+            if (verseLink) {
+                console.log("AiNotesModal: Native Capture", e.type, verseLink);
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+
+                let ref = verseLink.getAttribute('data-verse');
+                const href = verseLink.getAttribute('href');
+
+                if (!ref && href && href.startsWith('verse://')) {
+                    ref = decodeURIComponent(href.replace('verse://', ''));
+                }
+
+                if (ref) {
+                    const match = ref.trim().match(/(.+?)\s(\d+)(?::(\d+)(?:-(\d+))?)?$/);
+                    if (match) {
+                        const book = match[1].trim();
+                        const chapter = parseInt(match[2]);
+                        const startVerse = match[3] ? parseInt(match[3]) : undefined;
+                        const endVerse = match[4] ? parseInt(match[4]) : undefined;
+
+                        openBible({ book, chapter, verse: startVerse, endVerse }, true);
+                        // onClose(); // Keep open for notes
+                    } else {
+                        openBible(undefined, true);
+                    }
+                }
+            }
+        };
+
+        const handleClick = (e: MouseEvent) => {
+            // Strictly detect left click only
+            if (e.button !== 0) return;
+            handleAction(e.target as HTMLElement, e);
+        };
+
+        const handleTouchEnd = (e: TouchEvent) => {
+            handleAction(e.target as HTMLElement, e);
+        };
+
+        // Standard Capture Phase Event Listener (No Manual Tap)
+        container.addEventListener('click', handleClick, true);
+        container.addEventListener('touchend', handleTouchEnd, true);
+
+        return () => {
+            container.removeEventListener('click', handleClick, true);
+            container.removeEventListener('touchend', handleTouchEnd, true);
+        };
+    }, [content, openBible, onClose]);
+
+    return (
+        <div
+            ref={containerRef}
+            dangerouslySetInnerHTML={{ __html: formatAiResponse(content) }}
+        />
+    );
 }
 
 // Perplexity-style Search Results Component

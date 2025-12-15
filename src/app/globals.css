@@ -14,6 +14,25 @@
   --font-handwriting: var(--font-caveat);
 }
 
+@theme {
+  --font-sans: var(--font-inter);
+  --font-display: var(--font-outfit);
+}
+
+body.prevent-scroll {
+  overflow: hidden !important;
+  height: 100vh !important;
+  width: 100vw !important;
+  position: fixed !important;
+  touch-action: none !important;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
 .dark {
   --background: #0a0a0a;
   --foreground: #ededed;
@@ -147,4 +166,48 @@ body.modal-open .bottom-bar {
 
 body.modal-open {
   overflow: hidden !important;
+}
+
+/* Verse Link Styles for Clickability */
+.verse-link {
+  cursor: pointer !important;
+  position: relative;
+  z-index: 20;
+  /* Ensure it sits above other text/overlays */
+  color: #2563eb;
+  /* blue-600 */
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  padding: 4px 6px;
+  /* massive hit area increase */
+  margin: -4px -6px;
+  /* offset the layout shift */
+  border-radius: 4px;
+  transition: background-color 0.1s;
+  pointer-events: auto !important;
+  /* Force events */
+  touch-action: manipulation !important;
+  /* Kills 300ms delay */
+}
+
+@media (hover: hover) {
+  .verse-link:hover {
+    background-color: rgba(37, 99, 235, 0.1);
+    text-decoration: none;
+  }
+
+  .touch-safe-btn:hover {
+    color: #9333ea;
+    /* purple-600 */
+    background-color: #f3e8ff;
+    /* purple-100 */
+  }
+}
+
+/* Base styles for touch-safe-btn (mobile/default) */
+.touch-safe-btn {
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: color 0.1s, background-color 0.1s;
 }

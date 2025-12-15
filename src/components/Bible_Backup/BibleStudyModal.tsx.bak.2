@@ -1,0 +1,357 @@
+'use client';
+
+import React, { useEffect, useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { X, Sparkles, BookOpen, Search as SearchIcon, Maximize2, Minimize2, Loader2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { useAuth } from '@/context/AuthContext';
+import { useBible } from '@/context/BibleContext';
+import TiptapEditor, { EditorToolbar } from '../Editor/TiptapEditor';
+import { cn } from '@/lib/utils';
+import { useMediaQuery } from '@/lib/hooks/useMediaQuery';
+import BibleReader from './BibleReader';
+
+interface BibleStudyModalProps {
+    onClose: () => void;
+}
+
+export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
+    const { user } = useAuth();
+    const {
+        isStudyOpen, closeStudy,
+        onInsertNote, registerInsertHandler,
+        openBible,
+        tabs, activeTabId
+    } = useBible();
+    const [editor, setEditor] = useState<any>(null);
+    const [notes, setNotes] = useState('');
+    const [savingNotes, setSavingNotes] = useState(false);
+
+    // Search State
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const [isSearching, setIsSearching] = useState(false);
+    const [showResults, setShowResults] = useState(false);
+
+    const handleSaveNotes = async (content: string) => {
+        if (!user) return;
+        setSavingNotes(true);
+        try {
+            const notesRef = doc(db, 'users', user.uid, 'notes', 'bible-study-general');
+            await setDoc(notesRef, {
+                title: 'General Bible Study', // Ensure it has a title for the list
+                content,
+                updatedAt: serverTimestamp()
+            }, { merge: true });
+        } catch (error) {
+            console.error('Error saving notes:', error);
+        } finally {
+            setTimeout(() => setSavingNotes(false), 1000);
+        }
+    };
+
+    const handleSearch = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!searchQuery.trim()) return;
+
+        setIsSearching(true);
+        setShowResults(true);
+        try {
+            const res = await fetch(`/api/bible?search=${encodeURIComponent(searchQuery)}`);
+            if (!res.ok) throw new Error('Failed');
+            const data = await res.json();
+            setSearchResults(data.verses || []);
+        } catch (error) {
+            console.error(error);
+            setSearchResults([]);
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    const clearSearch = () => {
+        setSearchQuery('');
+        setSearchResults([]);
+        setShowResults(false);
+    };
+
+    // Refs
+    const modalContainerRef = useRef<HTMLDivElement>(null);
+    const videoPlaceholderRef = useRef<HTMLDivElement>(null);
+
+    // Register Bible Insert Handler
+    useEffect(() => {
+        registerInsertHandler((html) => {
+            if (editor) {
+                editor.chain().focus().insertContent(html).run();
+                const newContent = editor.getHTML();
+                handleSaveNotes(newContent);
+            }
+        });
+        return () => registerInsertHandler(null);
+    }, [editor, registerInsertHandler]);
+
+    // Resizable Reader Logic (Pixels)
+    const [readerHeight, setReaderHeight] = useState(500); // Default height in px
+    const [isDragging, setIsDragging] = useState(false);
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    // Maximize Logic
+    const [lastReaderHeight, setLastReaderHeight] = useState(500);
+    const isMaximized = readerHeight >= 800; // Threshold for "maximized"
+
+    const toggleMaximize = () => {
+        if (isMaximized) {
+            setReaderHeight(lastReaderHeight);
+        } else {
+            setLastReaderHeight(readerHeight);
+            setReaderHeight(800); // Expand to a large height
+        }
+    };
+
+    const handleDragStart = (e: React.MouseEvent | React.TouchEvent) => {
+        setIsDragging(true);
+        document.body.style.userSelect = 'none';
+    };
+
+    useEffect(() => {
+        const handleDrag = (e: MouseEvent | TouchEvent) => {
+            if (!isDragging) return;
+
+            const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+            // Simple logic: just use movementY would be better, but let's use absolute for now relative to top
+            // We need the top of the reader to calculate height.
+            // Since reader is at the top of the modal (under header), we can approximate or use ref.
+
+            // Let's just use delta for simplicity if we had it, but we don't.
+            // Alternative: Calculate height based on cursor position relative to modal top.
+            if (containerRef.current) {
+                const rect = containerRef.current.getBoundingClientRect();
+                const headerHeight = 60; // Approx header height
+                const newHeight = clientY - rect.top - headerHeight;
+                setReaderHeight(Math.max(300, Math.min(newHeight, 1200))); // Clamp
+            }
+        };
+
+        const handleDragEnd = () => {
+            setIsDragging(false);
+            document.body.style.userSelect = '';
+            window.removeEventListener('mousemove', handleDrag);
+            window.removeEventListener('mouseup', handleDragEnd);
+            window.removeEventListener('touchmove', handleDrag);
+            window.removeEventListener('touchend', handleDragEnd);
+        };
+
+        if (isDragging) {
+            window.addEventListener('mousemove', handleDrag);
+            window.addEventListener('mouseup', handleDragEnd);
+            window.addEventListener('touchmove', handleDrag);
+            window.addEventListener('touchend', handleDragEnd);
+        }
+
+        return () => {
+            window.removeEventListener('mousemove', handleDrag);
+            window.removeEventListener('mouseup', handleDragEnd);
+            window.removeEventListener('touchmove', handleDrag);
+            window.removeEventListener('touchend', handleDragEnd);
+        };
+    }, [isDragging]);
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6" ref={modalContainerRef}>
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={onClose}
+                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+
+            <motion.div
+                ref={containerRef}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="relative w-full max-w-5xl max-h-[90vh] bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+            >
+                {/* Fixed Header */}
+                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 z-20 shrink-0 relative">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                            <BookOpen className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                        </div>
+                        <h2 className="font-semibold text-gray-900 dark:text-white">Bible Study</h2>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={toggleMaximize}
+                            className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors text-gray-500"
+                            title={isMaximized ? "Restore View" : "Maximize Reader"}
+                        >
+                            {isMaximized ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
+                        </button>
+                        <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors">
+                            <X className="w-5 h-5 text-gray-500" />
+                        </button>
+                    </div>
+                </div>
+
+                {/* Scrollable Content Container */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar relative">
+
+                    {/* Bible Reader (Resizable Height) */}
+                    <div
+                        style={{ height: readerHeight }}
+                        className="w-full border-b border-gray-200 dark:border-zinc-800 transition-[height] duration-75 ease-out"
+                    >
+                        <BibleReader />
+                    </div>
+
+                    {/* Drag Handle / Search Bar */}
+                    <div
+                        onMouseDown={handleDragStart}
+                        onTouchStart={handleDragStart}
+                        className="sticky top-0 z-10 bg-gray-50 dark:bg-zinc-950 border-b border-gray-200 dark:border-zinc-800 p-2 flex items-center gap-2 cursor-row-resize hover:bg-gray-100 dark:hover:bg-zinc-900 transition-colors group"
+                    >
+                        {/* Visual Drag Handle Indicator */}
+                        <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-1 bg-gray-300 dark:bg-zinc-700 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+
+                        <form onSubmit={handleSearch} className="flex-1 relative max-w-2xl mx-auto w-full pointer-events-auto" onMouseDown={e => e.stopPropagation()}>
+                            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <input
+                                type="text"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder="Search verses (e.g., 'love', 'John 3:16')..."
+                                className="w-full pl-9 pr-10 py-2 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-gray-900 dark:text-white placeholder-gray-500 shadow-sm"
+                            />
+                            {searchQuery && (
+                                <button
+                                    type="button"
+                                    onClick={clearSearch}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full"
+                                >
+                                    <X className="w-3 h-3 text-gray-400" />
+                                </button>
+                            )}
+                        </form>
+                    </div>
+
+                    {/* Bottom Section: Notes or Search Results (40%) */}
+                    <div className="flex-1 flex flex-col min-h-0 bg-white dark:bg-zinc-900">
+                        {showResults ? (
+                            <div className="flex-1 overflow-y-auto custom-scrollbar p-6 bg-gray-50/50 dark:bg-zinc-900/50">
+                                <div className="flex items-center justify-between mb-4">
+                                    <div className="flex items-center gap-2">
+                                        <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Search Results</h3>
+                                        <span className="bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-400 text-xs px-2 py-0.5 rounded-full font-medium">
+                                            {searchResults.length}
+                                        </span>
+                                    </div>
+                                    <button onClick={() => setShowResults(false)} className="text-xs text-blue-600 hover:underline">Back to Notes</button>
+                                </div>
+
+                                {isSearching ? (
+                                    <div className="flex items-center justify-center py-20">
+                                        <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+                                    </div>
+                                ) : searchResults.length > 0 ? (
+                                    <div className="grid grid-cols-1 gap-4">
+                                        {(() => {
+                                            // Smart Sorting: Prioritize results from the current book (active tab)
+                                            // We need access to tabs/activeTabId from useBible but didn't destructure them yet.
+                                            // Let's use the 'current book' concept if available or standard sort.
+                                            // Wait, I need to update the destructuring at the top of BibleStudyModal first.
+                                            // Assuming I will update it, let's use the code.
+                                            const activeTab = tabs.find(t => t.id === activeTabId);
+                                            const currentBook = activeTab?.reference.book || '';
+
+                                            const sortedResults = [...searchResults].sort((a, b) => {
+                                                const aBook = a.book_name || a.book_id;
+                                                const bBook = b.book_name || b.book_id;
+                                                if (aBook === currentBook && bBook !== currentBook) return -1;
+                                                if (aBook !== currentBook && bBook === currentBook) return 1;
+                                                return 0;
+                                            });
+
+                                            return sortedResults.map((verse: any, idx) => {
+                                                const isRelevanceHigh = (verse.book_name || verse.book_id) === currentBook;
+                                                return (
+                                                    <div
+                                                        key={idx}
+                                                        onClick={() => openBible({ book: verse.book_name || verse.book_id, chapter: verse.chapter, verse: verse.verse }, true)}
+                                                        className={cn(
+                                                            "relative p-4 rounded-2xl border cursor-pointer transition-all hover:shadow-md group",
+                                                            isRelevanceHigh
+                                                                ? "bg-blue-50/50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800"
+                                                                : "bg-white dark:bg-zinc-900 border-gray-100 dark:border-zinc-800 hover:border-blue-200 dark:hover:border-blue-800"
+                                                        )}
+                                                    >
+                                                        {isRelevanceHigh && (
+                                                            <div className="absolute -top-2 -right-2 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-blue-200 dark:border-blue-800 shadow-sm">
+                                                                RELEVANT
+                                                            </div>
+                                                        )}
+                                                        <div className="flex items-center gap-2 mb-2">
+                                                            <span className={cn(
+                                                                "px-2.5 py-1 rounded-full text-xs font-bold",
+                                                                isRelevanceHigh
+                                                                    ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300"
+                                                                    : "bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-400"
+                                                            )}>
+                                                                {verse.reference}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-gray-700 dark:text-gray-300 text-sm leading-relaxed font-serif">
+                                                            {verse.text}
+                                                        </p>
+                                                    </div>
+                                                );
+                                            });
+                                        })()}
+                                    </div>
+                                ) : (
+                                    <div className="text-center py-20 text-gray-400">
+                                        <p>No results found for "{searchQuery}"</p>
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+
+                            <div className="h-full flex flex-col">
+                                {/* Toolbar Header */}
+                                <div className="sticky top-0 z-10 bg-white dark:bg-zinc-900 border-b border-gray-100 dark:border-zinc-800 px-4 py-2 flex flex-col gap-2 shrink-0">
+                                    <BookOpen className="w-5 h-5 text-blue-500" />
+                                    <h2 className="text-lg font-bold text-gray-800 dark:text-white">Bible Study & Notes</h2>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-sm font-bold text-gray-900 dark:text-white">My Notes</span>
+                                        {savingNotes && <span className="text-xs text-green-600 animate-pulse">Saving...</span>}
+                                    </div>
+                                    <EditorToolbar
+                                        editor={editor}
+                                        className="border-none shadow-none bg-transparent mb-0 pb-0 justify-center"
+                                    />
+                                </div>
+
+                                {/* Scrollable Editor Area */}
+                                <div className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-gray-50 dark:bg-zinc-900/50">
+                                    <div className="max-w-4xl mx-auto border border-gray-200 dark:border-zinc-800 rounded-xl overflow-hidden min-h-full bg-white dark:bg-zinc-950 shadow-sm">
+                                        <TiptapEditor
+                                            content={notes}
+                                            onChange={(content) => handleSaveNotes(content)}
+                                            className="p-6 min-h-[500px] prose dark:prose-invert max-w-none focus:outline-none [&>blockquote]:border-l-4 [&>blockquote]:border-purple-500 [&>blockquote]:pl-2 [&>blockquote]:py-1 [&>blockquote]:my-4 [&>blockquote]:bg-purple-50/50 dark:[&>blockquote]:bg-purple-900/20 [&>blockquote]:rounded-r [&>blockquote_p]:m-0 [&>blockquote_p+p]:mt-1"
+                                            showToolbar={false}
+                                            onEditorReady={setEditor}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </motion.div>
+        </div >
+    );
+}

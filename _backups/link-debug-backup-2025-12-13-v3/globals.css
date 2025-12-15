@@ -1,0 +1,176 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-handwriting: var(--font-caveat);
+}
+
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Custom Scrollbar */
+/* Custom Scrollbar */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  height: 12px;
+  /* Much taller */
+  width: 12px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+  /* Visible track */
+  border-radius: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(75, 85, 99, 1);
+  /* Dark grey */
+  border-radius: 20px;
+  border: 3px solid transparent;
+  /* Padding */
+  background-clip: content-box;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(55, 65, 81, 1);
+  /* Almost black on hover */
+}
+
+/* Tiptap Global Drag Handle */
+.drag-handle {
+  position: fixed;
+  opacity: 1;
+  transition: opacity 0.2s ease-in-out;
+  border-radius: 0.25rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10' style='fill: rgba(0, 0, 0, 0.5)'%3E%3Cpath d='M3,2 C2.44771525,2 2,1.55228475 2,1 C2,0.44771525 2.44771525,0 3,0 C3.55228475,0 4,0.44771525 4,1 C4,1.55228475 3.55228475,2 3,2 Z M3,6 C2.44771525,6 2,5.55228475 2,5 C2,4.44771525 2.44771525,4 3,4 C3.55228475,4 4,4.44771525 4,5 C4,5.55228475 3.55228475,6 3,6 Z M3,10 C2.44771525,10 2,9.55228475 2,9 C2,8.44771525 2.44771525,8 3,8 C3.55228475,8 4,8.44771525 4,9 C4,9.55228475 3.55228475,10 3,10 Z M7,2 C6.44771525,2 6,1.55228475 6,1 C6,0.44771525 6.44771525,0 7,0 C7.55228475,0 8,0.44771525 8,1 C8,1.55228475 7.55228475,2 7,2 Z M7,6 C6.44771525,6 6,5.55228475 6,5 C6,4.44771525 6.44771525,4 7,4 C7.55228475,4 8,4.44771525 8,5 C8,5.55228475 7.55228475,6 7,6 Z M7,10 C6.44771525,10 6,9.55228475 6,9 C6,8.44771525 6.44771525,8 7,8 C7.55228475,8 8,8.44771525 8,9 C8,9.55228475 7.55228475,10 7,10 Z'%3E%3C/path%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  width: 1.2rem;
+  height: 1.5rem;
+  z-index: 50;
+  cursor: grab;
+}
+
+.dark .drag-handle {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10' style='fill: rgba(255, 255, 255, 0.5)'%3E%3Cpath d='M3,2 C2.44771525,2 2,1.55228475 2,1 C2,0.44771525 2.44771525,0 3,0 C3.55228475,0 4,0.44771525 4,1 C4,1.55228475 3.55228475,2 3,2 Z M3,6 C2.44771525,6 2,5.55228475 2,5 C2,4.44771525 2.44771525,4 3,4 C3.55228475,4 4,4.44771525 4,5 C4,5.55228475 3.55228475,6 3,6 Z M3,10 C2.44771525,10 2,9.55228475 2,9 C2,8.44771525 2.44771525,8 3,8 C3.55228475,8 4,8.44771525 4,9 C4,9.55228475 3.55228475,10 3,10 Z M7,2 C6.44771525,2 6,1.55228475 6,1 C6,0.44771525 6.44771525,0 7,0 C7.55228475,0 8,0.44771525 8,1 C8,1.55228475 7.55228475,2 7,2 Z M7,6 C6.44771525,6 6,5.55228475 6,5 C6,4.44771525 6.44771525,4 7,4 C7.55228475,4 8,4.44771525 8,5 C8,5.55228475 7.55228475,6 7,6 Z M7,10 C6.44771525,10 6,9.55228475 6,9 C6,8.44771525 6.44771525,8 7,8 C7.55228475,8 8,8.44771525 8,9 C8,9.55228475 7.55228475,10 7,10 Z'%3E%3C/path%3E%3C/svg%3E");
+}
+
+/* Handwriting Mode Styles */
+/* Handwriting Mode Styles */
+.paper-lines {
+  background-image: linear-gradient(transparent 95%, #e5e7eb 95%);
+  background-size: 100% 2.5rem;
+  /* Matches line-height */
+  line-height: 2.5rem !important;
+  background-attachment: local;
+  font-family: var(--font-handwriting), cursive;
+  font-size: 1.5rem;
+  background-position: 0 0.5rem;
+  /* Shift lines slightly to align with text baseline */
+  position: relative;
+  z-index: 1;
+}
+
+.dark .paper-lines {
+  background-image: linear-gradient(transparent 95%, #27272a 95%);
+  border-color: #27272a;
+  color: #ededed;
+  /* Ensure text is visible in dark mode */
+}
+
+.paper-lines p {
+  margin-bottom: 0 !important;
+  margin-top: 0 !important;
+  position: relative;
+  z-index: 2;
+  /* Ensure text is above lines */
+}
+
+.paper-lines h1 {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  line-height: 5rem !important;
+  /* 2 lines */
+  padding-top: 0.5rem;
+  /* Adjust baseline */
+  position: relative;
+  z-index: 2;
+}
+
+.paper-lines img {
+  display: inline-block !important;
+  vertical-align: middle;
+  margin: 0 0.5rem;
+  position: relative;
+  z-index: 2;
+}
+
+/* Force Tiptap Image Wrappers to be inline */
+.ProseMirror .node-image,
+.ProseMirror .image-resizer,
+.ProseMirror .image-view {
+  display: inline-block !important;
+  vertical-align: middle;
+}
+
+/* Hide BottomBar when Modal is open (Mobile Fix) */
+body.modal-open #main-bottom-bar,
+body.modal-open .bottom-bar {
+  display: none !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+
+body.modal-open {
+  overflow: hidden !important;
+}
+
+/* Verse Link Styles for Clickability */
+.verse-link {
+  cursor: pointer !important;
+  position: relative;
+  z-index: 20;
+  /* Ensure it sits above other text/overlays */
+  color: #2563eb;
+  /* blue-600 */
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  padding: 4px 6px;
+  /* massive hit area increase */
+  margin: -4px -6px;
+  /* offset the layout shift */
+  border-radius: 4px;
+  transition: background-color 0.1s;
+  pointer-events: auto !important;
+  /* Force events */
+}
+
+.verse-link:hover {
+  background-color: rgba(37, 99, 235, 0.1);
+  text-decoration: none;
+}

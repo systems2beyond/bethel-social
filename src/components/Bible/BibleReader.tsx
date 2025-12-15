@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Loader2, Copy, Edit3, Check, BookOpen, PenLine } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2, Copy, Edit3, Check, BookOpen, PenLine, X, Plus } from 'lucide-react';
 import { useBible } from '@/context/BibleContext';
 import { cn } from '@/lib/utils';
 
@@ -92,7 +92,7 @@ const BIBLE_VERSIONS = [
 export default function BibleReader() {
     const {
         reference, setReference, version, setVersion,
-        onInsertNote, openStudy, isStudyOpen,
+        onInsertNote, openStudy, isStudyOpen, openBible,
         tabs, activeTabId, setActiveTab, addTab, closeTab
     } = useBible();
 
@@ -114,14 +114,19 @@ export default function BibleReader() {
     // Fetch Bible Text
     useEffect(() => {
         const fetchChapter = async () => {
+            if (!reference.book || !reference.chapter) {
+                setLoading(false);
+                return;
+            }
+
             setLoading(true);
             try {
                 // Map ID to Name for API if needed
                 const bookName = BIBLE_BOOKS.find(b => b.name === reference.book || b.id === reference.book)?.name || reference.book;
                 const safeBook = encodeURIComponent(bookName);
 
-                // Use local proxy to avoid CORS issues
-                const res = await fetch(`/api/bible?version=${version.toLowerCase()}&book=${safeBook}&chapter=${reference.chapter}`);
+                // Use direct API call to support static export
+                const res = await fetch(`https://bible-api.com/${safeBook}+${reference.chapter}?translation=${version.toLowerCase()}`);
 
                 if (!res.ok) throw new Error('Failed to fetch');
 
@@ -218,47 +223,52 @@ export default function BibleReader() {
         setSelectedVerses([]); // Clear selection after adding
     };
 
-    return (
-        <div className="flex flex-col h-full">
-            {/* Tab Bar */}
-            <div className="flex items-center overflow-x-auto bg-gray-100 dark:bg-zinc-950/50 border-b border-gray-200 dark:border-zinc-800 px-1 pt-1 hide-scrollbar">
-                {tabs.map(tab => (
-                    <div
-                        key={tab.id}
-                        onClick={() => setActiveTab(tab.id)}
-                        className={cn(
-                            "group flex items-center gap-2 px-3 py-1.5 min-w-[120px] max-w-[200px] text-xs font-medium cursor-pointer select-none rounded-t-lg transition-colors border-t border-x border-transparent mt-1",
-                            activeTabId === tab.id
-                                ? "bg-white dark:bg-zinc-900 text-gray-900 dark:text-white border-gray-200 dark:border-zinc-800 border-b-white dark:border-b-zinc-900 translate-y-[1px]"
-                                : "text-gray-500 hover:text-gray-900 dark:hover:text-gray-300 hover:bg-gray-200/50 dark:hover:bg-zinc-800/50"
-                        )}
-                    >
-                        <span className="truncate flex-1">
-                            {tab.reference.book} {tab.reference.chapter}
-                        </span>
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                closeTab(tab.id);
-                            }}
-                            className={cn(
-                                "p-0.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-gray-200 dark:hover:bg-zinc-700 text-gray-400 hover:text-red-500",
-                                tabs.length === 1 && "hidden" // Can't close last tab
-                            )}
-                        >
-                            <span className="sr-only">Close</span>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
-                        </button>
-                    </div>
-                ))}
+    useEffect(() => {
+        console.log(`[BibleReader] BibleTabs Rendered. Count: ${tabs.length}, Active: ${activeTabId}`);
+    }, [tabs, activeTabId]);
 
-                {/* New Tab Button */}
-                <button
-                    onClick={() => addTab()}
-                    className="ml-1 p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-zinc-800 rounded-md transition-colors"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14" /><path d="M12 5v14" /></svg>
-                </button>
+    return (
+        <div className="flex flex-col h-full bg-white dark:bg-zinc-900 relative rounded-lg border border-gray-200 dark:border-zinc-800">
+            {/* Header / Tabs */}
+            <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100 dark:border-zinc-800 bg-gray-50/50 dark:bg-zinc-800/50 backdrop-blur-sm">
+                <div className="flex items-center gap-1 overflow-x-auto no-scrollbar max-w-[calc(100%-120px)]">
+                    {tabs.map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => {
+                                console.log(`[BibleReader] Clicked tab: ${tab.id}`);
+                                setActiveTab(tab.id);
+                            }}
+                            className={`
+                                flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all whitespace-nowrap
+                                ${activeTabId === tab.id
+                                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 shadow-sm'
+                                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-zinc-800'
+                                }
+                            `}
+                        >
+                            <span>{tab.reference.book} {tab.reference.chapter}</span>
+                            {tabs.length > 1 && (
+                                <span
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        closeTab(tab.id);
+                                    }}
+                                    className="ml-1 opacity-60 hover:opacity-100 p-0.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10"
+                                >
+                                    <X className="w-3 h-3" />
+                                </span>
+                            )}
+                        </button>
+                    ))}
+                    <button
+                        onClick={() => openBible(undefined, true)}
+                        className="p-1.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                        title="New Tab"
+                    >
+                        <Plus className="w-4 h-4" />
+                    </button>
+                </div>
             </div>
 
             {/* Navigation Bar */}
