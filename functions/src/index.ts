@@ -100,6 +100,7 @@ export const debugPosts = onRequest(async (req, res) => {
 import { chatWithBibleBot, ingestSermon } from './ai/chatbot';
 export { ingestContent, scheduledWebsiteCrawl, ingestSocialPost } from './ai/knowledge_base';
 export * from './ai/comments';
+export * from './ai/meetings';
 export { onMeetingCreated } from './notifications';
 export * from './meeting'; // Export meeting functions
 

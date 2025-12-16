@@ -102,13 +102,31 @@ export const createMeeting = onCall({ timeoutSeconds: 60 }, async (request) => {
         // This ensures it shows up on the Events Page
         const meetingDoc: any = {
             title: topic || 'New Meeting',
+            description: description || '',
             date: startDateTime,
             meetLink: meetLink,
             eventId: eventId,
             type: 'general', // Default category
+            status: 'scheduled', // NEW: scheduled | active | completed
             createdBy: request.auth.uid,
-            createdAt: admin.firestore.FieldValue.serverTimestamp()
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            linkedResourceId: request.data.linkedResourceId || null,
+            linkedResourceType: request.data.linkedResourceType || 'scroll'
         };
+
+        // Snapshot Linked Resource (Title & Content) so attendees can view it
+        if (request.data.linkedResourceId) {
+            try {
+                const noteSnap = await db.collection('users').doc(request.auth.uid).collection('notes').doc(request.data.linkedResourceId).get();
+                if (noteSnap.exists) {
+                    const noteData = noteSnap.data();
+                    meetingDoc.linkedResourceTitle = noteData?.title || 'Untitled Scroll';
+                    meetingDoc.linkedResourceContent = noteData?.content || '';
+                }
+            } catch (err) {
+                console.warn("Failed to snapshot linked resource:", err);
+            }
+        }
 
         if (finalAttendeeUids.size > 0) {
             meetingDoc.attendeeUids = Array.from(finalAttendeeUids);
@@ -152,5 +170,73 @@ export const respondToMeeting = onCall({ timeoutSeconds: 60 }, async (request) =
     } catch (error: any) {
         console.error('Error responding to meeting:', error);
         throw new HttpsError('internal', 'Failed to update response: ' + error.message);
+    }
+});
+
+export const updateMeetingStatus = onCall({ timeoutSeconds: 60 }, async (request) => {
+    if (!request.auth) {
+        throw new HttpsError('unauthenticated', 'User must be logged in.');
+    }
+
+    const { meetingId, status, transcriptUrl, linkedResourceId } = request.data;
+
+    if (!meetingId) {
+        throw new HttpsError('invalid-argument', 'Meeting ID is required.');
+    }
+
+    try {
+        const meetingRef = db.collection('meetings').doc(meetingId);
+        const meetingSnapshot = await meetingRef.get();
+
+        if (!meetingSnapshot.exists) {
+            throw new HttpsError('not-found', 'Meeting not found.');
+        }
+
+        const meetingData = meetingSnapshot.data();
+        if (meetingData?.createdBy !== request.auth.uid) {
+            throw new HttpsError('permission-denied', 'Only the host can update meeting status.');
+        }
+
+        const updates: any = {
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        };
+
+        if (status && ['scheduled', 'active', 'completed'].includes(status)) {
+            updates.status = status;
+            if (status === 'active') updates.startedAt = admin.firestore.FieldValue.serverTimestamp();
+            if (status === 'completed') updates.endedAt = admin.firestore.FieldValue.serverTimestamp();
+        }
+
+        if (transcriptUrl !== undefined) updates.transcriptUrl = transcriptUrl;
+
+        if (linkedResourceId !== undefined) {
+            updates.linkedResourceId = linkedResourceId;
+
+            if (linkedResourceId) {
+                try {
+                    // Fetch note from the HOST (who created the meeting)
+                    // Note: request.auth.uid is the caller, and we verified caller == host above.
+                    const noteSnap = await db.collection('users').doc(request.auth.uid).collection('notes').doc(linkedResourceId).get();
+                    if (noteSnap.exists) {
+                        const noteData = noteSnap.data();
+                        updates.linkedResourceTitle = noteData?.title || 'Untitled Scroll';
+                        updates.linkedResourceContent = noteData?.content || '';
+                    }
+                } catch (err) {
+                    console.warn("Failed to snapshot updated linked resource:", err);
+                }
+            } else {
+                // Cleared
+                updates.linkedResourceTitle = admin.firestore.FieldValue.delete();
+                updates.linkedResourceContent = admin.firestore.FieldValue.delete();
+            }
+        }
+
+        await meetingRef.update(updates);
+
+        return { success: true };
+    } catch (error: any) {
+        console.error('Error updating meeting status:', error);
+        throw new HttpsError('internal', 'Failed to update meeting: ' + error.message);
     }
 });

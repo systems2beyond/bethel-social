@@ -103,6 +103,32 @@ export default function NotesPage() {
         return () => registerContextHandler(null);
     }, [activeNoteId, registerContextHandler]);
 
+    // Fetch Chat History for active note
+    useEffect(() => {
+        if (!user || !activeNoteId) return;
+
+        const q = query(
+            collection(db, 'users', user.uid, 'notes', activeNoteId, 'chat'),
+            orderBy('createdAt', 'asc')
+        );
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const msgs = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+
+            setChats(prev => ({
+                ...prev,
+                [activeNoteId]: msgs
+            }));
+        }, (error) => {
+            console.error("Error fetching chat for note:", activeNoteId, error);
+        });
+
+        return () => unsubscribe();
+    }, [user, activeNoteId]);
+
     const handleOpenAiNotes = (query?: string) => {
         setInitialAiQuery(query || '');
         setIsAiNotesModalOpen(true);
@@ -291,7 +317,7 @@ export default function NotesPage() {
                                 </p>
                                 <div className="flex items-center justify-between mt-2">
                                     <span className="text-[10px] text-gray-400 font-medium">
-                                        {note.updatedAt?.toDate().toLocaleDateString()}
+                                        {note.updatedAt?.toDate ? note.updatedAt.toDate().toLocaleDateString() : 'Recently'}
                                     </span>
                                     <button
                                         onClick={(e) => handleDelete(e, note.id)}
@@ -426,6 +452,18 @@ export default function NotesPage() {
                             ...prev,
                             [activeNoteId]: newMessages
                         }));
+                    }
+                }}
+                onSaveMessage={async (role, content) => {
+                    if (!user || !activeNoteId) return;
+                    try {
+                        await addDoc(collection(db, 'users', user.uid, 'notes', activeNoteId, 'chat'), {
+                            role,
+                            content,
+                            createdAt: serverTimestamp()
+                        });
+                    } catch (error) {
+                        console.error("Error saving chat:", error);
                     }
                 }}
                 onInsertToNotes={(text) => {

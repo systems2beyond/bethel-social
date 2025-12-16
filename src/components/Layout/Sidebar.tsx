@@ -347,7 +347,7 @@ function RecentChats() {
                             {chat.title || 'New Chat'}
                         </p>
                         <p className="text-xs text-gray-400">
-                            {chat.updatedAt?.toDate().toLocaleDateString()}
+                            {chat.updatedAt?.toDate ? chat.updatedAt.toDate().toLocaleDateString() : 'Recently'}
                         </p>
                     </button>
                 ))}

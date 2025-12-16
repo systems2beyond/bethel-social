@@ -7,6 +7,8 @@ import { useAuth } from '@/context/AuthContext';
 import { X, Calendar, Loader2, Check, Video, Clock, Type, Mail } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import UserInvitationGrid, { PublicUser } from './UserInvitationGrid';
+import ResourcePicker from './ResourcePicker';
+import { Scroll } from 'lucide-react';
 
 interface CreateMeetingModalProps {
     isOpen: boolean;
@@ -17,7 +19,7 @@ interface CreateMeetingModalProps {
 }
 
 export default function CreateMeetingModal({ isOpen, onClose, initialTopic = '', initialDate, initialDescription = '' }: CreateMeetingModalProps) {
-    const { googleAccessToken, user, signInWithGoogle } = useAuth();
+    const { googleAccessToken, user, signInWithGoogle, clearGmailToken } = useAuth();
     const [topic, setTopic] = useState(initialTopic);
     const [startTime, setStartTime] = useState('');
     const [selectedUsers, setSelectedUsers] = useState<PublicUser[]>([]); // Refactored to hold User Objects
@@ -25,6 +27,8 @@ export default function CreateMeetingModal({ isOpen, onClose, initialTopic = '',
     const [loading, setLoading] = useState(false);
     const [successLink, setSuccessLink] = useState<string | null>(null);
     const [error, setError] = useState('');
+    const [linkedResource, setLinkedResource] = useState<{ id: string, title: string, type: 'scroll' | 'sermon' } | null>(null);
+    const [isPickingResource, setIsPickingResource] = useState(false);
 
     useEffect(() => {
         if (isOpen) {
@@ -47,6 +51,8 @@ export default function CreateMeetingModal({ isOpen, onClose, initialTopic = '',
             }
             setSuccessLink(null);
             setError('');
+            setLinkedResource(null);
+            setIsPickingResource(false);
         }
     }, [isOpen, initialTopic, initialDate]);
 
@@ -77,7 +83,9 @@ export default function CreateMeetingModal({ isOpen, onClose, initialTopic = '',
                 startTime: new Date(startTime).toISOString(),
                 attendees, // List of emails for Google Calendar Invite
                 attendeeUids, // List of UIDs for Push Notifications
-                description: initialDescription // Pass notes context
+                description: initialDescription, // Pass notes context
+                linkedResourceId: linkedResource?.id,
+                linkedResourceType: linkedResource?.type
             });
 
             const { meetLink } = result.data;
@@ -117,6 +125,14 @@ export default function CreateMeetingModal({ isOpen, onClose, initialTopic = '',
                     if (!resp.ok) {
                         const errSort = await resp.json();
                         console.error("Gmail API Error:", errSort);
+
+                        // Handle Token Expiry
+                        if (resp.status === 401) {
+                            alert("Your Gmail session has expired. Please click 'Authorize Gmail' again to send usage invites.");
+                            clearGmailToken(); // Reset token to show Authorize button
+                            return;
+                        }
+
                         alert(`Failed to send email invite: ${errSort.error?.message || 'Unknown error'}`);
                     } else {
                         console.log("Invites sent successfully via Gmail API!");
@@ -236,6 +252,56 @@ export default function CreateMeetingModal({ isOpen, onClose, initialTopic = '',
                                         Selected: {selectedUsers.length} users • Manual: {attendeesText ? 'Active' : 'Empty'}
                                     </p>
                                 </div>
+                            </div>
+
+                            {/* Resource Linking */}
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                                    <Scroll className="w-3.5 h-3.5" /> Attached Resource (Optional)
+                                </label>
+
+                                {isPickingResource ? (
+                                    <div className="bg-gray-50 dark:bg-zinc-800/50 p-3 rounded-xl border border-gray-200 dark:border-zinc-700">
+                                        <ResourcePicker
+                                            onSelect={(r) => {
+                                                setLinkedResource(r);
+                                                setIsPickingResource(false);
+                                            }}
+                                            onCancel={() => setIsPickingResource(false)}
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-2">
+                                        {linkedResource ? (
+                                            <div className="flex-1 flex items-center justify-between p-2.5 bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800 rounded-xl">
+                                                <div className="flex items-center gap-2 overflow-hidden">
+                                                    <div className="p-1.5 bg-purple-100 dark:bg-purple-900/50 rounded-lg shrink-0">
+                                                        <Scroll className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                                                    </div>
+                                                    <span className="text-sm font-medium text-purple-900 dark:text-purple-100 truncate">
+                                                        {linkedResource.title}
+                                                    </span>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setLinkedResource(null)}
+                                                    className="p-1.5 hover:bg-purple-100 dark:hover:bg-purple-800 rounded-lg text-purple-600 dark:text-purple-400"
+                                                >
+                                                    <X className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsPickingResource(true)}
+                                                className="w-full py-2.5 px-3 border border-dashed border-gray-300 dark:border-zinc-700 rounded-xl text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-zinc-800 hover:border-blue-400 transition-colors flex items-center justify-center gap-2"
+                                            >
+                                                <Scroll className="w-4 h-4" />
+                                                Attach a Scroll or Bible Study
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
                             </div>
 
                             {error && (

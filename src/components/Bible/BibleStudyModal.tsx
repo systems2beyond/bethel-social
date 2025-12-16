@@ -33,12 +33,21 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
         tabs,
         activeTabId,
         searchVersion,
-        setSearchVersion
+        setSearchVersion,
+        activeNoteId,
+        collaborationId,
+        noteTitle: contextNoteTitle
     } = useBible();
     const [editor, setEditor] = useState<any>(null);
     const [notes, setNotes] = useState('');
-    const [noteTitle, setNoteTitle] = useState('General Bible Study');
+    const [noteTitle, setNoteTitle] = useState(contextNoteTitle || 'General Bible Study');
     const [savingNotes, setSavingNotes] = useState(false);
+    // Sync title from context when it changes
+    useEffect(() => {
+        if (contextNoteTitle) {
+            setNoteTitle(contextNoteTitle);
+        }
+    }, [contextNoteTitle]);
 
     // Prevent background scroll when open
     useEffect(() => {
@@ -188,38 +197,52 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
 
 
 
-    // Load Notes on Mount
+    // Load Notes on Mount or Change
     useEffect(() => {
         if (!user) return;
-        const notesRef = doc(db, 'users', user.uid, 'notes', 'bible-study-general');
+
+        // If collaborating, Tiptap/Yjs handles data sync. We don't load from Firestore manually.
+        if (collaborationId) {
+            setNotes(''); // Clear local string, let Yjs populate
+            return;
+        }
+
+        const noteDocId = activeNoteId || 'bible-study-general';
+        const notesRef = doc(db, 'users', user.uid, 'notes', noteDocId);
+
         const unsubscribe = onSnapshot(notesRef, (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 if (data.content && data.content !== notes) {
-                    // Only update if significantly different to avoid cursor jumps?
-                    // Tiptap handles content updates well if we don't force it on every keystroke.
-                    // But for initial load, it's fine.
-                    // actually, we should only setNotes if we don't have local changes?
-                    // For now, let's just set on initial load.
-                    if (!editor) setNotes(data.content);
+                    // Only set if we don't have an editor instance OR if we are switching docs
+                    // If editor exists, we rely on it, unless we just switched activeNoteId
+                    if (!editor || activeNoteId) setNotes(data.content);
                 }
-                if (data.title) setNoteTitle(data.title);
+                if (data.title && !contextNoteTitle) setNoteTitle(data.title);
             } else {
-                // If new, set default title based on current context
-                const activeTab = tabs.find(t => t.id === activeTabId);
-                if (activeTab) {
-                    setNoteTitle(`Study: ${activeTab.reference.book} ${activeTab.reference.chapter}`);
+                // If new, set default title based on current context (only if not provided by context)
+                if (!contextNoteTitle) {
+                    const activeTab = tabs.find(t => t.id === activeTabId);
+                    if (activeTab) {
+                        setNoteTitle(`Study: ${activeTab.reference.book} ${activeTab.reference.chapter}`);
+                    }
                 }
             }
         });
         return () => unsubscribe();
-    }, [user, editor]); // Depend on editor so we don't overwrite user typing if we add conflict logic later
+    }, [user, editor, activeNoteId, collaborationId, contextNoteTitle]); // Depend on identifying props
 
     const handleSaveNotes = async (content: string, titleOverride?: string) => {
         if (!user) return;
+        // If collaborating, we rely on Yjs provider to sync. We *could* save snapshots, 
+        // but for now, let's disable manual firestore saves to avoid overwriting Yjs data with stale local state.
+        if (collaborationId) return;
+
         setSavingNotes(true);
         try {
-            const notesRef = doc(db, 'users', user.uid, 'notes', 'bible-study-general');
+            const noteDocId = activeNoteId || 'bible-study-general';
+            const notesRef = doc(db, 'users', user.uid, 'notes', noteDocId);
+
             await setDoc(notesRef, {
                 title: titleOverride || noteTitle,
                 content,

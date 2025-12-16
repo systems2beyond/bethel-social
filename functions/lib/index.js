@@ -128,6 +128,7 @@ Object.defineProperty(exports, "ingestContent", { enumerable: true, get: functio
 Object.defineProperty(exports, "scheduledWebsiteCrawl", { enumerable: true, get: function () { return knowledge_base_1.scheduledWebsiteCrawl; } });
 Object.defineProperty(exports, "ingestSocialPost", { enumerable: true, get: function () { return knowledge_base_1.ingestSocialPost; } });
 __exportStar(require("./ai/comments"), exports);
+__exportStar(require("./ai/meetings"), exports);
 var notifications_1 = require("./notifications");
 Object.defineProperty(exports, "onMeetingCreated", { enumerable: true, get: function () { return notifications_1.onMeetingCreated; } });
 __exportStar(require("./meeting"), exports); // Export meeting functions

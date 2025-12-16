@@ -19,7 +19,7 @@ export interface Tab {
     scrollPosition?: number;
 }
 
-interface BibleContextType {
+export interface BibleContextType {
     isOpen: boolean;
     isStudyOpen: boolean;
     reference: BibleReference;
@@ -41,6 +41,12 @@ interface BibleContextType {
     // Search Config
     searchVersion: string;
     setSearchVersion: (version: string) => void;
+    // Note & Collaboration Context
+    activeNoteId: string | null;
+    collaborationId: string | null;
+    noteTitle: string;
+    openNote: (noteId: string, title?: string) => void;
+    openCollaboration: (collabId: string, title?: string) => void;
 }
 
 const BibleContext = createContext<BibleContextType | undefined>(undefined);
@@ -68,6 +74,11 @@ export function BibleProvider({ children }: { children: ReactNode }) {
     const [searchVersion, setSearchVersion] = useState('kjv'); // Default to KJV
     const [onInsertNote, setOnInsertNote] = useState<((text: string) => void) | null>(null);
     const [isStudyOpen, setIsStudyOpen] = useState(false);
+
+    // Note & Collaboration State
+    const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
+    const [collaborationId, setCollaborationId] = useState<string | null>(null);
+    const [noteTitle, setNoteTitle] = useState('General Bible Study');
 
     const openBible = useCallback((ref?: BibleReference, newTab = false) => {
         if (newTab) {
@@ -121,7 +132,28 @@ export function BibleProvider({ children }: { children: ReactNode }) {
     };
 
     const openStudy = () => setIsStudyOpen(true);
-    const closeStudy = () => setIsStudyOpen(false);
+
+    const closeStudy = () => {
+        setIsStudyOpen(false);
+        // Reset note context when closing
+        setActiveNoteId(null);
+        setCollaborationId(null);
+        setNoteTitle('General Bible Study');
+    };
+
+    const openNote = (noteId: string, title?: string) => {
+        setActiveNoteId(noteId);
+        setCollaborationId(null); // Ensure we are not colliding
+        if (title) setNoteTitle(title);
+        setIsStudyOpen(true);
+    };
+
+    const openCollaboration = (collabId: string, title?: string) => {
+        setCollaborationId(collabId);
+        setActiveNoteId(null); // Ensure we are not in personal note mode
+        if (title) setNoteTitle(title);
+        setIsStudyOpen(true);
+    };
 
     const registerInsertHandler = (handler: ((text: string) => void) | null) => {
         setOnInsertNote(() => handler);
@@ -190,7 +222,12 @@ export function BibleProvider({ children }: { children: ReactNode }) {
             closeTab,
             setActiveTab,
             searchVersion,
-            setSearchVersion
+            setSearchVersion,
+            activeNoteId,
+            collaborationId,
+            noteTitle,
+            openNote,
+            openCollaboration
         }}>
             {children}
         </BibleContext.Provider>

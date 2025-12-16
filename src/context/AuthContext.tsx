@@ -23,6 +23,7 @@ interface AuthContextType {
     signInWithYahoo: () => Promise<void>;
     signInWithFacebook: () => Promise<void>;
     signOut: () => Promise<void>;
+    clearGmailToken: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -122,6 +123,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return null;
     });
 
+    const clearGmailToken = () => {
+        setGoogleAccessToken(null);
+        if (typeof window !== 'undefined') {
+            sessionStorage.removeItem('googleAccessToken');
+        }
+    };
+
     const signInWithGoogle = async () => {
         const provider = new GoogleAuthProvider();
         provider.addScope('https://www.googleapis.com/auth/gmail.send');
@@ -180,7 +188,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     return (
-        <AuthContext.Provider value={{ user, userData, loading, googleAccessToken, signInWithGoogle, signInWithYahoo, signInWithFacebook, signOut }}>
+        <AuthContext.Provider value={{
+            user,
+            userData,
+            loading,
+            googleAccessToken,
+            signInWithGoogle,
+            signInWithYahoo,
+            signInWithFacebook,
+            signOut,
+            clearGmailToken
+        }}>
             {children}
         </AuthContext.Provider>
     );
