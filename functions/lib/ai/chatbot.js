@@ -32,6 +32,9 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.chatWithBibleBot = exports.ingestSermon = void 0;
 const logger = __importStar(require("firebase-functions/logger"));
@@ -40,6 +43,7 @@ const admin = __importStar(require("firebase-admin"));
 const genkit_1 = require("genkit");
 const vertexai_1 = require("@genkit-ai/vertexai");
 const firestore_1 = require("firebase-admin/firestore");
+const axios_1 = __importDefault(require("axios"));
 const router_1 = require("./router");
 // Initialize Genkit with Vertex AI (uses Project Quota/Blaze)
 let ai;
@@ -178,8 +182,11 @@ const chatWithBibleBot = async (request) => {
     - **Personalization:** Use **${userName || 'Friend'}**'s name naturally in the conversation to build rapport, especially when offering support or specific information. Ask how they are doing if appropriate.
     - **Scripture:** Always quote the KJV or NIV version when referencing the Bible.
     - **Context:** Use the provided 'Sermon Context' to answer specific questions about what was preached.
-    - **Unknowns:** If the answer is not in the context and is not general biblical knowledge, politely say you don't know and offer to connect them with a human.
-    - **Handoff:** If the user seems distressed, asks for prayer, or wants to speak to a pastor, suggest they contact the church office or use the "Talk to a Human" feature.
+    - **Context vs. General Knowledge:** 
+      1. FIRST, check the provided 'Sermon Context'. If the answer is there, use it.
+      2. IF NOT in context, but the question is about the **Bible, Theology, Church History, or Faith** (e.g., "Who is David?", "Explain John 3:16"), **YOU MUST ANSWER** using your own internal knowledge. 
+      3. **DO NOT REFUSE** these questions. "Information not in document" is NOT a valid reason to refuse a Bible question.
+      4. Only refuse if the question is completely unrelated to the church/faith (e.g., "How to fix a car").
     - **Visuals:** The user is looking at the image provided in the context. ALWAYS use this image to answer questions about dates, times, locations, visual details, or text contained within the image. Assume the user's question refers to this image unless specified otherwise.
     - **Image Context:** If the context contains "[Image Analysis]" or "[Extracted Text]", treat this as high-priority information. This text comes directly from images in the post and often contains vital details not present in the main post text.
     - **Linking Scripture:** CRITICAL: When you discuss a specific Bible chapter or verse, you MUST wrap explicitly the reference in double brackets to create a clickable link.
@@ -263,6 +270,10 @@ const chatWithBibleBot = async (request) => {
            - CORRECT: "See [[John 3:16]] for more."
            - INCORRECT: "See John 3:16 for more."
            - If the user asks about a chapter (e.g. "Psalm 23"), Start your answer with a link: "Read [[Psalm 23]]: ..."
+        7. **Bible Summaries (CRITICAL):**
+           - If asked to summarize a Bible chapter (e.g., "Proverbs 10") or topic, and the text is NOT in the context, **DO NOT REFUSE**. 
+           - Use your internal theological knowledge to provide the summary.
+           - You are an expert Bible assistant; you know the text of the Bible.
         
         **Special Instructions for Summarization:**
         If the user asks to "summarize", "recap", or "save this":
@@ -320,21 +331,28 @@ const chatWithBibleBot = async (request) => {
             logger.info('Skipping media attachment (video domain)', { imageUrl });
         }
         else {
-            // 2. Try to detect extension
-            const cleanUrl = imageUrl.split('?')[0];
-            const extension = (_a = cleanUrl.split('.').pop()) === null || _a === void 0 ? void 0 : _a.toLowerCase();
-            let contentType = 'image/jpeg'; // Default fallback
-            if (extension === 'png')
-                contentType = 'image/png';
-            if (extension === 'webp')
-                contentType = 'image/webp';
-            if (extension === 'heic')
-                contentType = 'image/heic';
-            if (extension === 'heif')
-                contentType = 'image/heif';
-            // If extension is 'jpg' or 'jpeg' or unknown, we use 'image/jpeg'
-            logger.info('Attaching media to prompt', { imageUrl, contentType, inferredFrom: extension || 'fallback' });
-            prompt.push({ media: { url: imageUrl, contentType } });
+            // 2. Check accessibility (prevent crash if URL is expired)
+            try {
+                await axios_1.default.head(imageUrl, { timeout: 3000 });
+                // 3. Try to detect extension
+                const cleanUrl = imageUrl.split('?')[0];
+                const extension = (_a = cleanUrl.split('.').pop()) === null || _a === void 0 ? void 0 : _a.toLowerCase();
+                let contentType = 'image/jpeg'; // Default fallback
+                if (extension === 'png')
+                    contentType = 'image/png';
+                if (extension === 'webp')
+                    contentType = 'image/webp';
+                if (extension === 'heic')
+                    contentType = 'image/heic';
+                if (extension === 'heif')
+                    contentType = 'image/heif';
+                // If extension is 'jpg' or 'jpeg' or unknown, we use 'image/jpeg'
+                logger.info('Attaching media to prompt', { imageUrl, contentType, inferredFrom: extension || 'fallback' });
+                prompt.push({ media: { url: imageUrl, contentType } });
+            }
+            catch (err) {
+                logger.warn(`Skipping inaccessible media URL: ${imageUrl}`, { error: err.message });
+            }
         }
     }
     logger.info('Sending prompt to Gemini', {

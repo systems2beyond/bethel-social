@@ -3,8 +3,8 @@ import { onCall } from 'firebase-functions/v2/https';
 import axios from 'axios';
 
 export const search = onCall({ timeoutSeconds: 300, memory: '512MiB' }, async (request) => {
-    const { query } = request.data;
-    logger.info(`Search request received for: ${query}`);
+    const { query, type = 'web' } = request.data;
+    logger.info(`Search request received for: ${query} [Type: ${type}]`);
 
     if (!query) {
         return { results: [] };
@@ -23,26 +23,49 @@ export const search = onCall({ timeoutSeconds: 300, memory: '512MiB' }, async (r
     // 1. Try Real Search if keys exist
     if (apiKey && cx) {
         try {
-            logger.info('Executing Google Custom Search...');
+            logger.info(`Executing Google Custom Search (${type})...`);
+
+            // Construct Query
+            let finalQuery = query;
+            // Force theological context
+            if (type === 'video') {
+                finalQuery += ' site:youtube.com (bible OR christian OR jesus OR theology)';
+            } else if (type === 'web') {
+                finalQuery += ' (bible OR christian OR jesus OR theology)';
+            }
+
             const response = await axios.get('https://www.googleapis.com/customsearch/v1', {
                 params: {
                     key: apiKey,
                     cx: cx,
-                    q: query,
-                    // searchType: 'image', // Commented out to get web results (citations + images)
-                    num: 6,
+                    q: finalQuery,
+                    num: type === 'video' ? 4 : 6,
                     safe: 'active'
                 }
             });
 
             const items = response.data.items || [];
-            const results = items.map((item: any) => ({
-                title: item.title,
-                link: item.link,
-                snippet: item.snippet,
-                displayLink: item.displayLink,
-                thumbnail: item.pagemap?.cse_image?.[0]?.src || item.pagemap?.cse_thumbnail?.[0]?.src || null
-            }));
+            const results = items.map((item: any) => {
+                let videoId = null;
+                if (type === 'video' && item.link) {
+                    const match = item.link.match(/[?&]v=([^&]+)/);
+                    if (match) videoId = match[1];
+                }
+
+                return {
+                    title: item.title,
+                    link: item.link,
+                    snippet: item.snippet,
+                    displayLink: item.displayLink,
+                    thumbnail: item.pagemap?.cse_image?.[0]?.src || item.pagemap?.cse_thumbnail?.[0]?.src || null,
+                    videoId // Only populated for videos
+                };
+            });
+
+            // For video search, filter out items without videoIds
+            if (type === 'video') {
+                return { results: results.filter((r: any) => r.videoId) };
+            }
 
             return { results };
 
@@ -55,6 +78,26 @@ export const search = onCall({ timeoutSeconds: 300, memory: '512MiB' }, async (r
     }
 
     // 2. Fallback: Mock Results
+    if (type === 'video') {
+        const mockVideos = [
+            {
+                title: `Understanding ${query} - Biblical Theology`,
+                link: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                thumbnail: "https://img.youtube.com/vi/dQw4w9WgXcQ/mqdefault.jpg",
+                videoId: "dQw4w9WgXcQ",
+                snippet: "A deep dive into the theological meaning..."
+            },
+            {
+                title: `History of ${query}`,
+                link: "https://www.youtube.com/watch?v=oHg5SJYRHA0",
+                thumbnail: "https://img.youtube.com/vi/oHg5SJYRHA0/mqdefault.jpg",
+                videoId: "oHg5SJYRHA0",
+                snippet: "Exploring the historical context..."
+            }
+        ];
+        return { results: mockVideos };
+    }
+
     const mockImages = [
         {
             title: `Map related to ${query}`,

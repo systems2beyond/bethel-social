@@ -481,21 +481,33 @@ export default function BibleAiChatModal({ isOpen, onClose, contextId, contextTi
                                     <button
                                         // Use onPointerDown to bypass any click/touch delay (aggressive fix)
                                         onPointerDown={(e) => {
-                                            e.preventDefault(); // Prevent focus loss/keyboard dismissal logic
-                                            onInsertToNotes(formatAiResponse(msg.content, { useButtons: false })); // Keep standard links for notes
-                                            onClose();
+                                            console.log("Insert Button: onPointerDown triggered");
+                                            e.preventDefault();
+                                            e.stopPropagation(); // Stop bubbling
+                                            const content = formatAiResponse(msg.content, { useButtons: false });
+                                            if (onInsertToNotes) {
+                                                onInsertToNotes(content);
+                                                // Delay close to ensure state updates propagate
+                                                setTimeout(() => onClose(), 100);
+                                            }
                                         }}
                                         onClick={(e) => {
-                                            // Fallback for non-pointer environments, though pointer events cover most
-                                            onInsertToNotes(formatAiResponse(msg.content, { useButtons: false }));
-                                            onClose();
+                                            // Redundant backup but safe
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            const content = formatAiResponse(msg.content, { useButtons: false });
+                                            if (onInsertToNotes) {
+                                                onInsertToNotes(content);
+                                                setTimeout(() => onClose(), 100);
+                                            }
                                         }}
-                                        className="text-xs flex items-center gap-1 text-gray-500 transition-colors px-2 touch-safe-btn"
+                                        className="text-xs flex items-center gap-1 text-gray-500 transition-colors px-2 touch-safe-btn pointer-events-auto cursor-pointer relative z-50 hover:bg-gray-100 dark:hover:bg-zinc-700 rounded-full py-1"
                                     >
                                         <Plus className="w-3 h-3" />
                                         Insert into Notes
                                     </button>
-                                )}
+                                )
+                                }
                             </div>
                         );
                     })}
@@ -626,8 +638,8 @@ export default function BibleAiChatModal({ isOpen, onClose, contextId, contextTi
                     )}
                 </AnimatePresence>
 
-            </motion.div>
-        </div>
+            </motion.div >
+        </div >
     );
 
     if (typeof document !== 'undefined') {

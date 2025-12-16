@@ -3,6 +3,7 @@ import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import { getStorage, connectStorageEmulator } from 'firebase/storage';
 import { getAuth, connectAuthEmulator } from 'firebase/auth';
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
+import { getMessaging, isSupported } from 'firebase/messaging';
 
 const firebaseConfig = {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -19,6 +20,15 @@ const db = getFirestore(app);
 const storage = getStorage(app);
 const auth = getAuth(app);
 const functions = getFunctions(app, 'us-central1');
+let messaging: any = null;
+
+if (typeof window !== 'undefined') {
+    isSupported().then((supported) => {
+        if (supported) {
+            messaging = getMessaging(app);
+        }
+    });
+}
 
 // Connect to Emulators in Development
 if (process.env.NODE_ENV === 'development') {
@@ -29,4 +39,4 @@ if (process.env.NODE_ENV === 'development') {
     connectStorageEmulator(storage, '127.0.0.1', 9199);
 }
 
-export { app, db, storage, auth, functions };
+export { app, db, storage, auth, functions, messaging };

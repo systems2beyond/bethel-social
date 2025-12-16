@@ -41,7 +41,7 @@ export interface TiptapEditorRef {
     insertContent: (content: string) => void;
 }
 
-export const EditorToolbar = ({ editor, className = '', onTogglePaperStyle, isPaperStyleActive, onInsertSticker }: { editor: any, className?: string, onTogglePaperStyle?: () => void, isPaperStyleActive?: boolean, onInsertSticker?: (url: string) => void }) => {
+export const EditorToolbar = ({ editor, className = '', onTogglePaperStyle, isPaperStyleActive, onInsertSticker, onInsert }: { editor: any, className?: string, onTogglePaperStyle?: () => void, isPaperStyleActive?: boolean, onInsertSticker?: (url: string) => void, onInsert?: (text: string) => void }) => {
     const [isStickerOpen, setIsStickerOpen] = React.useState(false);
     const stickerButtonRef = React.useRef<HTMLButtonElement>(null);
     const [, forceUpdate] = React.useState({});
@@ -241,7 +241,9 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
     const editor = useEditor({
         extensions: [
             StarterKit.configure({
-                history: collaborationId ? false : undefined // Disable history if collab is active (Yjs handles it)
+                history: collaborationId ? false : undefined, // Disable history if collab is active (Yjs handles it)
+                codeBlock: false, // We might want our own code block later
+                link: false, // Disable default Link extension from StarterKit
             } as any),
             Placeholder.configure({
                 placeholder: placeholder || 'Write something amazing...',
@@ -249,7 +251,8 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
             ImageResize,
             Highlight,
             DragHandle,
-            Underline,
+            // Underline removed (Duplicate),
+
             CustomLink.configure({
                 openOnClick: false,
             }),
@@ -364,7 +367,7 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
     }
 
     return (
-        <div ref={containerRef} className="flex flex-col gap-2 relative">
+        <div ref={containerRef} className="flex flex-col gap-2 relative bg-white dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 rounded-xl shadow-sm p-4 min-h-[700px]">
             {showToolbar && <EditorToolbar
                 editor={editor}
                 className="sticky top-0 z-50"

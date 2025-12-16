@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Compass, Calendar, Users, MessageSquare, Bell, User, LogOut, Settings, PlayCircle, Sun, Moon, Book, BookOpen } from 'lucide-react';
+import { Home, Compass, Calendar, Users, MessageSquare, Bell, User, LogOut, Settings, PlayCircle, Sun, Moon, Book, BookOpen, Heart } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
 import { useBible } from '@/context/BibleContext';
@@ -47,6 +47,7 @@ export function Sidebar() {
 
     const navItems = [
         { icon: Home, label: 'Home', href: '/' },
+        { icon: Heart, label: 'Fellowship', href: '/fellowship' },
         { icon: PlayCircle, label: 'Sermons', href: '/sermons' },
         { icon: MessageSquare, label: 'Notes', href: '/notes' },
         { icon: Book, label: 'Bible', onClick: () => openStudy() },

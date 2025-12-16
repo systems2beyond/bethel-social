@@ -12,15 +12,24 @@ export interface SearchResult {
     url?: string; // for navigation
     metadata?: any;
     score?: number;
+    // UI Extras
+    text?: string;
+    speaker?: string;
+    date?: string | number | Date;
+    content?: string;
+    timestamp?: number | Date;
 }
 
 export interface UnifiedSearchResults {
     bible: SearchResult[];
     sermons: SearchResult[];
     notes: SearchResult[];
+    web?: any[];
+    topics?: any[];
+    videos?: any[];
 }
 
-class UnifiedSearchService {
+export class UnifiedSearchService {
 
     // Cache for Sermon Metadata (Title, ID, Description, Date)
     // We don't want to re-fetch this on every keystroke
@@ -108,8 +117,8 @@ class UnifiedSearchService {
     async search(term: string, userId?: string, version: string = 'kjv'): Promise<UnifiedSearchResults> {
         if (!term.trim()) return { bible: [], sermons: [], notes: [] };
 
-        // 1. Bible Search (Orama)
-        const biblePromise = bibleSearch.search(term, version, { limit: 5 }).then(hits =>
+        // 1. Bible Search (Orama) - Increase limit to 50 for better context
+        const biblePromise = bibleSearch.search(term, version, { limit: 50 }).then(hits =>
             hits.map(h => ({
                 id: `${h.book}-${h.chapter}-${h.verse}`,
                 type: 'bible' as const,
@@ -126,9 +135,66 @@ class UnifiedSearchService {
         // 3. User Notes
         const notesPromise = userId ? this.searchNotes(term, userId) : Promise.resolve([]);
 
-        const [bible, sermons, notes] = await Promise.all([biblePromise, sermonsPromise, notesPromise]);
+        // 4. Web Search (Cloud Function)
+        const webPromise = (async () => {
+            try {
+                // lazy import to avoid build issues if firebase not init
+                const { getFunctions, httpsCallable } = await import('firebase/functions');
+                const functions = getFunctions();
+                const searchFn = httpsCallable(functions, 'search');
 
-        return { bible, sermons, notes };
+                // Standard Web Search
+                const res = await searchFn({ query: term }) as any;
+                const results = res.data.results || [];
+
+                // Process into visuals (web) and topics
+                const web = results.filter((r: any) => r.thumbnail).map((r: any) => ({
+                    title: r.title,
+                    url: r.thumbnail, // Use thumbnail as the main visual url
+                    link: r.link
+                }));
+
+                // Simple clustering for topics (mock logic for now or deriving from results)
+                const topics = results.slice(0, 3).map((r: any) => ({
+                    title: r.title,
+                    summary: r.snippet,
+                    sources: [{ name: r.displayLink || 'Web', url: r.link }]
+                }));
+
+                return { web, topics };
+            } catch (err) {
+                console.error("Web search error", err);
+                return { web: [], topics: [] };
+            }
+        })();
+
+        // 5. Video Search (Cloud Function)
+        const videoPromise = (async () => {
+            try {
+                const { getFunctions, httpsCallable } = await import('firebase/functions');
+                const functions = getFunctions();
+                const searchFn = httpsCallable(functions, 'search');
+
+                // Video Search
+                const res = await searchFn({ query: term, type: 'video' }) as any;
+                console.log("[UnifiedSearch] Video Results:", res.data?.results?.length, res.data?.results);
+                return res.data.results || [];
+            } catch (err) {
+                console.error("Video search error", err);
+                return [];
+            }
+        })();
+
+        const [bible, sermons, notes, webData, videos] = await Promise.all([biblePromise, sermonsPromise, notesPromise, webPromise, videoPromise]);
+
+        return {
+            bible,
+            sermons,
+            notes,
+            web: webData.web,
+            topics: webData.topics,
+            videos
+        };
     }
 }
 

@@ -20,6 +20,19 @@ interface BibleJsonBook {
     chapters: string[][]; // array of chapters, each containing array of verse strings
 }
 
+const BIBLE_BOOKS = [
+    "Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy", "Joshua", "Judges", "Ruth", "1 Samuel", "2 Samuel", "1 Kings", "2 Kings", "1 Chronicles", "2 Chronicles", "Ezra", "Nehemiah", "Esther", "Job", "Psalms", "Proverbs", "Ecclesiastes", "Song of Solomon", "Isaiah", "Jeremiah", "Lamentations", "Ezekiel", "Daniel", "Hosea", "Joel", "Amos", "Obadiah", "Jonah", "Micah", "Nahum", "Habakkuk", "Zephaniah", "Haggai", "Zechariah", "Malachi",
+    "Matthew", "Mark", "Luke", "John", "Acts", "Romans", "1 Corinthians", "2 Corinthians", "Galatians", "Ephesians", "Philippians", "Colossians", "1 Thessalonians", "2 Thessalonians", "1 Timothy", "2 Timothy", "Titus", "Philemon", "Hebrews", "James", "1 Peter", "2 Peter", "1 John", "2 John", "3 John", "Jude", "Revelation"
+];
+
+const getBookOrder = (book: string) => {
+    const norm = book.toLowerCase().replace(/\./g, '');
+    const idx = BIBLE_BOOKS.findIndex(b => b.toLowerCase().startsWith(norm));
+    if (idx !== -1) return idx;
+    // Fallback for partial matches if needed, otherwise strict
+    return 999;
+};
+
 class BibleSearchService {
     private indexes: Map<string, Orama<any>> = new Map();
     private loadPromises: Map<string, Promise<void>> = new Map();
@@ -54,21 +67,13 @@ class BibleSearchService {
                     if (!res.ok) throw new Error('Failed to fetch custom source');
                     data = await res.json();
                 } else {
-                    // Dynamic import based on version to split bundles
-                    // Note: This relies on build tool (Next.js/Webpack) handling dynamic imports of JSON
-                    // We might need to fetch from public/ if imports are too heavy
-                    // For now, let's try assuming they are in public/data/bible/ or imported
-                    // IMPORTANT: Dynamic import of large JSONs can be slow.
-                    // Better to fetch() them if they are in /public.
-
-                    // Let's assume we moved the JSONs to public/data/bible/
                     const res = await fetch(`/data/bible/${version}.json`);
                     if (!res.ok) throw new Error(`Version ${version} not found`);
                     data = await res.json();
                 }
 
                 const db = await this.createIndex(version);
-                const documents: any[] = []; // Orama insertMultiple takes loosely typed docs
+                const documents: any[] = [];
 
                 data.forEach((book) => {
                     book.chapters.forEach((verses, cIndex) => {
@@ -84,15 +89,14 @@ class BibleSearchService {
                     });
                 });
 
-                // Batch insert for performance
-                await insertMultiple(db, documents, 5000); // 5000 batch size
+                await insertMultiple(db, documents, 5000);
                 this.indexes.set(version, db);
                 console.timeEnd(`idx-${version}`);
 
             } catch (e) {
                 console.error(`Failed to load version ${version}:`, e);
                 this.loadPromises.delete(version);
-                throw e; // Propagate error
+                throw e;
             }
         };
 
@@ -104,61 +108,111 @@ class BibleSearchService {
     async search(query: string, version: string = 'kjv', options: { limit?: number, threshold?: number } = {}) {
         await this.loadVersion(version);
         const db = this.indexes.get(version);
-        if (!db) return []; // Should not happen
+        if (!db) return [];
 
-        // 1. Try to parse as reference (e.g. "Psalm 23", "John 3:16")
-        // Regex: (Optional Number + Name) + Chapter + (Optional :Verse)
-        // Group 1: Book Name (e.g. "Psalm", "1 John")
-        // Group 2: Chapter
-        // Group 3: Verse (Optional)
+        const trimmed = query.trim();
+
+        // Regex Definitions
+        // 1. Cross-Chapter Range: "Proverbs 1:6-5:2" -> Book, C1, V1, C2, V2
+        const rangeCrossRegex = /^((?:\d\s*)?[a-zA-Z]+(?:\s+[a-zA-Z]+)*)\s+(\d+):(\d+)\s*-\s*(\d+):(\d+)$/;
+
+        // 2. Same-Chapter Range: "John 3:16-18" -> Book, C1, V1, V2
+        const rangeSameRegex = /^((?:\d\s*)?[a-zA-Z]+(?:\s+[a-zA-Z]+)*)\s+(\d+):(\d+)\s*-\s*(\d+)$/;
+
+        // 3. Single Ref: "John 3:16" or "John 3"
         const refRegex = /^((?:\d\s*)?[a-zA-Z]+(?:\s+[a-zA-Z]+)*)\s+(\d+)(?::(\d+))?$/;
-        const match = query.trim().match(refRegex);
 
         let results;
+        let hits: any[] = [];
 
-        if (match) {
-            const [_, bookName, chapterStr, verseStr] = match;
-            const chapter = parseInt(chapterStr);
-            const verse = verseStr ? parseInt(verseStr) : undefined;
+        const matchCross = trimmed.match(rangeCrossRegex);
+        const matchSame = trimmed.match(rangeSameRegex);
+        const matchRef = trimmed.match(refRegex);
 
-            // Orama 'where' clause was causing crashes (likely version/schema issue).
-            // Workaround: Search for book name (fuzzy) and filter by chapter/verse manually.
-            const searchParams: any = {
+        const searchBook = async (bookName: string) => {
+            return search(db, {
                 term: bookName,
                 properties: ['book'],
-                limit: 5000, // Fetch enough to cover even Psalms matches
-                threshold: 0.2 // Allow "Psalm" to match "Psalms"
-            };
+                limit: 10000,
+                threshold: 0.2
+            });
+        };
 
-            results = await search(db, searchParams);
+        if (matchCross) {
+            const [_, bookName, c1, v1, c2, v2] = matchCross;
+            const startC = parseInt(c1), startV = parseInt(v1);
+            const endC = parseInt(c2), endV = parseInt(v2);
 
-            // Manual Filter
-            const filteredHits = results.hits.filter(hit => {
-                const doc = hit.document as any;
+            results = await searchBook(bookName);
+            hits = results.hits.map(h => h.document).filter((doc: any) => {
+                // Check Chapter Bounds
+                if (doc.chapter < startC || doc.chapter > endC) return false;
+                // Check Verse Bounds
+                if (doc.chapter === startC && doc.verse < startV) return false;
+                if (doc.chapter === endC && doc.verse > endV) return false;
+                return true;
+            });
+
+        } else if (matchSame) {
+            const [_, bookName, c1, v1, v2] = matchSame;
+            const chapter = parseInt(c1);
+            const startV = parseInt(v1), endV = parseInt(v2);
+
+            results = await searchBook(bookName);
+            hits = results.hits.map(h => h.document).filter((doc: any) => {
+                if (doc.chapter !== chapter) return false;
+                if (doc.verse < startV || doc.verse > endV) return false;
+                return true;
+            });
+
+        } else if (matchRef) {
+            const [_, bookName, c1, v1] = matchRef;
+            const chapter = parseInt(c1);
+            const verse = v1 ? parseInt(v1) : undefined;
+
+            results = await searchBook(bookName);
+            hits = results.hits.map(h => h.document).filter((doc: any) => {
                 if (doc.chapter !== chapter) return false;
                 if (verse && doc.verse !== verse) return false;
                 return true;
             });
+            // Cap single reference searches slightly to avoid spamming "Verse 1" of every book if fuzzy match behaves loosely
+            // But strict filtering above should handle it.
 
-            // Replace results.hits with filtered ones
-            results = { ...results, hits: filteredHits.slice(0, 100) }; // Cap result size
         } else {
-            // 2. Fallback to full text search
+            // Full Text Search
             results = await search(db, {
-                term: query,
-                limit: options.limit || 10,
-                tolerance: 1, // Typo tolerance
+                term: trimmed,
+                limit: options.limit || 50, // Increased limit to allow sorting to work better
+                tolerance: 1,
                 threshold: options.threshold || 0,
-                properties: ['text', 'book'], // Search in text and book name
-                boost: {
-                    book: 2 // Boost book name matches
-                }
+                properties: ['text', 'book'],
+                boost: { book: 2 }
             });
+            hits = results.hits.map(h => ({ ...h.document as any, score: h.score }));
         }
 
-        return results.hits.map(hit => ({
-            ...(hit.document as any), // Cast to any or helper type
-            score: hit.score
+        // --- GLOBAL SORTING ---
+        // Always return canonical order: Book -> Chapter -> Verse
+        hits.sort((a, b) => {
+            const orderA = getBookOrder(a.book);
+            const orderB = getBookOrder(b.book);
+            if (orderA !== orderB) return orderA - orderB;
+            if (a.chapter !== b.chapter) return a.chapter - b.chapter;
+            return a.verse - b.verse;
+        });
+
+        // Add score back if needed, currently mapping hits returns objects.
+        // If it was a text search, relevance might be important, BUT user complained about order.
+        // Compromise: For specific text searches (not refs), maybe we should preserve relevance?
+        // User said: "Proverbs 1:1, 25:1..." -> specific complaint about a BOOK search ("Proverbs") returning weird order.
+        // If they search "Love", maybe they want relevance?
+        // But usually Bible apps list "Genesis x:y" before "Revelation x:y" even for keyword searches.
+        // I will stick to Canonical Sort for now as it feels "safer" for a Bible app.
+
+        return hits.map(h => ({
+            ...h,
+            score: h.score || 1.0
         }));
     }
 
@@ -175,9 +229,7 @@ class BibleSearchService {
     hasCustomSource(): boolean {
         return this.customSources.has('custom');
     }
-    /**
-     * Get search history from localStorage
-     */
+
     getSearchHistory(): string[] {
         if (typeof window === 'undefined') return [];
         try {
@@ -188,18 +240,12 @@ class BibleSearchService {
         }
     }
 
-    /**
-     * Save a search term to history (max 5 items)
-     */
     saveSearchToHistory(term: string) {
         if (typeof window === 'undefined' || !term.trim()) return;
         try {
             let history = this.getSearchHistory();
-            // Remove if exists to push to top
             history = history.filter(h => h.toLowerCase() !== term.toLowerCase());
-            // Add to front
             history.unshift(term.trim());
-            // Keep max 5
             history = history.slice(0, 5);
             localStorage.setItem('bible_search_history', JSON.stringify(history));
         } catch (e) {

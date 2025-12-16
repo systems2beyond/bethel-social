@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Sparkles, BookOpen, Search as SearchIcon, Maximize2, Minimize2, Loader2, ChevronDown, Edit3, RotateCw, History, TrendingUp, Clock, ArrowRight, Youtube, Globe, Users, Plus } from 'lucide-react';
+import { X, Sparkles, BookOpen, Search as SearchIcon, Maximize2, Minimize2, Loader2, ChevronDown, Edit3, RotateCw, History, TrendingUp, Clock, ArrowRight, Youtube, Globe, Users, Plus, LayoutGrid, ExternalLink, Mic, Book } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -17,6 +17,7 @@ import { bibleSearch } from '@/lib/search/bible-index';
 import { unifiedSearch, type UnifiedSearchResults } from '@/lib/search/unified-search';
 import AiLessonCreator from './AiLessonCreator';
 import CreateMeetingModal from '../Meeting/CreateMeetingModal';
+import FellowshipView from './FellowshipView';
 
 interface BibleStudyModalProps {
     onClose: () => void;
@@ -57,14 +58,20 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
     // Search State
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]); // Deprecated, but keeping for compatibility if needed? No, let's switch.
-    const [detailedResults, setDetailedResults] = useState<UnifiedSearchResults>({ bible: [], sermons: [], notes: [] });
+    const [detailedResults, setDetailedResults] = useState<UnifiedSearchResults & { web?: any[], topics?: any[], videos?: any[] }>({ bible: [], sermons: [], notes: [], web: [], topics: [], videos: [] });
+    // Video Focus State
+    const [selectedVideo, setSelectedVideo] = useState<{ videoId: string, title: string } | null>(null);
+    const [quickNoteContent, setQuickNoteContent] = useState('');
+    const [isBibleExpanded, setIsBibleExpanded] = useState(false);
     // UI State
     const [isPlusMenuOpen, setIsPlusMenuOpen] = useState(false); // Kept for legacy ref, can remove if unused
     const [createMeetingState, setCreateMeetingState] = useState<{ isOpen: boolean, topic?: string, date?: string }>({ isOpen: false });
 
     const [isSearching, setIsSearching] = useState(false);
     const [isIndexing, setIsIndexing] = useState(false); // New state for loading index
-    const [showResults, setShowResults] = useState(false);
+    const [rightPaneView, setRightPaneView] = useState<'notes' | 'fellowship' | 'search'>('notes');
+    const showResults = rightPaneView === 'search'; // Derived for backward compat in render
+
 
     // Autocomplete & History
     const [searchHistory, setSearchHistory] = useState<string[]>([]);
@@ -73,6 +80,7 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
     const [unifiedSuggestions, setUnifiedSuggestions] = useState<UnifiedSearchResults>({ bible: [], sermons: [], notes: [] });
 
     const searchInputRef = useRef<HTMLInputElement>(null);
+    const searchResultsContainerRef = useRef<HTMLDivElement>(null);
 
     // Load history on mount
     useEffect(() => {
@@ -103,6 +111,8 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
             setDetailedResults(results);
 
             // Backward compatibility for old "searchResults" if any legacy prop needs it (none should)
+
+            // Backward compatibility for old "searchResults" if any legacy prop needs it (none should)
             setSearchResults(results.bible); // Still update this for any legacy code we missed
 
         } catch (error) {
@@ -113,17 +123,40 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
         }
     };
 
-    const handleSearchSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (searchQuery.trim()) {
-            bibleSearch.saveSearchToHistory(searchQuery);
-            setSearchHistory(bibleSearch.getSearchHistory());
-            performSearch(searchQuery);
-            setShowResults(true); // Trigger view switch here
-            if (splitRatio < 0.1 || splitRatio > 0.9) setSplitRatio(0.5); // Ensure pane is visible
-            setShowSuggestions(false);
+    const handleSearchSubmit = async (e?: React.FormEvent) => {
+        e?.preventDefault();
+        if (!searchQuery.trim()) return;
+
+        // Force close dropdown immediately
+        setShowSuggestions(false);
+
+        bibleSearch.saveSearchToHistory(searchQuery);
+        setSearchHistory(bibleSearch.getSearchHistory());
+        setIsSearching(true);
+        setRightPaneView('search'); // FORCE SEARCH PANE
+
+        try {
+            await performSearch(searchQuery);
+            // "Pane (larger pane) should slide up to close [dropdown]... and switch to larger search"
+            // Setting splitRatio to small value (e.g. 0.2) maximizes the Bottom Pane (Results).
+            // This creates the "Slide Up" effect the user described.
+            setSplitRatio(0.2);
+            setShowSuggestions(false); // Force close dropdown (it "slides to close" visually via AnimatePresence usually, or just disappears)
+        } catch (error) {
+            console.error('Search error:', error);
+        } finally {
+            setIsSearching(false);
             searchInputRef.current?.blur();
         }
+    };
+
+    const handleQuickNoteSave = () => {
+        if (!quickNoteContent.trim() || !user) return;
+
+        // Use existing handleAddToNotes or manual save
+        handleAddToNotes(`<p><strong>Note from Video (${selectedVideo?.title}):</strong></p><p>${quickNoteContent}</p>`);
+        setQuickNoteContent('');
+        // toast.success("Note saved!"); 
     };
 
     const handleHistoryClick = (term: string) => {
@@ -146,6 +179,13 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
     };
 
     const { userData } = useAuth(); // Need to see available custom sources
+
+    // Memoized User for Tiptap to prevent re-renders
+    const tiptapUser = useMemo(() => ({
+        name: userData?.displayName || 'Anonymous',
+        color: userData?.photoURL ? '#3b82f6' : '#a855f7'
+    }), [userData?.displayName, userData?.photoURL]);
+
 
 
     // Load Notes on Mount
@@ -209,7 +249,11 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
     const clearSearch = () => {
         setSearchQuery('');
         setSearchResults([]);
-        setShowResults(false);
+        if (rightPaneView === 'search') setRightPaneView('notes');
+    };
+
+    const handleNoteChange = (content: string) => {
+        setNotes(content);
     };
 
     // Refs
@@ -283,8 +327,9 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
             let newRatio = relativeY / containerHeight;
             newRatio = Math.max(0, Math.min(newRatio, 1));
 
-            // Snap logic
-            if (newRatio > 0.95) newRatio = 1.0;
+            // Snap logic - Prevent full closure of bottom pane as per user request
+            // Max 0.9 keeps the "Note Title"/Header visible
+            if (newRatio > 0.9) newRatio = 0.9;
             if (newRatio < 0.05) newRatio = 0.0;
 
             setSplitRatio(newRatio);
@@ -314,27 +359,53 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
         };
     }, [isDragging]);
 
-    const [isFellowshipMode, setIsFellowshipMode] = useState(false);
+    // isFellowshipMode merged into rightPaneView
+
     const [isAiChatOpen, setIsAiChatOpen] = useState(false);
     const [aiQuery, setAiQuery] = useState('');
     const [aiAutoSend, setAiAutoSend] = useState(false);
     const [aiMessages, setAiMessages] = useState<any[]>([]); // Restored for chat persistence
-    const [isCreateMeetingOpen, setIsCreateMeetingOpen] = useState(false);
-    const [createMeetingDefaultTopic, setCreateMeetingDefaultTopic] = useState('');
 
-    const handleAskAi = (query: string, autoSend: boolean = false) => {
-        setAiQuery(query);
+
+    const handleAskAi = (prompt: string, autoSend: boolean = true) => {
+        setAiQuery(prompt);
         setAiAutoSend(autoSend);
         setIsAiChatOpen(true);
     };
 
     const handleAddToNotes = (text: string) => {
-        if (editor) {
-            // Focus end to ensure valid selection target for block insertion
-            editor.commands.focus('end');
-            editor.commands.insertContent(text);
-            const newContent = editor.getHTML();
+        console.log("BibleStudyModal: handleAddToNotes called with text length:", text?.length);
+
+        const performFallback = () => {
+            console.warn("BibleStudyModal: Performing fallback append (Editor invalid/crashed).");
+            const newContent = notes + text;
+            setNotes(newContent);
             handleSaveNotes(newContent);
+        };
+
+        if (editor && !editor.isDestroyed) {
+            console.log("BibleStudyModal: Editor instance exists. Trying insert...");
+            try {
+                // Try-catch wrapped insert. If ANYTHING fails (focus or insert), we go to catch -> fallback.
+                try {
+                    editor.commands.focus('end');
+                } catch (focusErr) {
+                    // Just warn for focus, might still be able to insert?
+                    // Actually, if focus fails due to view issues, insert might too.
+                    console.warn("BibleStudyModal: Focus failed", focusErr);
+                }
+
+                editor.commands.insertContent(text);
+                const newContent = editor.getHTML();
+                handleSaveNotes(newContent);
+                console.log("BibleStudyModal: Content inserted via Editor.");
+            } catch (err) {
+                console.error("BibleStudyModal: Editor insert crashed:", err);
+                performFallback();
+            }
+        } else {
+            console.warn("BibleStudyModal: Editor missing or destroyed.", { exists: !!editor, destroyed: editor?.isDestroyed });
+            performFallback();
         }
     };
 
@@ -382,10 +453,10 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                className="relative w-full max-w-[95vw] sm:max-w-7xl h-[96vh] bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+                className="relative w-full max-w-[95vw] sm:max-w-7xl h-[96vh] bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col pb-12 sm:pb-0"
             >
-                {/* Fixed Header with Search */}
-                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 z-20 shrink-0 relative gap-4">
+                {/* Fixed Header with Search - Added Glass Effect to connect visual to pane */}
+                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md z-[60] shrink-0 relative gap-4">
 
                     {/* Title + Icon (Compact) */}
                     <div className="flex items-center gap-3 shrink-0 hidden sm:flex">
@@ -408,7 +479,7 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                     >
                                         <option value="kjv" className="text-black dark:text-white">KJV</option>
                                         <option value="web" className="text-black dark:text-white">WEB</option>
-                                        {customSources.map((s: any) => (
+                                        {customSources?.map((s: any) => (
                                             <option key={s.name} value={s.name} className="text-black dark:text-white">
                                                 {s.name}
                                             </option>
@@ -460,35 +531,41 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                     transition={{ duration: 0.15 }}
                                     className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-zinc-900 rounded-xl shadow-xl border border-gray-100 dark:border-zinc-800 overflow-hidden z-[60]"
                                 >
-                                    {/* Quick Filters */}
-                                    <div>
-                                        <div className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                                            <TrendingUp className="w-3 h-3" />
-                                            Quick Access
+                                    {/* QUICK FILTERS (Only show if NO query or NO matches yet) */}
+                                    {!searchQuery.trim() && (
+                                        <div>
+                                            <div className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                                                <TrendingUp className="w-3 h-3" />
+                                                Quick Access
+                                            </div>
+                                            <div className="flex flex-wrap gap-2 px-3 pb-2">
+                                                {['Gospels', 'Paul\'s Letters', 'Psalms', 'Proverbs', 'Genesis'].map(tag => (
+                                                    <button
+                                                        key={tag}
+                                                        onMouseDown={(e) => {
+                                                            e.preventDefault();
+                                                            handleHistoryClick(tag);
+                                                        }}
+                                                        className="px-3 py-1.5 bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-400 text-xs font-medium rounded-full hover:bg-blue-100 hover:text-blue-600 dark:hover:bg-blue-900/30 dark:hover:text-blue-400 transition-colors"
+                                                    >
+                                                        {tag}
+                                                    </button>
+                                                ))}
+                                            </div>
                                         </div>
-                                        <div className="flex flex-wrap gap-2 px-3 pb-2">
-                                            {['Gospels', 'Paul\'s Letters', 'Psalms', 'Proverbs', 'Genesis'].map(tag => (
-                                                <button
-                                                    key={tag}
-                                                    onMouseDown={(e) => {
-                                                        e.preventDefault();
-                                                        handleHistoryClick(tag);
-                                                    }}
-                                                    className="px-3 py-1.5 bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-400 text-xs font-medium rounded-full hover:bg-blue-100 hover:text-blue-600 dark:hover:bg-blue-900/30 dark:hover:text-blue-400 transition-colors"
-                                                >
-                                                    {tag}
-                                                </button>
-                                            ))}
-                                        </div>
-                                        {/* Web Search Option */}
-                                        {searchQuery && (
-                                            <div className="border-t border-gray-100 dark:border-zinc-800 mt-1 pt-1">
+                                    )}
+
+                                    {/* TOP MATCHES / LIVE SEARCH (Show if query exists) */}
+                                    {searchQuery.trim() && (
+                                        <>
+                                            {/* Web Search Option */}
+                                            <div className="border-b border-gray-100 dark:border-zinc-800 mb-1">
                                                 <button
                                                     onMouseDown={(e) => {
                                                         e.preventDefault();
                                                         handleWebSearch(searchQuery);
                                                     }}
-                                                    className="w-full text-left px-4 py-2 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors group"
+                                                    className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors group"
                                                 >
                                                     <div className="p-1.5 bg-gray-100 dark:bg-zinc-800 rounded-md group-hover:bg-blue-100 dark:group-hover:bg-blue-900/30 transition-colors">
                                                         <Globe className="w-4 h-4 text-gray-500 group-hover:text-blue-600 dark:group-hover:text-blue-400" />
@@ -498,77 +575,67 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                                     </span>
                                                 </button>
                                             </div>
-                                        )}
-                                    </div>
-                                </motion.div>
-                            )}
 
-                            {/* STATE 2: Typing -> Live Results Preview (Only when Suggestions are hidden or just separate? Usually separate) */}
-                            {/* Actually, if we have a query, we typically show RESULTS, not suggestions. */}
-                            {/* But here we want the "Dropdown" effect. */}
-                            {/* Let's wrap this in a separate conditional or merge logic if needed. */}
-                            {/* For now, just fixing the syntax. */}
-                            {searchQuery.trim() && !showSuggestions && (
-                                <motion.div
-                                    initial={{ opacity: 0, y: 5 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0, y: 5 }}
-                                    className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-zinc-900 rounded-xl shadow-xl border border-gray-100 dark:border-zinc-800 overflow-hidden z-[60]"
-                                >
-                                    <div className="py-2">
-                                        {isSearching ? (
-                                            <div className="flex items-center justify-center py-4 text-gray-400 gap-2">
-                                                <Loader2 className="w-4 h-4 animate-spin" />
-                                                <span className="text-sm">Searching...</span>
-                                            </div>
-                                        ) : unifiedSuggestions.bible.length > 0 || unifiedSuggestions.sermons.length > 0 ? (
-                                            <>
-                                                <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider flex justify-between items-center bg-gray-50/50 dark:bg-zinc-800/50 border-b border-gray-100 dark:border-zinc-800/50">
-                                                    <span>Top Matches</span>
-                                                    <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-[10px] px-1.5 py-0.5 rounded-full">
-                                                        {unifiedSuggestions.bible.length + unifiedSuggestions.sermons.length}
-                                                    </span>
-                                                </div>
-                                                <div className="max-h-[300px] overflow-y-auto custom-scrollbar p-2">
-                                                    {/* Bible Hits */}
-                                                    {unifiedSuggestions.bible.slice(0, 3).map((hit: any, i: number) => (
-                                                        <button
-                                                            key={`bible-${i}`}
-                                                            onClick={() => {
-                                                                const meta = hit.metadata;
-                                                                openBible({ book: meta.book, chapter: meta.chapter, verse: meta.verse }, true);
-                                                                setShowSuggestions(false);
-                                                                bibleSearch.saveSearchToHistory(searchQuery);
-                                                                setSplitRatio(1.0); // Auto-minimize results
-                                                            }}
-                                                            className="w-full text-left p-3 hover:bg-blue-50 dark:hover:bg-blue-900/10 rounded-xl transition-colors group mb-1"
-                                                        >
-                                                            <div className="flex items-center gap-2 mb-1">
-                                                                <span className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30 px-2 py-0.5 rounded-md">
-                                                                    {hit.title}
-                                                                </span>
-                                                            </div>
-                                                            <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 leading-relaxed">
-                                                                {hit.description}
-                                                            </p>
-                                                        </button>
-                                                    ))}
+                                            <div className="py-0">
+                                                {isSearching ? (
+                                                    <div className="flex items-center justify-center py-4 text-gray-400 gap-2">
+                                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                                        <span className="text-sm">Searching...</span>
+                                                    </div>
+                                                ) : unifiedSuggestions.bible.length > 0 || unifiedSuggestions.sermons.length > 0 ? (
+                                                    <>
+                                                        <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider flex justify-between items-center bg-gray-50/50 dark:bg-zinc-800/50 border-b border-gray-100 dark:border-zinc-800/50">
+                                                            <span>Top Matches</span>
+                                                            <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-[10px] px-1.5 py-0.5 rounded-full">
+                                                                {unifiedSuggestions.bible.length + unifiedSuggestions.sermons.length}
+                                                            </span>
+                                                        </div>
+                                                        <div className="max-h-[300px] overflow-y-auto custom-scrollbar p-2">
+                                                            {/* Bible Hits */}
+                                                            {unifiedSuggestions?.bible?.slice(0, 3)?.map((hit: any, i: number) => (
+                                                                <button
+                                                                    key={`bible-${i}`}
+                                                                    onClick={() => {
+                                                                        const meta = hit.metadata;
+                                                                        openBible({ book: meta.book, chapter: meta.chapter, verse: meta.verse }, true);
+                                                                        setShowSuggestions(false);
+                                                                        bibleSearch.saveSearchToHistory(searchQuery);
+                                                                        setSplitRatio(1.0); // Auto-minimize results
+                                                                    }}
+                                                                    className="w-full text-left p-3 hover:bg-blue-50 dark:hover:bg-blue-900/10 rounded-xl transition-colors group mb-1"
+                                                                >
+                                                                    <div className="flex items-center gap-2 mb-1">
+                                                                        <span className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30 px-2 py-0.5 rounded-md">
+                                                                            {hit.title}
+                                                                        </span>
+                                                                    </div>
+                                                                    <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 leading-relaxed">
+                                                                        {hit.description}
+                                                                    </p>
+                                                                </button>
+                                                            ))}
 
-                                                    {/* View All */}
-                                                    <button
-                                                        onClick={handleSearchSubmit}
-                                                        className="w-full text-center py-3 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline border-t border-gray-100 dark:border-zinc-800 mt-2"
-                                                    >
-                                                        View all results
-                                                    </button>
-                                                </div>
-                                            </>
-                                        ) : (
-                                            <div className="text-center py-8 text-gray-400">
-                                                <p className="text-sm">No matches found</p>
+                                                            {/* View All */}
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.preventDefault();
+                                                                    setShowSuggestions(false); // Explicitly close dropdown
+                                                                    handleSearchSubmit();
+                                                                }}
+                                                                className="w-full text-center py-3 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline border-t border-gray-100 dark:border-zinc-800 mt-2"
+                                                            >
+                                                                View all results
+                                                            </button>
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <div className="text-center py-8 text-gray-400">
+                                                        <p className="text-sm">No matches found</p>
+                                                    </div>
+                                                )}
                                             </div>
-                                        )}
-                                    </div>
+                                        </>
+                                    )}
                                 </motion.div>
                             )}
                         </AnimatePresence>
@@ -591,16 +658,18 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
 
                         <button
                             onClick={() => {
-                                console.log('[BibleStudyModal] Toggling Fellowship. Current:', isFellowshipMode);
-                                setIsFellowshipMode(!isFellowshipMode);
+                                setRightPaneView(prev => prev === 'fellowship' ? 'notes' : 'fellowship');
+                                // Ensure split ratio is visible
+                                if (splitRatio > 0.3) setSplitRatio(0.2); // Ensure pane is expanded (0.2 = bottom pane takes 80%)
+                                else if (splitRatio < 0.1) setSplitRatio(0.2); // If hidden, show it
                             }}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-all duration-300 font-medium text-xs sm:text-sm shadow-sm ${isFellowshipMode
-                                ? 'bg-gradient-to-r from-cyan-500 to-purple-600 text-white shadow-cyan-500/20 hover:shadow-cyan-500/40 animate-pulse-slow'
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-all duration-500 font-medium text-xs sm:text-sm shadow-sm ${rightPaneView === 'fellowship'
+                                ? 'bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 bg-[length:200%_200%] animate-gradient-xy text-white shadow-[0_0_15px_rgba(168,85,247,0.5)] border-transparent'
                                 : 'hover:bg-gray-100 dark:hover:bg-zinc-800 text-gray-700 dark:text-gray-300'
                                 }`}
                         >
-                            <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                            <span className="hidden sm:inline">{isFellowshipMode ? 'Fellowshipping...' : 'Fellowship'}</span>
+                            <Users className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${rightPaneView === 'fellowship' ? 'text-white animate-pulse' : 'text-gray-500 dark:text-gray-400'}`} />
+                            <span className="hidden sm:inline">{rightPaneView === 'fellowship' ? 'Fellowshipping...' : 'Fellowship'}</span>
                         </button>
 
                         <div className="w-px h-6 bg-gray-200 dark:bg-zinc-800 mx-1" />
@@ -623,7 +692,10 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
 
                     {/* TOP PANE: Bible Reader */}
                     <div
-                        style={{ height: `${splitRatio * 100}%`, minHeight: 0 }}
+                        style={{
+                            height: splitRatio > 0.9 ? '100%' : `${splitRatio * 100}%`,
+                            // Remove minHeight logic from here, we control bottom pane now
+                        }}
                         className={
                             cn(
                                 "w-full border-b border-gray-200 dark:border-zinc-800 overflow-hidden relative",
@@ -641,11 +713,14 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                     animate={{ opacity: 1, y: 0 }}
                                     exit={{ opacity: 0, y: 10 }}
                                     onClick={() => setSplitRatio(0.5)}
-                                    className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-xs font-bold px-4 py-2 rounded-full shadow-lg z-20 flex items-center gap-2 cursor-pointer hover:bg-blue-700 transition-colors"
+                                    className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 cursor-pointer pointer-events-auto group"
                                 >
-                                    <span>{detailedResults.bible.length + detailedResults.sermons.length + detailedResults.notes.length} results found below</span>
-                                    <div className="animate-bounce mt-1">
-                                        <ChevronDown className="w-3 h-3" />
+                                    <div className="bg-blue-600 dark:bg-blue-500 text-white px-4 py-2 rounded-full shadow-lg shadow-blue-500/20 flex items-center gap-2 text-xs font-bold hover:scale-105 active:scale-95 transition-transform">
+                                        <span className="bg-white/20 px-1.5 py-0.5 rounded text-[10px]">
+                                            {detailedResults.bible.length + detailedResults.sermons.length + detailedResults.notes.length + (detailedResults.web?.length || 0)}
+                                        </span>
+                                        <span>Results Found below</span>
+                                        <ChevronDown className="w-4 h-4 animate-bounce" />
                                     </div>
                                 </motion.div>
                             )}
@@ -658,33 +733,104 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                         onTouchStart={handleDragStart}
                         className={
                             cn(
-                                "z-50 bg-gray-50 dark:bg-zinc-950 border-y border-gray-200 dark:border-zinc-800 py-1.5 flex items-center justify-center cursor-row-resize hover:bg-blue-50 dark:hover:bg-blue-900/10 transition-colors group relative shrink-0",
-                                (splitRatio === 0 || splitRatio === 1) && "py-2" // Slightly larger hit area when snapped
+                                "relative z-50 flex items-center justify-center cursor-row-resize py-3 -my-3 group select-none touch-none",
+                                // Active/Hover State for Aurora Effect
+                                "active:z-[60]"
                             )}
                     >
-                        {/* Visual Drag Handle Indicator */}
-                        < div className={
-                            cn(
-                                "w-12 h-1 bg-gray-300 dark:bg-zinc-700 rounded-full transition-all duration-300",
-                                (showResults && splitRatio > 0.8) ? "bg-blue-400 dark:bg-blue-500 w-16 h-1.5 animate-pulse shadow-[0_0_10px_rgba(59,130,246,0.5)]" : "group-hover:bg-blue-400 dark:group-hover:bg-blue-600"
-                            )} />
+                        {/* Visual Bar Container - INCREASED HIT AREA */}
+                        <div className="absolute inset-x-0 h-4 bg-transparent hover:bg-gradient-to-b hover:from-transparent hover:via-blue-50/50 hover:to-transparent dark:hover:via-blue-900/10 flex items-center justify-center cursor-row-resize z-50">
+                            {/* Aurora Neon Glow Indicator - INCREASED VISUAL SIZE */}
+                            <div className={
+                                cn(
+                                    "w-32 h-1.5 bg-gray-300 dark:bg-zinc-600 rounded-full transition-all duration-500 ease-out relative",
+                                    // Aurora Logic: Active or Special State
+                                    "group-hover:bg-blue-400 dark:group-hover:bg-blue-500 group-hover:w-40 group-hover:h-2 group-hover:shadow-[0_0_15px_rgba(59,130,246,0.5)]",
+                                    "group-active:w-80 group-active:h-2.5 group-active:bg-blue-500 group-active:shadow-[0_0_30px_10px_rgba(59,130,246,0.6)]"
+                                )
+                            } />
+                        </div>
 
                         {/* Bouncing Chevron Cue if results hidden */}
                         {
                             (showResults && splitRatio > 0.9) && (
-                                <div className="absolute -bottom-6 text-blue-500 animate-bounce">
+                                <div className="absolute -bottom-6 text-blue-500 animate-bounce pointer-events-none">
                                     <ChevronDown className="w-4 h-4" />
                                 </div>
                             )
                         }
                     </div>
 
-                    {/* BOTTOM PANE: Notes / Unified Results */}
-                    <div className="flex-1 flex flex-col min-h-0 bg-white dark:bg-zinc-900 overflow-hidden">
-                        {
-                            showResults ? (
-                                <div className="flex-1 overflow-y-auto custom-scrollbar p-6 bg-gray-50/50 dark:bg-zinc-900/50" >
-                                    <div className="flex items-center justify-between mb-4 sticky top-0 bg-gray-50/95 dark:bg-zinc-900/95 backdrop-blur z-10 py-2 border-b border-transparent">
+                    {/* BOTTOM PANE: Explicit Switch for View Modes */}
+                    <div
+                        className={cn(
+                            "flex-1 flex flex-col min-h-0 bg-white dark:bg-zinc-900 overflow-hidden",
+                            // STRICT COLLAPSE LOGIC: If split ratio > 0.9, force height to 32px (Title Only)
+                            splitRatio > 0.9 && "flex-none !h-[32px]"
+                        )}
+                    >
+                        {rightPaneView === 'search' ? (
+                            selectedVideo ? (
+                                /* --- VIDEO FOCUS VIEW --- */
+                                <div className="flex-1 flex flex-col min-h-0 bg-black relative">
+                                    {/* Header / Back */}
+                                    <div className="absolute top-0 left-0 right-0 z-20 p-4 bg-gradient-to-b from-black/80 to-transparent flex items-center justify-between">
+                                        <button
+                                            onClick={() => setSelectedVideo(null)}
+                                            className="flex items-center gap-2 text-white/80 hover:text-white bg-black/40 hover:bg-black/60 px-3 py-1.5 rounded-full backdrop-blur transition-all text-sm font-medium"
+                                        >
+                                            <ArrowRight className="w-4 h-4 rotate-180" />
+                                            Back to Results
+                                        </button>
+                                    </div>
+
+                                    {/* Video Player (Full Height) */}
+                                    <div className="flex-1 w-full bg-black flex items-center justify-center">
+                                        <iframe
+                                            width="100%"
+                                            height="100%"
+                                            src={`https://www.youtube.com/embed/${selectedVideo.videoId}?autoplay=1`}
+                                            title={selectedVideo.title}
+                                            frameBorder="0"
+                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                            allowFullScreen
+                                            className="w-full h-full"
+                                        />
+                                    </div>
+
+                                    {/* Quick Note Overlay (Bottom) */}
+                                    <div className="bg-gray-900/95 backdrop-blur border-t border-gray-800 p-4">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                                                <Edit3 className="w-3 h-3" />
+                                                Quick Notes
+                                            </h4>
+                                            {quickNoteContent.trim() && (
+                                                <span className="text-[10px] text-green-400">Drafting...</span>
+                                            )}
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <textarea
+                                                value={quickNoteContent}
+                                                onChange={(e) => setQuickNoteContent(e.target.value)}
+                                                placeholder="Jot down thoughts... (Saved to your main notes)"
+                                                className="flex-1 bg-gray-800 text-gray-200 text-sm rounded-lg border-gray-700 focus:ring-purple-500 focus:border-purple-500 p-2 resize-none h-16"
+                                            />
+                                            <button
+                                                onClick={handleQuickNoteSave}
+                                                disabled={!quickNoteContent.trim()}
+                                                className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg px-4 flex flex-col items-center justify-center gap-1 transition-colors min-w-[60px]"
+                                            >
+                                                <Plus className="w-5 h-5" />
+                                                <span className="text-[10px] font-bold">ADD</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                /* --- SEARCH VIEW --- */
+                                <div ref={searchResultsContainerRef} className="flex-1 overflow-y-auto custom-scrollbar p-6 bg-gray-50/50 dark:bg-zinc-900/50">
+                                    <div id="search-results-top" className="flex items-center justify-between mb-4 sticky top-0 bg-gray-50/95 dark:bg-zinc-900/95 backdrop-blur z-10 py-2 border-b border-transparent">
                                         <div className="flex items-center gap-2">
                                             <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Search Results</h3>
                                             <span className="bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-400 text-xs px-2 py-0.5 rounded-full font-medium">
@@ -700,7 +846,7 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                             >
                                                 {isNotesMaximized ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
                                             </button>
-                                            <button onClick={() => setShowResults(false)} className="text-xs text-blue-600 hover:underline font-medium">
+                                            <button onClick={() => setRightPaneView('notes')} className="text-xs text-blue-600 hover:underline font-medium">
                                                 Close Results
                                             </button>
                                         </div>
@@ -711,88 +857,252 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                             <RotateCw className="w-6 h-6 animate-spin" />
                                             <p>{isIndexing ? `Indexing ${searchVersion.toUpperCase()}... (First run only)` : 'Searching...'}</p>
                                         </div>
-                                    ) : (detailedResults.bible.length > 0 || detailedResults.sermons.length > 0 || detailedResults.notes.length > 0) ? (
-                                        <div className="space-y-8">
-                                            {/* SECTION 1: SERMONS (High Relevance) */}
-                                            {detailedResults.sermons.length > 0 && (
-                                                <div className="animate-in fade-in slide-in-from-bottom-2 duration-500 delay-75">
-                                                    <h4 className="flex items-center gap-2 text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider mb-3 pl-1">
-                                                        <Youtube className="w-4 h-4" /> Related Sermons
-                                                    </h4>
-                                                    <div className="grid gap-4 sm:grid-cols-2">
-                                                        {detailedResults.sermons.map((sermon: any) => (
-                                                            <div key={sermon.id} className="bg-white dark:bg-zinc-950 p-4 rounded-xl shadow-sm border border-purple-100 dark:border-purple-900/30 hover:border-purple-300 transition-colors group cursor-pointer active:scale-95 duration-100" onClick={() => {
-                                                                // Handle open sermon
-                                                                window.open(`/sermons/${sermon.id}`, '_blank');
-                                                                setSplitRatio(1.0); // Auto-minimize
-                                                            }}>
-                                                                <div className="flex items-start justify-between mb-2">
-                                                                    <div className="p-2 bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 rounded-lg group-hover:bg-purple-200 transition-colors">
-                                                                        <Youtube className="w-5 h-5" />
-                                                                    </div>
-                                                                    <div className="text-[10px] bg-gray-100 dark:bg-zinc-800 text-gray-500 px-2 py-0.5 rounded-full">
-                                                                        {sermon.subtitle}
-                                                                    </div>
-                                                                </div>
-                                                                <h5 className="font-semibold text-gray-900 dark:text-white mb-1 group-hover:text-purple-600 transition-colors">{sermon.title}</h5>
-                                                                <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2">{sermon.description}</p>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {/* SECTION 2: NOTES (Personal) */}
-                                            {detailedResults.notes.length > 0 && (
-                                                <div className="animate-in fade-in slide-in-from-bottom-2 duration-500 delay-100">
-                                                    <h4 className="flex items-center gap-2 text-xs font-bold text-yellow-600 dark:text-yellow-400 uppercase tracking-wider mb-3 pl-1">
-                                                        <Edit3 className="w-4 h-4" /> Your Notes
-                                                    </h4>
-                                                    <div className="grid gap-3">
-                                                        {detailedResults.notes.map((note: any) => (
-                                                            <div key={note.id} className="bg-white dark:bg-zinc-950 p-4 rounded-xl border border-yellow-100 dark:border-yellow-900/30 hover:border-yellow-300 transition-colors cursor-pointer" onClick={() => {
-                                                                // Open note context?
-                                                                setNotes(note.content); // Simplified preview
-                                                                setSplitRatio(1.0); // Auto-minimize
-                                                            }}>
-                                                                <h5 className="font-medium text-gray-900 dark:text-white text-sm mb-1">{note.title}</h5>
-                                                                <div className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2" dangerouslySetInnerHTML={{ __html: note.description || '' }} />
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {/* SECTION 3: SCRIPTURE (Bulk Matches) */}
+                                    ) : (detailedResults.bible.length > 0 || detailedResults.sermons.length > 0 || detailedResults.notes.length > 0 || (detailedResults.web && detailedResults.web.length > 0) || (detailedResults.topics && detailedResults.topics.length > 0)) ? (
+                                        <div className="space-y-8 pb-12">
+                                            {/* SECTION 1: BIBLE (Use First) */}
                                             {detailedResults.bible.length > 0 && (
-                                                <div className="animate-in fade-in slide-in-from-bottom-2 duration-500 delay-150">
-                                                    <h4 className="flex items-center gap-2 text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-3 pl-1">
-                                                        <BookOpen className="w-4 h-4" /> Scripture Matches
-                                                    </h4>
-                                                    <div className="grid gap-3">
-                                                        {detailedResults.bible.map((verse: any, idx: number) => (
-                                                            <div
-                                                                key={`verse-${idx}`}
-                                                                onClick={() => {
-                                                                    const meta = verse.metadata;
-                                                                    openBible({ book: meta.book, chapter: meta.chapter, verse: meta.verse }, true);
-                                                                    setSplitRatio(1.0); // Auto-minimize
-                                                                }}
-                                                                className="relative p-4 rounded-2xl border cursor-pointer transition-all hover:shadow-md group bg-white dark:bg-zinc-900 border-gray-100 dark:border-zinc-800 hover:border-blue-200 dark:hover:border-blue-800"
+                                                <div>
+                                                    <div className="flex items-center justify-between mb-3 px-1">
+                                                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                                                            <Book className="w-4 h-4" />
+                                                            Scripture Matches ({detailedResults.bible.length})
+                                                        </h4>
+                                                        {detailedResults.bible.length > 3 && (
+                                                            <button
+                                                                onClick={() => setIsBibleExpanded(!isBibleExpanded)}
+                                                                className="text-[10px] font-bold text-blue-600 hover:underline uppercase tracking-wider"
                                                             >
-                                                                <div className="flex items-center gap-2 mb-2">
-                                                                    <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300">
+                                                                {isBibleExpanded ? 'Show Less' : `Show All (${detailedResults.bible.length})`}
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    <div className="grid gap-2">
+                                                        {(isBibleExpanded ? detailedResults.bible : detailedResults.bible.slice(0, 3)).map((verse, i) => (
+                                                            <div
+                                                                key={i}
+                                                                onClick={() => {
+                                                                    openBible({ book: verse.metadata.book, chapter: verse.metadata.chapter, verse: verse.metadata.verse }, true);
+                                                                }}
+                                                                className="p-3 bg-white dark:bg-zinc-800 rounded-xl border border-gray-100 dark:border-zinc-700/50 shadow-sm hover:shadow-md hover:border-blue-200 dark:hover:border-blue-700 transition-all cursor-pointer group"
+                                                            >
+                                                                <div className="flex items-center justify-between mb-1.5">
+                                                                    <span className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded">
                                                                         {verse.title}
                                                                     </span>
+                                                                    <ArrowRight className="w-3.5 h-3.5 text-gray-300 group-hover:text-blue-500 transition-colors" />
                                                                 </div>
-                                                                <p className="text-gray-700 dark:text-gray-300 text-sm leading-relaxed font-serif">
-                                                                    {verse.description}
+                                                                <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed font-serif">
+                                                                    {verse.text || verse.description || verse.content || "Text unavailable"}
                                                                 </p>
                                                             </div>
                                                         ))}
                                                     </div>
+                                                    {/* Fade out indicator if collapsed and more exist */}
+                                                    {!isBibleExpanded && detailedResults.bible.length > 3 && (
+                                                        <div
+                                                            onClick={() => setIsBibleExpanded(true)}
+                                                            className="mt-2 text-center text-xs text-gray-400 hover:text-blue-500 cursor-pointer transition-colors border-t border-dashed border-gray-200 dark:border-zinc-800 pt-2"
+                                                        >
+                                                            + {detailedResults.bible.length - 3} more verses
+                                                        </div>
+                                                    )}
                                                 </div>
                                             )}
+
+                                            {/* SECTION 2: WEB VISUALS */}
+                                            {detailedResults.web && detailedResults.web.length > 0 && (
+                                                <div>
+                                                    <div className="flex items-center justify-between mb-3 px-1">
+                                                        <h4 className="text-xs font-bold text-pink-500 uppercase tracking-widest flex items-center gap-2">
+                                                            <Globe className="w-4 h-4" />
+                                                            Web Visuals
+                                                        </h4>
+                                                        <span className="text-[10px] text-gray-400 italic">Click to add to notes</span>
+                                                    </div>
+                                                    <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
+                                                        {detailedResults.web.map((img, i) => (
+                                                            <div
+                                                                key={i}
+                                                                onClick={() => {
+                                                                    if (editor) {
+                                                                        editor.chain().focus().setImage({ src: img.url }).run();
+                                                                        // toast.success("Image added to notes");
+                                                                    }
+                                                                }}
+                                                                className="relative rounded-lg overflow-hidden cursor-pointer group shadow-sm hover:shadow-md transition-all border border-gray-100 dark:border-zinc-800 h-24 sm:h-20"
+                                                            >
+                                                                <img src={img.url} alt={img.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                                                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                    <span className="text-[9px] text-white font-medium truncate w-full leading-tight">{img.title}</span>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* SECTION 2.5: VIDEOS (New) */}
+                                            {detailedResults.videos && detailedResults.videos.length > 0 && (
+                                                <div>
+                                                    <div className="flex items-center justify-between mb-3 px-1">
+                                                        <h4 className="text-xs font-bold text-red-500 uppercase tracking-widest flex items-center gap-2">
+                                                            <Globe className="w-4 h-4" />
+                                                            Videos
+                                                        </h4>
+                                                    </div>
+                                                    <div className="grid grid-cols-1 gap-3">
+                                                        {detailedResults.videos.map((video, i) => (
+                                                            <div
+                                                                key={i}
+                                                                onClick={() => setSelectedVideo({ videoId: video.videoId, title: video.title })}
+                                                                className="flex gap-3 bg-white dark:bg-zinc-800 p-3 rounded-xl border border-gray-100 dark:border-zinc-700/50 shadow-sm hover:shadow-md cursor-pointer group transition-all"
+                                                            >
+                                                                <div className="relative w-32 h-20 rounded-lg overflow-hidden flex-shrink-0 bg-black">
+                                                                    <img src={video.thumbnail} alt={video.title} className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity" />
+                                                                    <div className="absolute inset-0 flex items-center justify-center">
+                                                                        <div className="w-8 h-8 rounded-full bg-black/50 flex items-center justify-center backdrop-blur-sm group-hover:bg-red-600 transition-colors">
+                                                                            <div className="w-0 h-0 border-t-[5px] border-t-transparent border-l-[8px] border-l-white border-b-[5px] border-b-transparent ml-1"></div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex-1 min-w-0 flex flex-col justify-center">
+                                                                    <h5 className="font-bold text-gray-800 dark:text-gray-200 text-sm mb-1 leading-tight line-clamp-2 group-hover:text-red-500 transition-colors">
+                                                                        {video.title}
+                                                                    </h5>
+                                                                    <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1">{video.snippet}</p>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* SECTION 3: WEB INSIGHTS & TOPICS */}
+                                            {detailedResults.topics && detailedResults.topics.length > 0 && (
+                                                <div>
+                                                    <div className="flex items-center justify-between mb-3 px-1">
+                                                        <h4 className="text-xs font-bold text-teal-500 uppercase tracking-widest flex items-center gap-2">
+                                                            <LayoutGrid className="w-4 h-4" />
+                                                            Web Insights & Topics
+                                                        </h4>
+                                                    </div>
+                                                    <div className="space-y-3">
+                                                        {detailedResults.topics.map((topic, i) => (
+                                                            <div key={i} className="bg-white dark:bg-zinc-800 rounded-xl border border-gray-100 dark:border-zinc-700/50 p-4 shadow-sm">
+                                                                <h5 className="font-bold text-gray-900 dark:text-white mb-1">{topic.title}</h5>
+                                                                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 leading-relaxed">{topic.summary}</p>
+                                                                <div className="flex flex-wrap gap-2">
+                                                                    {topic.sources?.map((source: any, j: number) => (
+                                                                        <a
+                                                                            key={j}
+                                                                            href={source.url}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            className="flex items-center gap-1.5 px-2 py-1 bg-gray-50 dark:bg-zinc-700/50 hover:bg-teal-50 dark:hover:bg-teal-900/20 text-[10px] font-medium text-gray-600 dark:text-gray-300 hover:text-teal-600 dark:hover:text-teal-400 rounded-md border border-gray-100 dark:border-zinc-700 transition-colors"
+                                                                        >
+                                                                            <span>{source.name}</span>
+                                                                            <ExternalLink className="w-3 h-3" />
+                                                                        </a>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* SECTION 4: NOTES (Personal) */}
+                                            {detailedResults.notes.length > 0 && (
+                                                <div>
+                                                    <div className="flex items-center justify-between mb-3 px-1">
+                                                        <h4 className="text-xs font-bold text-yellow-500 uppercase tracking-widest flex items-center gap-2">
+                                                            <Edit3 className="w-4 h-4" />
+                                                            Your Notes
+                                                        </h4>
+                                                    </div>
+                                                    <div className="grid gap-2">
+                                                        {detailedResults.notes.map((note, i) => (
+                                                            <div
+                                                                key={i}
+                                                                className="p-4 bg-yellow-50/50 dark:bg-yellow-900/10 rounded-xl border border-yellow-100 dark:border-yellow-900/30 hover:shadow-md transition-all cursor-pointer"
+                                                            >
+                                                                <div className="flex items-center gap-2 mb-1">
+                                                                    <span className="text-xs font-bold text-yellow-700 dark:text-yellow-500">
+                                                                        {new Date(note.timestamp || Date.now()).toLocaleDateString()}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="prose prose-sm dark:prose-invert line-clamp-2 text-xs" dangerouslySetInnerHTML={{ __html: note.content || '' }} />
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* SECTION 5: SERMONS */}
+                                            {detailedResults.sermons.length > 0 && (
+                                                <div>
+                                                    <div className="flex items-center justify-between mb-3 px-1">
+                                                        <h4 className="text-xs font-bold text-purple-500 uppercase tracking-widest flex items-center gap-2">
+                                                            <Mic className="w-4 h-4" />
+                                                            Relevant Sermons
+                                                        </h4>
+                                                    </div>
+                                                    <div className="grid gap-2">
+                                                        {detailedResults.sermons.map((sermon, i) => (
+                                                            <div
+                                                                key={i}
+                                                                className="p-4 bg-white dark:bg-zinc-800 rounded-xl border border-gray-100 dark:border-zinc-700/50 shadow-sm hover:shadow-md hover:border-purple-200 dark:hover:border-purple-700 transition-all cursor-pointer group"
+                                                            >
+                                                                <h5 className="font-bold text-gray-800 dark:text-gray-200 text-sm mb-1 group-hover:text-purple-600 transition-colors">
+                                                                    {sermon.title}
+                                                                </h5>
+                                                                <div className="flex items-center gap-2 text-xs text-gray-400">
+                                                                    <span>{sermon.speaker || 'Unknown Speaker'}</span>
+                                                                    <span>•</span>
+                                                                    <span>{new Date(sermon.date || Date.now()).toLocaleDateString()}</span>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* DYNAMIC AI SUMMARY */}
+                                            <div className="bg-gradient-to-br from-indigo-50 to-white dark:from-indigo-950/30 dark:to-zinc-900 p-5 rounded-xl border border-indigo-100 dark:border-indigo-900/50 shadow-sm relative overflow-hidden">
+                                                <div className="absolute top-0 right-0 p-3 opacity-5 dark:opacity-10">
+                                                    <Sparkles className="w-24 h-24" />
+                                                </div>
+                                                <div className="flex items-center gap-2 mb-3">
+                                                    <div className="p-1.5 bg-indigo-100 dark:bg-indigo-900/50 rounded-lg">
+                                                        <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                                                    </div>
+                                                    <h4 className="font-bold text-gray-800 dark:text-white text-sm">AI Pulse</h4>
+                                                </div>
+                                                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed relative z-10">
+                                                    Based on your search for <span className="font-medium text-gray-900 dark:text-white">"{searchQuery}"</span>, we found <strong>{detailedResults.bible.length}</strong> scriptures, <strong>{detailedResults.sermons.length}</strong> sermons, and <strong>{(detailedResults.web?.length || 0) + (detailedResults.topics?.length || 0)}</strong> web insights.
+                                                    {(detailedResults.topics && detailedResults.topics.length > 0) && (
+                                                        <span> Top resources include <em>"{detailedResults.topics[0].title}"</em> and others.</span>
+                                                    )}
+                                                    <span className="block mt-2 text-indigo-600 dark:text-indigo-400 font-medium">Click "Explore Rabbit Hole" to uncover hidden theological connections.</span>
+                                                </p>
+                                                <div className="mt-4 flex gap-2 relative z-10">
+                                                    <button
+                                                        onClick={() => handleAskAi(`I want to go down a biblical rabbit hole regarding "${searchQuery}". Connect this to detailed theology, original Hebrew/Greek nuances, historic context, and unexpected cross-references. I want to explore the deep connections.`)}
+                                                        className="text-xs bg-white dark:bg-zinc-800 border border-indigo-200 dark:border-indigo-800 px-3 py-1.5 rounded-full hover:bg-indigo-50 dark:hover:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 transition-colors flex items-center gap-1 font-medium"
+                                                    >
+                                                        <Plus className="w-3 h-3" />
+                                                        Explore Rabbit Hole
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            searchResultsContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+                                                        }}
+                                                        className="text-xs bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 px-3 py-1.5 rounded-full hover:bg-gray-50 dark:hover:bg-zinc-700 transition-colors flex items-center gap-1 text-gray-500"
+                                                    >
+                                                        View Sources
+                                                    </button>
+                                                </div>
+                                            </div>
                                         </div>
                                     ) : (
                                         <div className="text-center py-20 text-gray-400">
@@ -800,62 +1110,76 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                         </div>
                                     )}
                                 </div>
-                            ) : (
-                                <div className="h-full flex flex-col">
-                                    {/* Toolbar Header */}
-                                    <div className="sticky top-0 z-10 bg-white dark:bg-zinc-900 border-b border-gray-100 dark:border-zinc-800 px-4 py-2 flex items-center justify-between shrink-0">
-                                        <div className="flex flex-col gap-0.5 flex-1 mr-4">
-                                            <div className="flex items-center gap-2">
-                                                <Edit3 className="w-4 h-4 text-blue-500 shrink-0" />
-                                                <input
-                                                    type="text"
-                                                    value={noteTitle}
-                                                    onChange={(e) => handleTitleChange(e.target.value)}
-                                                    className="bg-transparent border-none p-0 text-base sm:text-sm font-bold text-gray-800 dark:text-white focus:ring-0 w-full placeholder-gray-400"
-                                                    placeholder="Note Title..."
-                                                />
-                                            </div>
-                                            {savingNotes && <span className="text-[10px] text-green-600 animate-pulse font-medium ml-6">Saving...</span>}
-                                        </div>
+                            )
+                        ) : rightPaneView === 'fellowship' ? (
+                            /* --- FELLOWSHIP VIEW --- */
+                            <FellowshipView
+                                editorProps={{
+                                    content: '',
+                                    onChange: (html: string) => { }, // Read-only from this level in theory, but Tiptap handles real-time
+                                    collaborationId: `fellowship-${tabs.find(t => t.id === activeTabId)?.reference.book}-${tabs.find(t => t.id === activeTabId)?.reference.chapter}`,
+                                    user: tiptapUser,
+                                    onAskAi: handleAskAi
+                                }}
+                                scrollId={tabs.find(t => t.id === activeTabId)?.reference.book + ' ' + tabs.find(t => t.id === activeTabId)?.reference.chapter}
+                            />
+                        ) : (
+                            /* --- PERSONAL NOTES VIEW --- */
+                            /* --- PERSONAL NOTES VIEW --- */
+                            <div className="h-full flex flex-col overflow-hidden">
+                                {/* Toolbar Header */}
+                                <div className="sticky top-0 z-10 bg-white dark:bg-zinc-900 border-b border-gray-100 dark:border-zinc-800 px-4 py-2 flex items-center justify-between shrink-0">
+                                    <div className="flex flex-col gap-0.5 flex-1 mr-4">
                                         <div className="flex items-center gap-2">
-                                            {/* Toggle Full Screen for Notes */}
-                                            <button
-                                                onClick={toggleNotesMaximize}
-                                                className="p-1.5 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg text-gray-400 hover:text-gray-600 transition-colors"
-                                                title={isNotesMaximized ? "Restore View" : "Full Screen Notes"}
-                                            >
-                                                {isNotesMaximized ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div className="border-b border-gray-100 dark:border-zinc-800 px-2 bg-gray-50/50 dark:bg-zinc-900/50">
-                                        <EditorToolbar
-                                            editor={editor}
-                                            className="border-none shadow-none bg-transparent mb-0 pb-0 justify-center scale-90 origin-left"
-                                        />
-                                    </div>
-
-                                    {/* Scrollable Editor Area */}
-                                    <div className="flex-1 overflow-y-auto p-4 sm:p-6 custom-scrollbar bg-gray-50 dark:bg-zinc-900/50">
-                                        <div className="max-w-4xl mx-auto border border-gray-200 dark:border-zinc-800 rounded-xl overflow-hidden min-h-full bg-white dark:bg-zinc-950 shadow-sm relative">
-                                            <TiptapEditor
-                                                content={notes}
-                                                onChange={(content) => handleSaveNotes(content)}
-                                                className="p-6 min-h-[500px] prose dark:prose-invert max-w-none focus:outline-none"
-                                                showToolbar={false}
-                                                onEditorReady={setEditor}
-                                                onAskAi={handleAskAi}
-                                                onLinkClick={handleLinkClick}
-                                                collaborationId={isFellowshipMode ? `fellowship-${tabs.find(t => t.id === activeTabId)?.reference.book}-${tabs.find(t => t.id === activeTabId)?.reference.chapter}` : undefined}
-                                                user={{ name: userData?.displayName || 'Anonymous', color: '#3b82f6' }}
+                                            <Edit3 className="w-4 h-4 text-blue-500 shrink-0" />
+                                            <input
+                                                type="text"
+                                                value={noteTitle}
+                                                onChange={(e) => handleTitleChange(e.target.value)}
+                                                className="bg-transparent border-none p-0 text-base sm:text-sm font-bold text-gray-800 dark:text-white focus:ring-0 w-full placeholder-gray-400"
+                                                placeholder="Note Title..."
                                             />
                                         </div>
+                                        {savingNotes && <span className="text-[10px] text-green-600 animate-pulse font-medium ml-6">Saving...</span>}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        {/* Toggle Full Screen for Notes */}
+                                        <button
+                                            onClick={toggleNotesMaximize}
+                                            className="p-1.5 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg text-gray-400 hover:text-gray-600 transition-colors"
+                                            title={isNotesMaximized ? "Restore View" : "Full Screen Notes"}
+                                        >
+                                            {isNotesMaximized ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                                        </button>
                                     </div>
                                 </div>
-
-                            )}
-                    </div>
-                </div>
+                                <div
+                                    className="h-full overflow-y-auto px-4 pt-4 pb-48 custom-scrollbar cursor-text"
+                                    onClick={() => {
+                                        // Safely focus editor if available
+                                        if (editor && !editor.isDestroyed) {
+                                            editor.chain().focus().run();
+                                        }
+                                    }}
+                                >
+                                    <TiptapEditor
+                                        content={notes}
+                                        onChange={handleNoteChange}
+                                        placeholder="Write your study notes here..."
+                                        className="min-h-full focus:outline-none max-w-none prose prose-sm dark:prose-invert text-gray-900 dark:text-gray-100"
+                                        onEditorReady={setEditor}
+                                        onAskAi={handleAskAi}
+                                        onLinkClick={handleLinkClick}
+                                        showToolbar={true} // Use internal sticky toolbar
+                                        // Ensure collaborationId is undefined for personal notes
+                                        collaborationId={undefined}
+                                        user={tiptapUser}
+                                    />
+                                </div>
+                            </div>
+                        )}
+                    </div >
+                </div >
 
                 <BibleAiChatModal
                     isOpen={isAiChatOpen}
@@ -871,8 +1195,12 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                     onMessagesChange={setAiMessages}
                     onInsertToNotes={handleAddToNotes}
                     onCreateMeeting={(topic) => {
-                        setCreateMeetingDefaultTopic(topic || '');
-                        setIsCreateMeetingOpen(true);
+                        setCreateMeetingState({
+                            isOpen: true,
+                            topic: topic || '',
+                            date: new Date().toISOString()
+                        });
+                        setIsAiChatOpen(false); // Close chat to show meeting modal
                     }}
                     preserveScrollLockOnClose={true}
                 />
@@ -891,7 +1219,7 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                 <CreateMeetingModal
                     isOpen={createMeetingState.isOpen}
                     onClose={() => setCreateMeetingState({ isOpen: false })}
-                    initialTopic={createMeetingState.topic || createMeetingDefaultTopic}
+                    initialTopic={createMeetingState.topic || ''}
                     initialDate={createMeetingState.date}
                     initialDescription={editor ? editor.getHTML() : ''}
                 />

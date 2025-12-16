@@ -4,7 +4,9 @@ import { onCall, onRequest } from 'firebase-functions/v2/https';
 // import * as logger from 'firebase-functions/logger';
 import { defineSecret } from 'firebase-functions/params';
 const googleApiKey = defineSecret('GOOGLE_API_KEY');
-admin.initializeApp();
+if (!admin.apps.length) {
+    admin.initializeApp();
+}
 
 // Import social functions
 import { facebookWebhook, syncFacebookPosts, syncFacebookLiveStatus } from './social/facebook';
@@ -98,6 +100,7 @@ export const debugPosts = onRequest(async (req, res) => {
 import { chatWithBibleBot, ingestSermon } from './ai/chatbot';
 export { ingestContent, scheduledWebsiteCrawl, ingestSocialPost } from './ai/knowledge_base';
 export * from './ai/comments';
+export { onMeetingCreated } from './notifications';
 export * from './meeting'; // Export meeting functions
 
 
