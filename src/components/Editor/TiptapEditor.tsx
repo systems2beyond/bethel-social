@@ -15,7 +15,7 @@ import Link from '@tiptap/extension-link';
 import { Bold, Italic, Underline as UnderlineIcon, List, ListOrdered, Heading1, Heading2, Quote, Highlighter, Sparkles, FileText, Sticker, Maximize2, Minimize2 } from 'lucide-react';
 import { StickerPopover } from './StickerPopover';
 import Collaboration from '@tiptap/extension-collaboration';
-// import CollaborationCursor from '@tiptap/extension-collaboration-cursor';
+import CollaborationCursor from '@tiptap/extension-collaboration-cursor';
 import * as Y from 'yjs';
 import { WebrtcProvider } from 'y-webrtc';
 import { cn } from '@/lib/utils';
@@ -212,29 +212,38 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
         return collaborationId ? new Y.Doc() : null;
     }, [collaborationId]);
 
+    const [provider, setProvider] = React.useState<any>(null);
+
     // Manage Provider lifecycle
     useEffect(() => {
         if (!yDoc || !collaborationId) return;
-        const signalingServers = ['wss://signaling.yjs.dev'];
+        const signalingServers = [
+            'wss://signaling.yjs.dev',
+            'wss://y-webrtc-signaling-eu.herokuapp.com',
+            'wss://y-webrtc-signaling-us.herokuapp.com'
+        ];
         console.log('[Tiptap] Initializing Provider for:', collaborationId, 'with signaling:', signalingServers);
 
         // Use public signaling servers for WebrtcProvider
         // Removed heroku servers as they are often down/unreliable
-        const provider = new WebrtcProvider(collaborationId, yDoc, {
+        const newProvider = new WebrtcProvider(collaborationId, yDoc, {
             signaling: signalingServers
         });
 
         // Add user awareness
         if (user) {
-            provider.awareness.setLocalStateField('user', {
+            newProvider.awareness.setLocalStateField('user', {
                 name: user.name,
                 color: user.color,
             });
         }
 
+        setProvider(newProvider);
+
         return () => {
             console.log('[Tiptap] Destroying provider');
-            provider.destroy();
+            newProvider.destroy();
+            setProvider(null);
         }
     }, [yDoc, collaborationId, user]);
 
@@ -257,11 +266,14 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
                 openOnClick: false,
             }),
             // Conditionally add collaboration extensions
-            ...(collaborationId && yDoc ? [
+            ...(collaborationId && yDoc && provider ? [
                 Collaboration.configure({
                     document: yDoc,
                 }),
-                // CollaborationCursor completely removed to prevent 'null awareness' crash
+                CollaborationCursor.configure({
+                    provider: provider,
+                    user: user || { name: 'Anonymous', color: '#f783ac' },
+                }),
             ] : []),
             ExtensionBubbleMenu.configure({
                 pluginKey: 'bubbleMenu',
@@ -314,7 +326,7 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
                 onEditorReady(editor);
             }
         }
-    }, [collaborationId, yDoc]); // Re-create editor if these change
+    }, [collaborationId, yDoc, provider]); // Re-create editor if these change
 
     useImperativeHandle(ref, () => ({
         insertContent: (content: string) => {

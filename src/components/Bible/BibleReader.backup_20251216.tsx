@@ -1,9 +1,8 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useState, useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight, ChevronDown, Loader2, Copy, Edit3, Check, BookOpen, PenLine, X, Plus, Sparkles, Folder } from 'lucide-react';
-import { useBible, TabGroup, Tab } from '@/context/BibleContext';
+import { useBible } from '@/context/BibleContext';
 import { cn } from '@/lib/utils';
 
 // Bible Data Structure
@@ -157,43 +156,26 @@ export default function BibleReader({ onInsertNote, onAskAi }: BibleReaderProps)
         setSelectedVerses([]);
     }, [reference.book, reference.chapter, version, activeTabId]); // Re-fetch on tab switch if needed (ref changes)
 
-    // Scroll to verse when text loads (and auto-select)
+    // Scroll to specific verse if requested
     useEffect(() => {
-        if (!loading && text.length > 0 && reference.verse) {
-            const targetVerse = reference.verse; // Capture current value
-            const targetEndVerse = reference.endVerse;
+        if (!loading && reference.verse && scrollRef.current) {
+            const verseEl = document.getElementById(`verse-${reference.verse}`);
+            if (verseEl) {
+                verseEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-            // Small timeout to allow DOM paint
-            const timer = setTimeout(() => {
-                const element = document.getElementById(`verse-${targetVerse}`);
-                if (element) {
-                    element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-                    // User requested NO auto-highlight, just scroll.
-                    // We only auto-select if explicitly deep-linked with range (maybe?)
-                    // User said: "dont highlight the text let the user do that just sscroll to the text"
-                    // So we will remove the single verse selection.
-
-                    // Keeping range selection if explicitly defined (optional, but usually "Note" links are single verses)
-                    if (targetEndVerse) {
-                        const range: number[] = [];
-                        for (let i = targetVerse; i <= targetEndVerse; i++) {
-                            range.push(i);
-                        }
-                        // If it's a range, maybe we still select? The user said "text", implies single verse.
-                        // I'll comment it out to be safe and strictly follow "let the user do that".
-                        // actually, ranges are rare deep links. If I clicked "John 3:16-18", I probably want to see that block.
-                        // But for single verse links, definitely no highlight.
-                        // I will DISABLE ALL auto-highlight for now to be safe.
-                        // setSelectedVerses(range);
-                    } else {
-                        // setSelectedVerses([targetVerse]);
+                // Auto-select the verse range if deep-linked
+                if (reference.endVerse) {
+                    const range = [];
+                    for (let i = reference.verse; i <= reference.endVerse; i++) {
+                        range.push(i);
                     }
+                    setSelectedVerses(range);
+                } else {
+                    setSelectedVerses([reference.verse]);
                 }
-            }, 300); // 300ms delay to be safe
-            return () => clearTimeout(timer);
+            }
         }
-    }, [loading, text, reference.verse, reference.book, reference.chapter, reference.endVerse]);
+    }, [loading, reference.verse, reference.endVerse]);
 
     const handleVerseClick = (verseNum: number) => {
         if (selectedVerses.includes(verseNum)) {
@@ -283,19 +265,88 @@ export default function BibleReader({ onInsertNote, onAskAi }: BibleReaderProps)
                         </button>
                     ))}
 
-                    {/* Render Groups with Dropdown Logic */}
-                    {groups.map(group => (
-                        <GroupDropdown
-                            key={group.id}
-                            group={group}
-                            tabs={tabs.filter(t => t.groupId === group.id)}
-                            activeTabId={activeTabId}
-                            setActiveTab={setActiveTab}
-                            toggleGroupCollapse={toggleGroupCollapse}
-                            closeGroup={closeGroup}
-                            closeTab={closeTab}
-                        />
-                    ))}
+                    {/* Render Groups */}
+                    {groups.map(group => {
+                        const groupTabs = tabs.filter(t => t.groupId === group.id);
+                        // Safe color handling for background opacity
+                        const isHex = group.color.startsWith('#');
+                        // Simple opacity simulation or just use the color directly if needed, 
+                        // but for 'bg-opacity' with arbitrary hex we usually need style={{ backgroundColor: ... + opacity }}
+
+                        return (
+                            <div
+                                key={group.id}
+                                className={cn(
+                                    "flex items-center h-[36px] mt-auto rounded-t-lg mx-1 transition-all border-b-0 overflow-hidden",
+                                    group.isCollapsed ? "w-auto" : "w-auto pr-1"
+                                )}
+                                style={{
+                                    border: `1px solid ${group.color}`,
+                                    borderBottom: 'none',
+                                    backgroundColor: isHex ? `${group.color}15` : undefined // 15 = ~8% opacity for hex
+                                }}
+                            >
+                                {/* Group Header (Parent Tab) */}
+                                <div
+                                    className="flex items-center gap-1.5 px-3 py-1.5 cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 h-full transition-colors"
+                                    onClick={() => toggleGroupCollapse(group.id)}
+                                >
+                                    {group.isCollapsed ? <ChevronRight className="w-3.5 h-3.5 text-gray-400" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-400" />}
+                                    <Folder className="w-3.5 h-3.5" style={{ color: group.color }} />
+                                    <span className="text-[11px] font-bold uppercase tracking-wider text-gray-600 dark:text-gray-300 truncate max-w-[80px]">
+                                        {group.name}
+                                    </span>
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            closeGroup(group.id);
+                                        }}
+                                        className="ml-1 opacity-0 hover:opacity-100 hover:text-red-400 transition-opacity"
+                                    >
+                                        <X className="w-3 h-3" />
+                                    </button>
+                                </div>
+
+                                {/* Tabs in Group (Nested / Horizontal Accordion) */}
+                                {!group.isCollapsed && groupTabs.map(tab => (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => setActiveTab(tab.id)}
+                                        className={cn(
+                                            "relative px-3 py-1.5 min-w-[90px] max-w-[140px] cursor-pointer h-[calc(100%-4px)] my-0.5 rounded transition-all group/tab flex items-center justify-between gap-2 ml-1",
+                                            activeTabId === tab.id
+                                                ? "bg-white dark:bg-zinc-800 shadow-sm"
+                                                : "hover:bg-black/5 dark:hover:bg-white/5 text-gray-500 dark:text-gray-400"
+                                        )}
+                                    >
+                                        {/* Active Indicator inside group (left vertical bar) */}
+                                        {activeTabId === tab.id && (
+                                            <div
+                                                className="absolute left-0 top-1 bottom-1 w-[3px] rounded-full"
+                                                style={{ backgroundColor: group.color }}
+                                            />
+                                        )}
+
+                                        <span className={cn(
+                                            "truncate text-xs font-medium pl-1",
+                                            activeTabId === tab.id ? "text-gray-900 dark:text-gray-200" : ""
+                                        )}>
+                                            {tab.reference.book} {tab.reference.chapter}
+                                        </span>
+                                        <span
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                closeTab(tab.id);
+                                            }}
+                                            className="opacity-0 group-hover/tab:opacity-100 p-0.5 hover:bg-gray-200 dark:hover:bg-zinc-700 rounded-full transition-all"
+                                        >
+                                            <X className="w-3 h-3 text-gray-400" />
+                                        </span>
+                                    </button>
+                                ))}
+                            </div>
+                        );
+                    })}
 
                     <button
                         onClick={() => openBible(undefined, true)}
@@ -474,128 +525,5 @@ export default function BibleReader({ onInsertNote, onAskAi }: BibleReaderProps)
                 </div>
             )}
         </div>
-    );
-}
-
-interface GroupDropdownProps {
-    group: TabGroup;
-    tabs: Tab[];
-    activeTabId: string;
-    setActiveTab: (id: string) => void;
-    toggleGroupCollapse: (id: string) => void;
-    closeGroup: (id: string) => void;
-    closeTab: (id: string) => void;
-}
-
-function GroupDropdown({ group, tabs, activeTabId, setActiveTab, toggleGroupCollapse, closeGroup, closeTab }: GroupDropdownProps) {
-    const buttonRef = useRef<HTMLDivElement>(null);
-    const [coords, setCoords] = useState({ top: 0, left: 0, width: 200 });
-    const isHex = group.color.startsWith('#');
-
-    // Update coordinates when opening
-    useLayoutEffect(() => {
-        if (!group.isCollapsed && buttonRef.current) {
-            const rect = buttonRef.current.getBoundingClientRect();
-            // Align dropdown logic
-            setCoords({
-                top: rect.bottom + 8, // slight gap
-                left: Math.max(16, rect.left), // Prevent going off-screen left
-                width: Math.max(200, rect.width)
-            });
-        }
-    }, [group.isCollapsed]);
-
-    return (
-        <>
-            <div
-                ref={buttonRef}
-                className={cn(
-                    "flex items-center h-[36px] mt-auto rounded-t-lg mx-1 transition-all border-b-0 cursor-pointer group select-none",
-                    !group.isCollapsed ? "bg-white dark:bg-zinc-800 z-20 relative" : "bg-transparent hover:bg-gray-100 dark:hover:bg-zinc-800/50"
-                )}
-                style={{
-                    border: `1px solid ${group.color}`,
-                    borderBottom: !group.isCollapsed ? 'none' : undefined,
-                    backgroundColor: group.isCollapsed ? (isHex ? `${group.color}15` : undefined) : undefined
-                }}
-                onClick={() => toggleGroupCollapse(group.id)}
-            >
-                <div className="flex items-center gap-1.5 px-3 py-1.5">
-                    {group.isCollapsed ? <ChevronRight className="w-3.5 h-3.5 text-gray-400" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-400" />}
-                    <Folder className="w-3.5 h-3.5" style={{ color: group.color }} />
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-gray-600 dark:text-gray-300 truncate max-w-[100px]">
-                        {group.name}
-                    </span>
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            closeGroup(group.id);
-                        }}
-                        className="ml-1 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-opacity"
-                    >
-                        <X className="w-3 h-3" />
-                    </button>
-                </div>
-
-                {/* Active Indicator Line if Collapsed but Child Active */}
-                {group.isCollapsed && tabs.some(t => t.id === activeTabId) && (
-                    <div className="absolute bottom-[-1px] left-0 right-0 h-[3px] z-20" style={{ backgroundColor: group.color }} />
-                )}
-            </div>
-
-            {/* Portal Dropdown */}
-            {!group.isCollapsed && createPortal(
-                <div className="fixed inset-0 z-[99999] isolate pointer-events-none">
-                    {/* Backdrop for click-outside */}
-                    <div className="absolute inset-0 pointer-events-auto" onClick={() => toggleGroupCollapse(group.id)} />
-
-                    {/* Dropdown Content */}
-                    <div
-                        className="absolute pointer-events-auto bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 shadow-xl rounded-b-lg rounded-r-lg max-h-[300px] overflow-y-auto custom-scrollbar flex flex-col p-1 animate-in fade-in zoom-in-95 duration-100 origin-top-left"
-                        style={{
-                            top: coords.top,
-                            left: coords.left,
-                            minWidth: '220px',
-                            maxWidth: '300px',
-                            borderTop: `2px solid ${group.color}`
-                        }}
-                        onClick={e => e.stopPropagation()}
-                    >
-                        {tabs.map(tab => (
-                            <button
-                                key={tab.id}
-                                onClick={() => {
-                                    setActiveTab(tab.id);
-                                    // Optional: Close dropdown on selection? User said "drop down so they can see everything". 
-                                    // Usually users want to switch tabs. I'll keep it open for "Workbook" feel, or close? 
-                                    // Standard tabs don't close container. But this is a "Dropdown".
-                                    // Let's Keep it Open for now as it acts like a "Folder". User can click outside to close.
-                                }}
-                                className={cn(
-                                    "flex items-center justify-between w-full px-3 py-2 text-left rounded-md transition-colors text-xs mb-0.5",
-                                    activeTabId === tab.id
-                                        ? "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 font-medium"
-                                        : "hover:bg-gray-100 dark:hover:bg-zinc-800 text-gray-600 dark:text-gray-300"
-                                )}
-                            >
-                                <span>{tab.reference.book} {tab.reference.chapter}</span>
-                                <span
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        closeTab(tab.id);
-                                    }}
-                                    className="p-1 hover:bg-gray-200 dark:hover:bg-zinc-700 rounded-full text-gray-400 hover:text-red-400 opacity-60 hover:opacity-100"
-                                >
-                                    <X className="w-3 h-3" />
-                                </span>
-                            </button>
-                        ))}
-                        {tabs.length === 0 && (
-                            <div className="text-center py-2 text-xs text-gray-400 italic">Empty Group</div>
-                        )}
-                    </div>
-                </div>
-                , document.body)}
-        </>
     );
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
@@ -153,209 +154,237 @@ export default function CreateMeetingModal({ isOpen, onClose, initialTopic = '',
         }
     };
 
-    if (!isOpen) return null;
+    const [mounted, setMounted] = useState(false);
 
-    return (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                className="bg-white dark:bg-zinc-900 w-full max-w-md rounded-2xl shadow-xl overflow-hidden border border-gray-100 dark:border-zinc-800"
-            >
-                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-zinc-800 bg-gray-50/50 dark:bg-zinc-900/50">
-                    <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                        <Video className="w-5 h-5 text-blue-600" />
-                        Schedule Meeting <span className="text-[10px] bg-red-500 text-white px-1 rounded">v2</span>
-                    </h3>
-                    <button onClick={onClose} className="p-1 hover:bg-gray-200 dark:hover:bg-zinc-800 rounded-full transition-colors">
-                        <X className="w-5 h-5 text-gray-500" />
-                    </button>
-                </div>
+    useEffect(() => {
+        setMounted(true);
+        if (isOpen) {
+            document.body.classList.add('modal-open');
+        }
+        return () => {
+            document.body.classList.remove('modal-open');
+            setMounted(false);
+        };
+    }, [isOpen]);
 
-                <div className="p-6">
-                    {successLink ? (
-                        <div className="text-center py-6">
-                            <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                                <Check className="w-8 h-8 text-green-600 dark:text-green-400" />
-                            </div>
-                            <h4 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Meeting Created!</h4>
-                            <p className="text-gray-500 dark:text-gray-400 mb-6 text-sm">
-                                Your Google Meet link is ready.
-                            </p>
+    if (!isOpen || !mounted) return null;
 
-                            <a
-                                href={successLink}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="block w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors mb-3"
-                            >
-                                Join Meeting Now
-                            </a>
-                            <button
-                                onClick={onClose}
-                                className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                            >
-                                Close
+    const modalContent = (
+        <div className="relative z-[50000]" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+            {/* Backdrop - Independent fixed layer */}
+            <div
+                className="fixed inset-0 bg-black/75 backdrop-blur-md transition-opacity"
+                aria-hidden="true"
+                onClick={onClose}
+            />
+
+            {/* Scroll Container - Independent fixed layer sitting on top */}
+            <div className="fixed inset-0 z-10 overflow-y-auto">
+                <div className="flex min-h-full items-center justify-center p-4 text-center">
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                        className="relative transform overflow-hidden rounded-2xl bg-white dark:bg-zinc-900 text-left shadow-xl transition-all sm:my-8 w-full max-w-md border border-gray-100 dark:border-zinc-800"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-zinc-800 bg-gray-50/50 dark:bg-zinc-900/50">
+                            <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                                <Video className="w-5 h-5 text-blue-600" />
+                                Schedule Meeting <span className="text-[10px] bg-red-500 text-white px-1 rounded">v2</span>
+                            </h3>
+                            <button onClick={onClose} className="p-1 hover:bg-gray-200 dark:hover:bg-zinc-800 rounded-full transition-colors">
+                                <X className="w-5 h-5 text-gray-500" />
                             </button>
                         </div>
-                    ) : (
-                        <form onSubmit={handleCreate} className="space-y-4">
-                            <div>
-                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                                    <Type className="w-3.5 h-3.5" /> Topic
-                                </label>
-                                <input
-                                    type="text"
-                                    required
-                                    value={topic}
-                                    onChange={(e) => setTopic(e.target.value)}
-                                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-700 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                                    placeholder="e.g. Weekly Fellowship"
-                                />
-                            </div>
 
-                            <div>
-                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                                    <Clock className="w-3.5 h-3.5" /> Date & Time
-                                </label>
-                                <input
-                                    type="datetime-local"
-                                    required
-                                    value={startTime}
-                                    onChange={(e) => setStartTime(e.target.value)}
-                                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-700 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all dark:[color-scheme:dark]"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                                    <Type className="w-3.5 h-3.5" /> Attendees ({selectedUsers.length} selected)
-                                </label>
-
-                                {/* Visual Grid */}
-                                <UserInvitationGrid
-                                    selectedUsers={selectedUsers}
-                                    onSelectionChange={setSelectedUsers}
-                                />
-
-                                {/* Manual Input */}
-                                <div className="mt-3">
-                                    <input
-                                        type="text"
-                                        value={attendeesText}
-                                        onChange={(e) => setAttendeesText(e.target.value)}
-                                        placeholder="Add external emails (comma separated)..."
-                                        className="w-full px-4 py-2 bg-gray-50 dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-700 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm"
-                                    />
-                                    <p className="text-[10px] text-gray-400 mt-1.5 ml-1">
-                                        Selected: {selectedUsers.length} users • Manual: {attendeesText ? 'Active' : 'Empty'}
+                        <div className="p-6">
+                            {successLink ? (
+                                <div className="text-center py-6">
+                                    <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <Check className="w-8 h-8 text-green-600 dark:text-green-400" />
+                                    </div>
+                                    <h4 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Meeting Created!</h4>
+                                    <p className="text-gray-500 dark:text-gray-400 mb-6 text-sm">
+                                        Your Google Meet link is ready.
                                     </p>
+
+                                    <a
+                                        href={successLink}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="block w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors mb-3"
+                                    >
+                                        Join Meeting Now
+                                    </a>
+                                    <button
+                                        onClick={onClose}
+                                        className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                                    >
+                                        Close
+                                    </button>
                                 </div>
-                            </div>
-
-                            {/* Resource Linking */}
-                            <div>
-                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                                    <Scroll className="w-3.5 h-3.5" /> Attached Resource (Optional)
-                                </label>
-
-                                {isPickingResource ? (
-                                    <div className="bg-gray-50 dark:bg-zinc-800/50 p-3 rounded-xl border border-gray-200 dark:border-zinc-700">
-                                        <ResourcePicker
-                                            onSelect={(r) => {
-                                                setLinkedResource(r);
-                                                setIsPickingResource(false);
-                                            }}
-                                            onCancel={() => setIsPickingResource(false)}
+                            ) : (
+                                <form onSubmit={handleCreate} className="space-y-4">
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                                            <Type className="w-3.5 h-3.5" /> Topic
+                                        </label>
+                                        <input
+                                            type="text"
+                                            required
+                                            value={topic}
+                                            onChange={(e) => setTopic(e.target.value)}
+                                            className="w-full px-4 py-2.5 bg-gray-50 dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-700 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                            placeholder="e.g. Weekly Fellowship"
                                         />
                                     </div>
-                                ) : (
-                                    <div className="flex items-center gap-2">
-                                        {linkedResource ? (
-                                            <div className="flex-1 flex items-center justify-between p-2.5 bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800 rounded-xl">
-                                                <div className="flex items-center gap-2 overflow-hidden">
-                                                    <div className="p-1.5 bg-purple-100 dark:bg-purple-900/50 rounded-lg shrink-0">
-                                                        <Scroll className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                                                    </div>
-                                                    <span className="text-sm font-medium text-purple-900 dark:text-purple-100 truncate">
-                                                        {linkedResource.title}
-                                                    </span>
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setLinkedResource(null)}
-                                                    className="p-1.5 hover:bg-purple-100 dark:hover:bg-purple-800 rounded-lg text-purple-600 dark:text-purple-400"
-                                                >
-                                                    <X className="w-4 h-4" />
-                                                </button>
+
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                                            <Clock className="w-3.5 h-3.5" /> Date & Time
+                                        </label>
+                                        <input
+                                            type="datetime-local"
+                                            required
+                                            value={startTime}
+                                            onChange={(e) => setStartTime(e.target.value)}
+                                            className="w-full px-4 py-2.5 bg-gray-50 dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-700 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all dark:[color-scheme:dark]"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                            <Type className="w-3.5 h-3.5" /> Attendees ({selectedUsers.length} selected)
+                                        </label>
+
+                                        {/* Visual Grid */}
+                                        <UserInvitationGrid
+                                            selectedUsers={selectedUsers}
+                                            onSelectionChange={setSelectedUsers}
+                                        />
+
+                                        {/* Manual Input */}
+                                        <div className="mt-3">
+                                            <input
+                                                type="text"
+                                                value={attendeesText}
+                                                onChange={(e) => setAttendeesText(e.target.value)}
+                                                placeholder="Add external emails (comma separated)..."
+                                                className="w-full px-4 py-2 bg-gray-50 dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-700 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm"
+                                            />
+                                            <p className="text-[10px] text-gray-400 mt-1.5 ml-1">
+                                                Selected: {selectedUsers.length} users • Manual: {attendeesText ? 'Active' : 'Empty'}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Resource Linking */}
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                                            <Scroll className="w-3.5 h-3.5" /> Attached Resource (Optional)
+                                        </label>
+
+                                        {isPickingResource ? (
+                                            <div className="bg-gray-50 dark:bg-zinc-800/50 p-3 rounded-xl border border-gray-200 dark:border-zinc-700">
+                                                <ResourcePicker
+                                                    onSelect={(r) => {
+                                                        setLinkedResource(r);
+                                                        setIsPickingResource(false);
+                                                    }}
+                                                    onCancel={() => setIsPickingResource(false)}
+                                                />
                                             </div>
                                         ) : (
-                                            <button
-                                                type="button"
-                                                onClick={() => setIsPickingResource(true)}
-                                                className="w-full py-2.5 px-3 border border-dashed border-gray-300 dark:border-zinc-700 rounded-xl text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-zinc-800 hover:border-blue-400 transition-colors flex items-center justify-center gap-2"
-                                            >
-                                                <Scroll className="w-4 h-4" />
-                                                Attach a Scroll or Bible Study
-                                            </button>
+                                            <div className="flex items-center gap-2">
+                                                {linkedResource ? (
+                                                    <div className="flex-1 flex items-center justify-between p-2.5 bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800 rounded-xl">
+                                                        <div className="flex items-center gap-2 overflow-hidden">
+                                                            <div className="p-1.5 bg-purple-100 dark:bg-purple-900/50 rounded-lg shrink-0">
+                                                                <Scroll className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                                                            </div>
+                                                            <span className="text-sm font-medium text-purple-900 dark:text-purple-100 truncate">
+                                                                {linkedResource.title}
+                                                            </span>
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setLinkedResource(null)}
+                                                            className="p-1.5 hover:bg-purple-100 dark:hover:bg-purple-800 rounded-lg text-purple-600 dark:text-purple-400"
+                                                        >
+                                                            <X className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setIsPickingResource(true)}
+                                                        className="w-full py-2.5 px-3 border border-dashed border-gray-300 dark:border-zinc-700 rounded-xl text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-zinc-800 hover:border-blue-400 transition-colors flex items-center justify-center gap-2"
+                                                    >
+                                                        <Scroll className="w-4 h-4" />
+                                                        Attach a Scroll or Bible Study
+                                                    </button>
+                                                )}
+                                            </div>
                                         )}
                                     </div>
-                                )}
-                            </div>
 
-                            {error && (
-                                <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs rounded-lg flex items-center gap-2">
-                                    <X className="w-4 h-4 shrink-0" />
-                                    {error}
-                                </div>
-                            )}
-
-                            {/* Auth Warning for Invites */}
-                            {!googleAccessToken && (selectedUsers.length > 0 || attendeesText.length > 0) && (
-                                <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-xl">
-                                    <div className="flex items-start gap-2">
-                                        <div className="p-1.5 bg-amber-100 dark:bg-amber-900/50 rounded-full shrink-0">
-                                            <Mail className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                                    {error && (
+                                        <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs rounded-lg flex items-center gap-2">
+                                            <X className="w-4 h-4 shrink-0" />
+                                            {error}
                                         </div>
-                                        <div className="flex-1">
-                                            <h4 className="text-xs font-semibold text-amber-900 dark:text-amber-100">Permission Needed</h4>
-                                            <p className="text-[10px] text-amber-700 dark:text-amber-300 mt-0.5 leading-relaxed">
-                                                To send email invitations, you need to grant Gmail permission again.
-                                            </p>
-                                            <button
-                                                type="button"
-                                                onClick={() => signInWithGoogle()}
-                                                className="mt-2 w-full py-1.5 bg-amber-100 hover:bg-amber-200 dark:bg-amber-800 dark:hover:bg-amber-700 text-amber-900 dark:text-amber-100 text-xs font-medium rounded-lg transition-colors"
-                                            >
-                                                Authorize Gmail
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
+                                    )}
 
-                            <button
-                                onClick={handleCreate}
-                                disabled={loading}
-                                className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-xl transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                            >
-                                {loading ? (
-                                    <>
-                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                        Scheduling...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Calendar className="w-4 h-4" />
-                                        Schedule Meeting
-                                    </>
-                                )}
-                            </button>
-                        </form>
-                    )}
+                                    {/* Auth Warning for Invites */}
+                                    {!googleAccessToken && (selectedUsers.length > 0 || attendeesText.length > 0) && (
+                                        <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-xl">
+                                            <div className="flex items-start gap-2">
+                                                <div className="p-1.5 bg-amber-100 dark:bg-amber-900/50 rounded-full shrink-0">
+                                                    <Mail className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                                                </div>
+                                                <div className="flex-1">
+                                                    <h4 className="text-xs font-semibold text-amber-900 dark:text-amber-100">Permission Needed</h4>
+                                                    <p className="text-[10px] text-amber-700 dark:text-amber-300 mt-0.5 leading-relaxed">
+                                                        To send email invitations, you need to grant Gmail permission again.
+                                                    </p>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => signInWithGoogle()}
+                                                        className="mt-2 w-full py-1.5 bg-amber-100 hover:bg-amber-200 dark:bg-amber-800 dark:hover:bg-amber-700 text-amber-900 dark:text-amber-100 text-xs font-medium rounded-lg transition-colors"
+                                                    >
+                                                        Authorize Gmail
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <button
+                                        onClick={handleCreate}
+                                        disabled={loading}
+                                        className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-xl transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                    >
+                                        {loading ? (
+                                            <>
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                Scheduling...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Calendar className="w-4 h-4" />
+                                                Schedule Meeting
+                                            </>
+                                        )}
+                                    </button>
+                                </form>
+                            )}
+                        </div>
+                    </motion.div>
                 </div>
-            </motion.div>
+            </div>
         </div>
     );
+
+    return createPortal(modalContent, document.body);
 }

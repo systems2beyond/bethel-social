@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Sparkles, BookOpen, Search as SearchIcon, Maximize2, Minimize2, Loader2, ChevronDown, Edit3, RotateCw, History, TrendingUp, Clock, ArrowRight, Youtube, Globe, Users, Plus, LayoutGrid, ExternalLink, Mic, Book } from 'lucide-react';
+import { X, Sparkles, BookOpen, Search as SearchIcon, Maximize2, Minimize2, Loader2, ChevronDown, Edit3, RotateCw, History, TrendingUp, Clock, ArrowRight, Youtube, Globe, Users, Plus, LayoutGrid, ExternalLink, Mic, Book, ChevronRight, Folder } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -36,7 +36,13 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
         setSearchVersion,
         activeNoteId,
         collaborationId,
-        noteTitle: contextNoteTitle
+        noteTitle: contextNoteTitle, // Renamed to avoid conflict with local state
+        groups,
+        toggleGroupCollapse,
+        closeGroup,
+        setActiveTab,
+        addTab,
+        closeTab
     } = useBible();
     const [editor, setEditor] = useState<any>(null);
     const [notes, setNotes] = useState('');
@@ -63,6 +69,13 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
             document.body.classList.remove('modal-open');
         };
     }, [isStudyOpen]);
+
+    // Automatically switch to Fellowship view when collaboration starts
+    useEffect(() => {
+        if (collaborationId) {
+            setRightPaneView('fellowship');
+        }
+    }, [collaborationId]);
 
     // Search State
     const [searchQuery, setSearchQuery] = useState('');
@@ -726,7 +739,7 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                 splitRatio === 0 && "invisible border-none" // Completely hide if ratio is 0
                             )}
                     >
-                        <BibleReader onInsertNote={onInsertNote || undefined} onAskAi={handleAskAi} />
+                        <BibleReader key={activeTabId} onInsertNote={onInsertNote || undefined} onAskAi={handleAskAi} />
 
                         {/* Visual Cue for Search Results when Reader is dominant */}
                         <AnimatePresence>
@@ -1140,11 +1153,11 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                 editorProps={{
                                     content: '',
                                     onChange: (html: string) => { }, // Read-only from this level in theory, but Tiptap handles real-time
-                                    collaborationId: `fellowship-${tabs.find(t => t.id === activeTabId)?.reference.book}-${tabs.find(t => t.id === activeTabId)?.reference.chapter}`,
+                                    collaborationId: collaborationId || `fellowship-${tabs.find(t => t.id === activeTabId)?.reference.book}-${tabs.find(t => t.id === activeTabId)?.reference.chapter}`,
                                     user: tiptapUser,
                                     onAskAi: handleAskAi
                                 }}
-                                scrollId={tabs.find(t => t.id === activeTabId)?.reference.book + ' ' + tabs.find(t => t.id === activeTabId)?.reference.chapter}
+                                scrollId={collaborationId || (tabs.find(t => t.id === activeTabId)?.reference.book + ' ' + tabs.find(t => t.id === activeTabId)?.reference.chapter)}
                             />
                         ) : (
                             /* --- PERSONAL NOTES VIEW --- */
