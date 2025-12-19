@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, forwardRef, useImperativeHandle, useRef } from 'react';
+import React, { useEffect, forwardRef, useImperativeHandle, useRef, useMemo } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import { BubbleMenu, FloatingMenu } from '@tiptap/react/menus';
 import ExtensionBubbleMenu from '@tiptap/extension-bubble-menu';
@@ -12,27 +12,36 @@ import Highlight from '@tiptap/extension-highlight';
 import DragHandle from 'tiptap-extension-global-drag-handle';
 import Underline from '@tiptap/extension-underline';
 import Link from '@tiptap/extension-link';
-import { Bold, Italic, Underline as UnderlineIcon, List, ListOrdered, Heading1, Heading2, Quote, Highlighter, Sparkles, FileText, Sticker } from 'lucide-react';
+import { Bold, Italic, Underline as UnderlineIcon, List, ListOrdered, Heading1, Heading2, Quote, Highlighter, Sparkles, FileText, Sticker, Maximize2, Minimize2 } from 'lucide-react';
 import { StickerPopover } from './StickerPopover';
+import Collaboration from '@tiptap/extension-collaboration';
+import CollaborationCursor from '@tiptap/extension-collaboration-cursor';
+import * as Y from 'yjs';
+import { WebsocketProvider } from 'y-websocket';
+import { cn } from '@/lib/utils';
 
 interface TiptapEditorProps {
     content: string;
     onChange: (html: string) => void;
     placeholder?: string;
     className?: string;
-    onAskAi?: (query: string) => void;
+    onAskAi?: (query: string, autoSend?: boolean) => void;
     showToolbar?: boolean;
     onEditorReady?: (editor: any) => void;
     onLinkClick?: (url: string) => void;
+    collaborationId?: string;
+    user?: { name: string; color: string; };
 }
+
+// ... (skipping unchanged parts) ...
+
+
 
 export interface TiptapEditorRef {
     insertContent: (content: string) => void;
 }
 
-import { cn } from '@/lib/utils';
-
-export const EditorToolbar = ({ editor, className = '', onTogglePaperStyle, isPaperStyleActive, onInsertSticker }: { editor: any, className?: string, onTogglePaperStyle?: () => void, isPaperStyleActive?: boolean, onInsertSticker?: (url: string) => void }) => {
+export const EditorToolbar = ({ editor, className = '', onTogglePaperStyle, isPaperStyleActive, onInsertSticker, onInsert }: { editor: any, className?: string, onTogglePaperStyle?: () => void, isPaperStyleActive?: boolean, onInsertSticker?: (url: string) => void, onInsert?: (text: string) => void }) => {
     const [isStickerOpen, setIsStickerOpen] = React.useState(false);
     const stickerButtonRef = React.useRef<HTMLButtonElement>(null);
     const [, forceUpdate] = React.useState({});
@@ -161,22 +170,34 @@ const CustomLink = Link.extend({
     addAttributes() {
         return {
             ...this.parent?.(),
-            href: {
-                default: null,
-            },
             class: {
-                default: 'text-blue-600 dark:text-blue-400 hover:underline cursor-pointer font-medium hover:text-blue-800 dark:hover:text-blue-300 transition-colors verse-link',
+                default: 'verse-link text-blue-600 dark:text-blue-400 hover:underline cursor-pointer font-medium hover:text-blue-800 dark:hover:text-blue-300 transition-colors',
                 parseHTML: element => element.getAttribute('class'),
+                renderHTML: attributes => ({
+                    class: attributes.class,
+                }),
             },
             'data-verse': {
                 default: null,
                 parseHTML: element => element.getAttribute('data-verse'),
+                renderHTML: attributes => ({
+                    'data-verse': attributes['data-verse'],
+                }),
             }
         };
-    }
+    },
+    addOptions() {
+        return {
+            ...this.parent?.(),
+            openOnClick: false,
+            autolink: true,
+            protocols: ['http', 'https', 'mailto', 'verse'],
+            validate: (href: string) => /^https?:\/\//.test(href) || href.startsWith('verse://'),
+        } as any;
+    },
 });
 
-const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, onChange, placeholder = 'Start typing...', className = '', onAskAi, showToolbar = true, onEditorReady, onLinkClick }, ref) => {
+const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, onChange, placeholder, className = '', onAskAi, showToolbar = true, onEditorReady, onLinkClick, collaborationId, user }, ref) => {
     const onAskAiRef = React.useRef(onAskAi);
     const onLinkClickRef = React.useRef(onLinkClick);
     const [isPaperStyle, setIsPaperStyle] = React.useState(false);
@@ -186,37 +207,78 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
         onLinkClickRef.current = onLinkClick;
     }, [onAskAi, onLinkClick]);
 
+    // Collaboration Logic: Use useMemo for stable Y.Doc instance across renders
+    const yDoc = React.useMemo(() => {
+        return collaborationId ? new Y.Doc() : null;
+    }, [collaborationId]);
+
+    const [provider, setProvider] = React.useState<any>(null);
+
+    // Manage Provider lifecycle
     useEffect(() => {
-        console.log('TiptapEditor Mounted. Extensions:', [StarterKit, Placeholder, Highlight, DragHandle, CustomLink]);
-        console.log('Rendering TiptapEditor V2 with Link Support (CustomLink with data-verse)');
-    }, []);
+        if (!yDoc || !collaborationId) return;
+        // Phase 2: Production on GCP Cloud Run
+        const newProvider = new WebsocketProvider(
+            'wss://y-websocket-server-503876827928.us-central1.run.app',
+            collaborationId,
+            yDoc
+        );
+
+        newProvider.on('status', (event: any) => {
+            console.log('[Tiptap] Provider connection status:', event.status);
+        });
+
+
+        // Add user awareness
+        if (user) {
+            newProvider.awareness.setLocalStateField('user', {
+                name: user.name,
+                color: user.color,
+            });
+        }
+
+        setProvider(newProvider);
+
+        return () => {
+            console.log('[Tiptap] Destroying provider');
+            newProvider.destroy();
+            setProvider(null);
+        }
+    }, [yDoc, collaborationId, user]);
+
+
 
     const editor = useEditor({
         extensions: [
             StarterKit.configure({
-                // @ts-ignore - Explicitly disable link in case it's included in this version
-                link: false,
-            }),
+                history: collaborationId ? false : true, // Explicitly disable history for collab
+                codeBlock: false, // We might want our own code block later
+                link: false, // Disable default Link extension from StarterKit
+            } as any),
             Placeholder.configure({
-                placeholder: placeholder,
+                placeholder: placeholder || 'Write something amazing...',
             }),
-            ImageResize.configure({
-                inline: true,
-                allowBase64: true,
-            }),
-            Highlight.configure({ multicolor: true }),
+            ImageResize,
+            Highlight,
+            DragHandle,
+            // Underline removed (Duplicate),
             CustomLink.configure({
                 openOnClick: false,
-                autolink: true,
-                validate: href => /^https?:\/\//.test(href) || href.startsWith('verse://'),
-                HTMLAttributes: {
-                    class: 'text-blue-600 dark:text-blue-400 hover:underline cursor-pointer font-medium hover:text-blue-800 dark:hover:text-blue-300 transition-colors verse-link',
-                },
             }),
-            DragHandle.configure({
-                width: 20,
-                scrollTreshold: 100,
-            }),
+            // Conditionally add collaboration extensions
+            ...(collaborationId && yDoc ? [
+                Collaboration.configure({
+                    document: yDoc,
+                }),
+            ] : []),
+            // Re-enabled cursor with safety check
+            // Re-enabled cursor with safety check
+            // ...(collaborationId && provider ? [
+            //     CollaborationCursor.configure({
+            //         provider: provider,
+            //         user: user || { name: 'Anonymous', color: '#f783ac' },
+            //     }),
+            // ] : []),
             ExtensionBubbleMenu.configure({
                 pluginKey: 'bubbleMenu',
             }),
@@ -224,44 +286,21 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
                 pluginKey: 'floatingMenu',
             }),
         ],
-        content: content,
+        // CRITICAL FIX: Do NOT pass content if collaboration is active. 
+        // Passing content + Collaboration extension causes Tiptap to crash with "TextSelection endpoint" error.
+        // We must seed the content MANUALLY after the provider is synced.
+        content: collaborationId ? undefined : content,
         editorProps: {
             attributes: {
-                class: `prose dark:prose-invert max-w-none focus:outline-none min-h-[800px] ${isPaperStyle ? 'paper-lines px-6 py-4' : ''} ${className}`,
+                class: cn('prose dark:prose-invert max-w-none focus:outline-none min-h-[150px]', isPaperStyle ? 'paper-lines px-6 py-4' : '', className),
             },
-            handleDOMEvents: {
-                click: (view, event) => {
-                    const target = event.target as HTMLElement;
-                    // Support both explicit anchors and our wrapper class
-                    const link = target.closest('a') || target.closest('.verse-link');
-
-                    if (link) {
-                        const href = link.getAttribute('href');
-                        const dataVerse = link.getAttribute('data-verse');
-
-                        if (onLinkClickRef.current) {
-                            // Check for verse link
-                            const isVerseLink = (href && href.startsWith('verse://')) || !!dataVerse;
-
-                            if (isVerseLink) {
-                                // Ensure we pass the full verse URI if missing (e.g. if href stripped)
-                                const uri = (href && href.startsWith('verse://')) ? href : `verse://${dataVerse}`;
-                                onLinkClickRef.current(uri);
-                                event.preventDefault();
-                                event.stopPropagation();
-                                return true;
-                            }
-
-                            // Handle normal links with Meta/Ctrl
-                            if (href && (event.metaKey || event.ctrlKey)) {
-                                window.open(href, '_blank');
-                                event.preventDefault();
-                                return true;
-                            }
-                        }
-                    }
-                    return false;
+            handleClick: (view, pos, event) => {
+                const attrs = view.state.doc.resolve(pos).marks().find(m => m.type.name === 'link')?.attrs;
+                if (attrs && onLinkClick) {
+                    onLinkClick(attrs.href);
+                    return true;
                 }
+                return false;
             },
             handleKeyDown: (view, event) => {
                 if (event.key === 'Enter') {
@@ -285,18 +324,45 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
                 return false;
             }
         },
+        editable: true,
         onUpdate: ({ editor }) => {
-            onChange(editor.getHTML());
-        },
-        onSelectionUpdate: ({ editor }) => {
-            // Optional: Handle selection updates
+            if (!collaborationId) onChange(editor.getHTML());
         },
         onCreate: ({ editor }) => {
             if (onEditorReady) {
                 onEditorReady(editor);
             }
         }
-    });
+    }, [collaborationId, yDoc, provider]); // Re-create editor if these change
+
+    // Phase 3: Content Seeding Logic
+    // If we are connecting to a new Yjs session (empty doc), we manually inject the initial content.
+    useEffect(() => {
+        if (!editor || !provider || !collaborationId || !content || !yDoc) return;
+
+        const handleSynced = (event: any) => {
+            if (provider.synced) {
+                const fragment = yDoc.getXmlFragment('default');
+                if (fragment.length === 0) {
+                    console.log('[Tiptap] Seeding initial content into empty Yjs doc');
+                    editor.commands.setContent(content);
+                } else {
+                    console.log('[Tiptap] Remote content found, skipping seed');
+                }
+            }
+        };
+
+        provider.on('synced', handleSynced);
+
+        // Immediate check
+        if (provider.synced) {
+            handleSynced({ status: 'synced' });
+        }
+
+        return () => {
+            provider.off('synced', handleSynced);
+        }
+    }, [editor, provider, collaborationId, content, yDoc]);
 
     useImperativeHandle(ref, () => ({
         insertContent: (content: string) => {
@@ -308,14 +374,13 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
     }));
 
     useEffect(() => {
-        if (editor && content && editor.getHTML() !== content) {
+        if (editor && content && !collaborationId && editor.getHTML() !== content) {
             editor.commands.setContent(content);
         }
-    }, [content, editor]);
+    }, [content, editor, collaborationId]);
 
-    // Native Click Listener for robustness (Bypassing React specific event bubbling issues in Editors)
+    // Native Click Listener
     const containerRef = useRef<HTMLDivElement>(null);
-
     useEffect(() => {
         const container = containerRef.current;
         if (!container) return;
@@ -327,28 +392,19 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
             if (link) {
                 const href = link.getAttribute('href');
                 const dataVerse = link.getAttribute('data-verse');
-
-                // Check specifically for verse links to intercept
                 const isVerseLink = (href && href.startsWith('verse://')) || !!dataVerse;
 
                 if (isVerseLink && onLinkClickRef.current) {
-                    console.log('[Tiptap] Intercepted Native Click:', href || dataVerse);
                     const uri = (href && href.startsWith('verse://')) ? href : `verse://${dataVerse}`;
-
                     onLinkClickRef.current(uri);
-
-                    // Stop EVERYTHING
                     e.preventDefault();
                     e.stopPropagation();
-                    e.stopImmediatePropagation();
                     return false;
                 }
             }
         };
 
-        // Add listener with { capture: true } to get it before ANYONE else
         container.addEventListener('click', handleNativeClick, { capture: true });
-
         return () => {
             container.removeEventListener('click', handleNativeClick, { capture: true });
         };
@@ -359,11 +415,7 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
     }
 
     return (
-        <div
-            ref={containerRef}
-            className="flex flex-col gap-2 relative"
-        >
-            {/* Toolbar */}
+        <div ref={containerRef} className="flex flex-col gap-2 relative bg-white dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 rounded-xl shadow-sm p-4 min-h-[700px]">
             {showToolbar && <EditorToolbar
                 editor={editor}
                 className="sticky top-0 z-50"
@@ -376,33 +428,12 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
                 }}
             />}
 
-            {/* Bubble Menu (Selected Text) */}
             {editor && (
                 <BubbleMenu editor={editor} className="flex items-center gap-1 p-1 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-lg shadow-lg">
-                    <button
-                        onClick={() => editor.chain().focus().toggleBold().run()}
-                        className={`p-1.5 rounded hover:bg-gray-100 dark:hover:bg-zinc-800 ${editor.isActive('bold') ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'text-gray-600 dark:text-gray-300'}`}
-                    >
-                        <Bold className="w-4 h-4" />
-                    </button>
-                    <button
-                        onClick={() => editor.chain().focus().toggleItalic().run()}
-                        className={`p-1.5 rounded hover:bg-gray-100 dark:hover:bg-zinc-800 ${editor.isActive('italic') ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'text-gray-600 dark:text-gray-300'}`}
-                    >
-                        <Italic className="w-4 h-4" />
-                    </button>
-                    <button
-                        onClick={() => editor.chain().focus().toggleUnderline().run()}
-                        className={`p-1.5 rounded hover:bg-gray-100 dark:hover:bg-zinc-800 ${editor.isActive('underline') ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'text-gray-600 dark:text-gray-300'}`}
-                    >
-                        <UnderlineIcon className="w-4 h-4" />
-                    </button>
-                    <button
-                        onClick={() => editor.chain().focus().toggleHighlight().run()}
-                        className={`p-1.5 rounded hover:bg-gray-100 dark:hover:bg-zinc-800 ${editor.isActive('highlight') ? 'text-yellow-600 bg-yellow-50 dark:bg-yellow-900/20' : 'text-gray-600 dark:text-gray-300'}`}
-                    >
-                        <Highlighter className="w-4 h-4" />
-                    </button>
+                    <button onClick={() => editor.chain().focus().toggleBold().run()} className={`p-1.5 rounded hover:bg-gray-100 dark:hover:bg-zinc-800 ${editor.isActive('bold') ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'text-gray-600 dark:text-gray-300'}`}><Bold className="w-4 h-4" /></button>
+                    <button onClick={() => editor.chain().focus().toggleItalic().run()} className={`p-1.5 rounded hover:bg-gray-100 dark:hover:bg-zinc-800 ${editor.isActive('italic') ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'text-gray-600 dark:text-gray-300'}`}><Italic className="w-4 h-4" /></button>
+                    <button onClick={() => editor.chain().focus().toggleUnderline().run()} className={`p-1.5 rounded hover:bg-gray-100 dark:hover:bg-zinc-800 ${editor.isActive('underline') ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'text-gray-600 dark:text-gray-300'}`}><UnderlineIcon className="w-4 h-4" /></button>
+                    <button onClick={() => editor.chain().focus().toggleHighlight().run()} className={`p-1.5 rounded hover:bg-gray-100 dark:hover:bg-zinc-800 ${editor.isActive('highlight') ? 'text-yellow-600 bg-yellow-50 dark:bg-yellow-900/20' : 'text-gray-600 dark:text-gray-300'}`}><Highlighter className="w-4 h-4" /></button>
                     {onAskAi && (
                         <>
                             <div className="w-px h-4 bg-gray-200 dark:bg-zinc-700 mx-1" />
@@ -410,10 +441,32 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
                                 onClick={() => {
                                     const selection = editor.state.selection;
                                     const text = editor.state.doc.textBetween(selection.from, selection.to, ' ');
-                                    if (text) onAskAi(text);
+                                    if (text) onAskAi(`Simplify this text:\n"${text}"`, true);
                                 }}
                                 className="p-1.5 rounded hover:bg-purple-50 dark:hover:bg-purple-900/20 text-purple-600 dark:text-purple-400"
-                                title="Ask AI"
+                                title="Simplify"
+                            >
+                                <Minimize2 className="w-4 h-4" />
+                            </button>
+                            <button
+                                onClick={() => {
+                                    const selection = editor.state.selection;
+                                    const text = editor.state.doc.textBetween(selection.from, selection.to, ' ');
+                                    if (text) onAskAi(`Expand on this text:\n"${text}"`, true);
+                                }}
+                                className="p-1.5 rounded hover:bg-purple-50 dark:hover:bg-purple-900/20 text-purple-600 dark:text-purple-400"
+                                title="Expand / Elaborate"
+                            >
+                                <Maximize2 className="w-4 h-4" />
+                            </button>
+                            <button
+                                onClick={() => {
+                                    const selection = editor.state.selection;
+                                    const text = editor.state.doc.textBetween(selection.from, selection.to, ' ');
+                                    if (text) onAskAi(`${text}\n\n`, false);
+                                }}
+                                className="p-1.5 rounded hover:bg-purple-50 dark:hover:bg-purple-900/20 text-purple-600 dark:text-purple-400"
+                                title="Ask AI about this"
                             >
                                 <Sparkles className="w-4 h-4" />
                             </button>
@@ -422,47 +475,10 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
                 </BubbleMenu>
             )}
 
-            {/* Floating Menu (Empty Line) */}
-            {editor && (
-                <FloatingMenu editor={editor} className="flex items-center gap-1 p-1 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-lg shadow-lg">
-                    <button
-                        onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-                        className={`p-1.5 rounded hover:bg-gray-100 dark:hover:bg-zinc-800 ${editor.isActive('heading', { level: 1 }) ? 'text-blue-600' : 'text-gray-600 dark:text-gray-300'}`}
-                    >
-                        <Heading1 className="w-4 h-4" />
-                    </button>
-                    <button
-                        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-                        className={`p-1.5 rounded hover:bg-gray-100 dark:hover:bg-zinc-800 ${editor.isActive('heading', { level: 2 }) ? 'text-blue-600' : 'text-gray-600 dark:text-gray-300'}`}
-                    >
-                        <Heading2 className="w-4 h-4" />
-                    </button>
-                    <button
-                        onClick={() => editor.chain().focus().toggleBulletList().run()}
-                        className={`p-1.5 rounded hover:bg-gray-100 dark:hover:bg-zinc-800 ${editor.isActive('bulletList') ? 'text-blue-600' : 'text-gray-600 dark:text-gray-300'}`}
-                    >
-                        <List className="w-4 h-4" />
-                    </button>
-                    <button
-                        onClick={() => editor.chain().focus().toggleOrderedList().run()}
-                        className={`p-1.5 rounded hover:bg-gray-100 dark:hover:bg-zinc-800 ${editor.isActive('orderedList') ? 'text-blue-600' : 'text-gray-600 dark:text-gray-300'}`}
-                    >
-                        <ListOrdered className="w-4 h-4" />
-                    </button>
-                    <button
-                        onClick={() => editor.chain().focus().toggleBlockquote().run()}
-                        className={`p-1.5 rounded hover:bg-gray-100 dark:hover:bg-zinc-800 ${editor.isActive('blockquote') ? 'text-blue-600' : 'text-gray-600 dark:text-gray-300'}`}
-                    >
-                        <Quote className="w-4 h-4" />
-                    </button>
-                </FloatingMenu>
-            )}
-
             <EditorContent editor={editor} />
         </div>
     );
 });
 
 TiptapEditor.displayName = 'TiptapEditor';
-
 export default TiptapEditor;

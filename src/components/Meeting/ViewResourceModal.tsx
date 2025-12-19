@@ -151,7 +151,7 @@ export function ViewResourceModal({ isOpen, onClose, title, content, type = 'scr
         onClose();
         // Use meetingId as the unique collaboration room ID
         // We could append '-notes' to be specific
-        openCollaboration(`meeting-${meetingId}-notes`, `Collaborating: ${title}`);
+        openCollaboration(`meeting-${meetingId}-notes`, `Collaborating: ${title}`, content);
     };
 
     const handleContentClick = (e: React.MouseEvent<HTMLDivElement>) => {

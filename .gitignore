@@ -42,3 +42,9 @@ next-env.d.ts
 
 # Local Netlify folder
 .netlify
+
+# Backups
+backups/
+collaboration-server/
+src/components/Bible/FellowshipView.backup.tsx
+src/components/Editor/TiptapEditor.backup.tsx

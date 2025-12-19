@@ -1,20 +1,61 @@
 import React, { useState } from 'react';
-import { Users, Wifi, Share2, Globe, Settings, Lock, Eye, Edit2 } from 'lucide-react';
+import { Users, Wifi, Share2, Globe, Settings, Lock, Eye, Edit2, X, Check, Loader2 } from 'lucide-react';
 import TiptapEditor, { EditorToolbar } from '../Editor/TiptapEditor'; // Assuming default import
 import { useAuth } from '@/context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
+import { createPortal } from 'react-dom';
+import ShareScrollModal from './ShareScrollModal';
+import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { ChevronRight, MessageSquare, Bell } from 'lucide-react';
 
 interface FellowshipViewProps {
     editorProps: any; // Pass through props for Tiptap
     onlineCount?: number; // Placeholder for now, can perform awareness logic later or inside
     scrollId: string;
+    onJoinScroll: (id: string) => void;
 }
 
-export default function FellowshipView({ editorProps, scrollId }: FellowshipViewProps) {
+export default function FellowshipView({ editorProps, scrollId, onJoinScroll }: FellowshipViewProps) {
     const { userData } = useAuth();
     const [showSettings, setShowSettings] = useState(false);
     const [isPublic, setIsPublic] = useState(true);
     const [allowEditing, setAllowEditing] = useState(true);
+
+    // Share Modal State
+    const [showShareModal, setShowShareModal] = useState(false);
+
+    // Invitations State
+    const [invitations, setInvitations] = useState<any[]>([]);
+    const [invitationSidebarOpen, setInvitationSidebarOpen] = useState(false);
+
+    // Listen for invitations
+    React.useEffect(() => {
+        if (!userData?.uid) return;
+
+        const q = query(
+            collection(db, 'invitations'),
+            where('toUserId', '==', userData.uid),
+            where('status', '==', 'pending'),
+            orderBy('createdAt', 'desc')
+        );
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const invites = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            setInvitations(invites);
+        });
+
+        return () => unsubscribe();
+    }, [userData?.uid]);
+
+    // Derived: Current Scroll Title (mock or from invite)
+    const activeInvite = invitations.find(i => i.resourceId === scrollId);
+    const activeScrollTitle = activeInvite?.title || "Fellowship Scroll";
+
+    // Removed local share handler and state in favor of component content
 
     return (
         <div className="h-full flex flex-col bg-slate-50 dark:bg-[#0B1120]"> {/* Distinct Background */}
@@ -26,14 +67,14 @@ export default function FellowshipView({ editorProps, scrollId }: FellowshipView
                     </div>
                     <div>
                         <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                            Fellowship Scroll
+                            {activeScrollTitle}
                             {isPublic ? (
                                 <span className="px-1.5 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-[10px] flex items-center gap-1 text-indigo-600 dark:text-indigo-400 font-mono">
                                     <Globe className="w-3 h-3" /> Public
                                 </span>
                             ) : (
                                 <span className="px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-[10px] flex items-center gap-1 text-slate-500 font-mono">
-                                    <Lock className="w-3 h-3" /> Private
+                                    <Lock className="w-3 h-3" /> Shared
                                 </span>
                             )}
                         </h3>
@@ -45,13 +86,27 @@ export default function FellowshipView({ editorProps, scrollId }: FellowshipView
 
                 <div className="flex items-center gap-2">
                     <button
+                        onClick={() => setInvitationSidebarOpen(!invitationSidebarOpen)}
+                        className={`relative p-2 rounded-full transition-colors ${invitationSidebarOpen ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600' : 'hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 hover:text-indigo-500'}`}
+                        title="Shared Scrolls"
+                    >
+                        <Bell className="w-4 h-4" />
+                        {invitations.length > 0 && (
+                            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                        )}
+                    </button>
+                    <button
                         onClick={() => setShowSettings(!showSettings)}
-                        className={`p-2 rounded-full transition-colors ${showSettings ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600' : 'hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 hover:text-indigo-500'}`}
+                        className={`hidden sm:block p-2 rounded-full transition-colors ${showSettings ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600' : 'hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 hover:text-indigo-500'}`}
                         title="Collaboration Settings"
                     >
                         <Settings className="w-4 h-4" />
                     </button>
-                    <button className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-indigo-500" title="Share Scroll">
+                    <button
+                        onClick={() => setShowShareModal(true)}
+                        className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-indigo-500"
+                        title="Share Scroll"
+                    >
                         <Share2 className="w-4 h-4" />
                     </button>
                 </div>
@@ -107,20 +162,89 @@ export default function FellowshipView({ editorProps, scrollId }: FellowshipView
                 )}
             </AnimatePresence>
 
-            {/* Editor Container with Special Styling */}
-            <div className="flex-1 overflow-hidden relative">
-                <div className="absolute inset-0 bg-[url('/patterns/grid.svg')] opacity-[0.03] pointer-events-none" /> {/* Subtle pattern */}
-                <div className="h-full flex flex-col">
-                    <div className="border-b border-indigo-50 dark:border-indigo-900/20 px-2 bg-white/50 dark:bg-[#0B1120]/50 backdrop-blur-sm">
-                        {/* We can place a specific toolbar here if we want overrides, 
-                             but using the Editor's internal logic is often cleaner unless we want a floating one. */}
-                    </div>
+            {/* Invitation Sidebar */}
+            <AnimatePresence>
+                {invitationSidebarOpen && (
+                    <motion.div
+                        initial={{ width: 0, opacity: 0 }}
+                        animate={{ width: 260, opacity: 1 }}
+                        exit={{ width: 0, opacity: 0 }}
+                        className="border-r border-indigo-100 dark:border-indigo-900/30 bg-white dark:bg-[#0B1120] overflow-hidden flex flex-col"
+                    >
+                        <div className="p-3 border-b border-indigo-50 dark:border-indigo-900/20 bg-slate-50/50 dark:bg-[#0B1120]">
+                            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                                <MessageSquare className="w-3 h-3" />
+                                Shared with You
+                            </h4>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                            {invitations.length === 0 ? (
+                                <div className="text-center py-8 text-slate-400 text-xs">
+                                    No pending invites
+                                </div>
+                            ) : (
+                                invitations.map(invite => (
+                                    <div
+                                        key={invite.id}
+                                        onClick={() => {
+                                            // Ideally we pass a callback to parent to switch the scrollId
+                                            // But since we can't easily change props from here without lifting state up even more...
+                                            // We might need to dispatch a custom event or use a context.
+                                            // FOR NOW: Let's assume the parent can watch for URL changes or we just reload (hacky)
+                                            // OR: We create a simple internal redirect if we are inside a system that supports it.
+                                            // Actually, the cleanest way without refactoring everything is to just update the URL if using query params?
+                                            // User requested: "preview... add to notes or collaborate"
 
-                    <div className="flex-1 overflow-hidden">
-                        <TiptapEditor
-                            {...editorProps}
-                            className="h-full overflow-y-auto px-6 py-6 custom-scrollbar prose-indigo max-w-none"
-                        />
+                                            // Handle Join
+                                            if (onJoinScroll) {
+                                                onJoinScroll(invite.resourceId);
+                                                setInvitationSidebarOpen(false);
+                                            } else {
+                                                alert(`Joining shared scroll: ${invite.title} (ID: ${invite.resourceId})`);
+                                            }
+                                        }}
+                                        className={`p-3 rounded-xl border border-indigo-100 dark:border-indigo-900/30 cursor-pointer transition-all hover:shadow-md ${invite.resourceId === scrollId ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200' : 'bg-white dark:bg-white/5 hover:border-indigo-300'}`}
+                                    >
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <div className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center text-[10px] font-bold text-indigo-600">
+                                                {invite.fromUser?.displayName?.[0]}
+                                            </div>
+                                            <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 truncate flex-1">
+                                                {invite.fromUser?.displayName}
+                                            </span>
+                                            <span className="text-[9px] text-slate-400">
+                                                {new Date(invite.createdAt?.seconds * 1000).toLocaleDateString()}
+                                            </span>
+                                        </div>
+                                        <h5 className="text-sm font-medium text-indigo-900 dark:text-indigo-300 mb-1">
+                                            {invite.title}
+                                        </h5>
+                                        <p className="text-[10px] text-slate-500 line-clamp-2">
+                                            Click to join shared session...
+                                        </p>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Editor Container with Special Styling */}
+            <div className="flex-1 overflow-hidden relative flex">
+                <div className="flex-1 overflow-hidden relative flex flex-col">
+                    <div className="absolute inset-0 bg-[url('/patterns/grid.svg')] opacity-[0.03] pointer-events-none" /> {/* Subtle pattern */}
+                    <div className="h-full flex flex-col">
+                        <div className="border-b border-indigo-50 dark:border-indigo-900/20 px-2 bg-white/50 dark:bg-[#0B1120]/50 backdrop-blur-sm">
+                            {/* Toolbar placeholder */}
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto">
+                            <TiptapEditor
+                                {...editorProps}
+                                className="h-full overflow-y-auto px-6 py-6 custom-scrollbar prose-indigo max-w-none"
+                            />
+                        </div>
                     </div>
                 </div>
             </div>
@@ -137,6 +261,13 @@ export default function FellowshipView({ editorProps, scrollId }: FellowshipView
                     <span>v1.2.0</span>
                 </div>
             </div>
-        </div>
+            {/* Share Modal Portal */}
+            {/* Share Modal */}
+            <ShareScrollModal
+                isOpen={showShareModal}
+                onClose={() => setShowShareModal(false)}
+                title="Share Fellowship Scroll"
+            />
+        </div >
     );
 }

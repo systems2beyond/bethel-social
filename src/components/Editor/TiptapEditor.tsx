@@ -17,7 +17,7 @@ import { StickerPopover } from './StickerPopover';
 import Collaboration from '@tiptap/extension-collaboration';
 import CollaborationCursor from '@tiptap/extension-collaboration-cursor';
 import * as Y from 'yjs';
-import { WebrtcProvider } from 'y-webrtc';
+import { WebsocketProvider } from 'y-websocket';
 import { cn } from '@/lib/utils';
 
 interface TiptapEditorProps {
@@ -217,18 +217,17 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
     // Manage Provider lifecycle
     useEffect(() => {
         if (!yDoc || !collaborationId) return;
-        const signalingServers = [
-            'wss://signaling.yjs.dev',
-            'wss://y-webrtc-signaling-eu.herokuapp.com',
-            'wss://y-webrtc-signaling-us.herokuapp.com'
-        ];
-        console.log('[Tiptap] Initializing Provider for:', collaborationId, 'with signaling:', signalingServers);
+        // Phase 2: Production on GCP Cloud Run
+        const newProvider = new WebsocketProvider(
+            'wss://y-websocket-server-503876827928.us-central1.run.app',
+            collaborationId,
+            yDoc
+        );
 
-        // Use public signaling servers for WebrtcProvider
-        // Removed heroku servers as they are often down/unreliable
-        const newProvider = new WebrtcProvider(collaborationId, yDoc, {
-            signaling: signalingServers
+        newProvider.on('status', (event: any) => {
+            console.log('[Tiptap] Provider connection status:', event.status);
         });
+
 
         // Add user awareness
         if (user) {
@@ -247,10 +246,12 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
         }
     }, [yDoc, collaborationId, user]);
 
+
+
     const editor = useEditor({
         extensions: [
             StarterKit.configure({
-                history: collaborationId ? false : undefined, // Disable history if collab is active (Yjs handles it)
+                history: collaborationId ? false : true, // Explicitly disable history for collab
                 codeBlock: false, // We might want our own code block later
                 link: false, // Disable default Link extension from StarterKit
             } as any),
@@ -261,20 +262,23 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
             Highlight,
             DragHandle,
             // Underline removed (Duplicate),
-
             CustomLink.configure({
                 openOnClick: false,
             }),
             // Conditionally add collaboration extensions
-            ...(collaborationId && yDoc && provider ? [
+            ...(collaborationId && yDoc ? [
                 Collaboration.configure({
                     document: yDoc,
                 }),
-                CollaborationCursor.configure({
-                    provider: provider,
-                    user: user || { name: 'Anonymous', color: '#f783ac' },
-                }),
             ] : []),
+            // Re-enabled cursor with safety check
+            // Re-enabled cursor with safety check
+            // ...(collaborationId && provider ? [
+            //     CollaborationCursor.configure({
+            //         provider: provider,
+            //         user: user || { name: 'Anonymous', color: '#f783ac' },
+            //     }),
+            // ] : []),
             ExtensionBubbleMenu.configure({
                 pluginKey: 'bubbleMenu',
             }),
@@ -282,6 +286,9 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
                 pluginKey: 'floatingMenu',
             }),
         ],
+        // CRITICAL FIX: Do NOT pass content if collaboration is active. 
+        // Passing content + Collaboration extension causes Tiptap to crash with "TextSelection endpoint" error.
+        // We must seed the content MANUALLY after the provider is synced.
         content: collaborationId ? undefined : content,
         editorProps: {
             attributes: {
@@ -327,6 +334,35 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
             }
         }
     }, [collaborationId, yDoc, provider]); // Re-create editor if these change
+
+    // Phase 3: Content Seeding Logic
+    // If we are connecting to a new Yjs session (empty doc), we manually inject the initial content.
+    useEffect(() => {
+        if (!editor || !provider || !collaborationId || !content || !yDoc) return;
+
+        const handleSynced = (event: any) => {
+            if (provider.synced) {
+                const fragment = yDoc.getXmlFragment('default');
+                if (fragment.length === 0) {
+                    console.log('[Tiptap] Seeding initial content into empty Yjs doc');
+                    editor.commands.setContent(content);
+                } else {
+                    console.log('[Tiptap] Remote content found, skipping seed');
+                }
+            }
+        };
+
+        provider.on('synced', handleSynced);
+
+        // Immediate check
+        if (provider.synced) {
+            handleSynced({ status: 'synced' });
+        }
+
+        return () => {
+            provider.off('synced', handleSynced);
+        }
+    }, [editor, provider, collaborationId, content, yDoc]);
 
     useImperativeHandle(ref, () => ({
         insertContent: (content: string) => {

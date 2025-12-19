@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Sparkles, BookOpen, Search as SearchIcon, Maximize2, Minimize2, Loader2, ChevronDown, Edit3, RotateCw, History, TrendingUp, Clock, ArrowRight, Youtube, Globe, Users, Plus, LayoutGrid, ExternalLink, Mic, Book, ChevronRight, Folder } from 'lucide-react';
+import { X, Sparkles, BookOpen, Search as SearchIcon, Maximize2, Minimize2, Loader2, ChevronDown, Edit3, RotateCw, History, TrendingUp, Clock, ArrowRight, Youtube, Globe, Users, Plus, LayoutGrid, ExternalLink, Mic, Book, ChevronRight, Folder, Share2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -18,6 +18,7 @@ import { unifiedSearch, type UnifiedSearchResults } from '@/lib/search/unified-s
 import AiLessonCreator from './AiLessonCreator';
 import CreateMeetingModal from '../Meeting/CreateMeetingModal';
 import FellowshipView from './FellowshipView';
+import ShareScrollModal from './ShareScrollModal';
 
 interface BibleStudyModalProps {
     onClose: () => void;
@@ -36,17 +37,24 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
         setSearchVersion,
         activeNoteId,
         collaborationId,
+        collaborationInitialContent,
         noteTitle: contextNoteTitle, // Renamed to avoid conflict with local state
         groups,
         toggleGroupCollapse,
         closeGroup,
         setActiveTab,
         addTab,
-        closeTab
+        closeTab,
+        setCollaborationId
     } = useBible();
     const [editor, setEditor] = useState<any>(null);
     const [notes, setNotes] = useState('');
     const [noteTitle, setNoteTitle] = useState(contextNoteTitle || 'General Bible Study');
+
+    // Private Note Share State
+    const [showPrivateShareModal, setShowPrivateShareModal] = useState(false);
+
+    // Auto-save logic (Debounced)
     const [savingNotes, setSavingNotes] = useState(false);
     // Sync title from context when it changes
     useEffect(() => {
@@ -692,21 +700,43 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
 
                         <div className="w-px h-6 bg-gray-200 dark:bg-zinc-800 mx-1" />
 
-                        <button
-                            onClick={() => {
-                                setRightPaneView(prev => prev === 'fellowship' ? 'notes' : 'fellowship');
-                                // Ensure split ratio is visible
-                                if (splitRatio > 0.3) setSplitRatio(0.2); // Ensure pane is expanded (0.2 = bottom pane takes 80%)
-                                else if (splitRatio < 0.1) setSplitRatio(0.2); // If hidden, show it
-                            }}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-all duration-500 font-medium text-xs sm:text-sm shadow-sm ${rightPaneView === 'fellowship'
-                                ? 'bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 bg-[length:200%_200%] animate-gradient-xy text-white shadow-[0_0_15px_rgba(168,85,247,0.5)] border-transparent'
-                                : 'hover:bg-gray-100 dark:hover:bg-zinc-800 text-gray-700 dark:text-gray-300'
-                                }`}
-                        >
-                            <Users className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${rightPaneView === 'fellowship' ? 'text-white animate-pulse' : 'text-gray-500 dark:text-gray-400'}`} />
-                            <span className="hidden sm:inline">{rightPaneView === 'fellowship' ? 'Fellowshipping...' : 'Fellowship'}</span>
-                        </button>
+                        {/* View Switcher (Tabs) */}
+                        <div className="flex bg-gray-100 dark:bg-zinc-800 rounded-full p-1 border border-gray-200 dark:border-zinc-700">
+                            <button
+                                onClick={() => {
+                                    setRightPaneView('notes');
+                                    // Ensure split ratio is visible
+                                    if (splitRatio > 0.3 && splitRatio < 0.9) { } // Keep current if valid
+                                    else if (splitRatio > 0.9) setSplitRatio(0.5); // If reader maximized, restore split
+                                    else if (splitRatio < 0.1) setSplitRatio(0.2); // If notes hidden, show them
+                                    else setSplitRatio(0.5); // Default
+                                }}
+                                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all ${rightPaneView !== 'fellowship'
+                                    ? 'bg-white dark:bg-zinc-700 text-gray-900 dark:text-white shadow-sm'
+                                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                                    }`}
+                            >
+                                <Edit3 className="w-3.5 h-3.5" />
+                                <span className="hidden sm:inline">Notes</span>
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setRightPaneView('fellowship');
+                                    // Ensure split ratio is visible
+                                    if (splitRatio > 0.3 && splitRatio < 0.9) { }
+                                    else if (splitRatio > 0.9) setSplitRatio(0.5);
+                                    else if (splitRatio < 0.1) setSplitRatio(0.2);
+                                    else setSplitRatio(0.5);
+                                }}
+                                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all ${rightPaneView === 'fellowship'
+                                    ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-sm'
+                                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                                    }`}
+                            >
+                                <Users className="w-3.5 h-3.5" />
+                                <span className="hidden sm:inline">Fellowship</span>
+                            </button>
+                        </div>
 
                         <div className="w-px h-6 bg-gray-200 dark:bg-zinc-800 mx-1" />
 
@@ -1151,13 +1181,14 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                             /* --- FELLOWSHIP VIEW --- */
                             <FellowshipView
                                 editorProps={{
-                                    content: '',
+                                    content: collaborationInitialContent || '',
                                     onChange: (html: string) => { }, // Read-only from this level in theory, but Tiptap handles real-time
                                     collaborationId: collaborationId || `fellowship-${tabs.find(t => t.id === activeTabId)?.reference.book}-${tabs.find(t => t.id === activeTabId)?.reference.chapter}`,
                                     user: tiptapUser,
                                     onAskAi: handleAskAi
                                 }}
                                 scrollId={collaborationId || (tabs.find(t => t.id === activeTabId)?.reference.book + ' ' + tabs.find(t => t.id === activeTabId)?.reference.chapter)}
+                                onJoinScroll={(newId) => setCollaborationId(newId)}
                             />
                         ) : (
                             /* --- PERSONAL NOTES VIEW --- */
@@ -1179,10 +1210,18 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                         {savingNotes && <span className="text-[10px] text-green-600 animate-pulse font-medium ml-6">Saving...</span>}
                                     </div>
                                     <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => setShowPrivateShareModal(true)}
+                                            className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-indigo-500"
+                                            title="Share Note"
+                                        >
+                                            <Share2 className="w-4 h-4" />
+                                        </button>
+                                        <div className="w-px h-4 bg-gray-200 dark:bg-zinc-800 mx-1" />
                                         {/* Toggle Full Screen for Notes */}
                                         <button
                                             onClick={toggleNotesMaximize}
-                                            className="p-1.5 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg text-gray-400 hover:text-gray-600 transition-colors"
+                                            className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors text-gray-500 hover:text-gray-700"
                                             title={isNotesMaximized ? "Restore View" : "Full Screen Notes"}
                                         >
                                             {isNotesMaximized ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
@@ -1258,6 +1297,12 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                     initialTopic={createMeetingState.topic || ''}
                     initialDate={createMeetingState.date}
                     initialDescription={editor ? editor.getHTML() : ''}
+                />
+
+                <ShareScrollModal
+                    isOpen={showPrivateShareModal}
+                    onClose={() => setShowPrivateShareModal(false)}
+                    title={`Share "${noteTitle}"`}
                 />
 
             </motion.div >
