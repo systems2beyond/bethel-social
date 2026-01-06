@@ -11,6 +11,7 @@ interface ViewResourceModalProps {
     type?: 'scroll' | 'bible';
     meetingId?: string; // Passed to enable collaboration context
     resourceId?: string;
+    collaborationId?: string; // Direct override for collaboration ID
 }
 
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
@@ -22,7 +23,7 @@ import { Edit3, FilePlus } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { useEffect, useState } from 'react';
 
-export function ViewResourceModal({ isOpen, onClose, title, content, type = 'scroll', meetingId }: ViewResourceModalProps) {
+export function ViewResourceModal({ isOpen, onClose, title, content, type = 'scroll', meetingId, collaborationId: explicitCollaborationId }: ViewResourceModalProps) {
     const { user } = useAuth();
     const { openNote, openCollaboration, openBible, createTabGroup, openMultipleTabs } = useBible();
     const [mounted, setMounted] = useState(false);
@@ -144,6 +145,13 @@ export function ViewResourceModal({ isOpen, onClose, title, content, type = 'scr
     };
 
     const handleCollaborate = () => {
+        // Use explicit collaborationId if provided (for Shared Scrolls)
+        if (explicitCollaborationId) {
+            onClose();
+            openCollaboration(explicitCollaborationId, `Collaborating: ${title}`, content);
+            return;
+        }
+
         if (!meetingId) {
             toast.error("Cannot collaborate on this resource (No Meeting ID)");
             return;

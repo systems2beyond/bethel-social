@@ -3,9 +3,10 @@
 import React from 'react';
 import { Post } from '@/types';
 import { motion } from 'framer-motion';
-import { Heart, MessageCircle, Share2, Facebook, Youtube, Pin, Sparkles, Play } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Facebook, Youtube, Pin, Sparkles, Play, Trash2 } from 'lucide-react';
 import { CommentsSection } from './CommentsSection';
 import { ShareMenu } from './ShareMenu';
+import { PostOptionsMenu } from './PostOptionsMenu';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { clsx, type ClassValue } from 'clsx';
@@ -227,7 +228,7 @@ const YouTubeFeedPlayer = React.forwardRef<VideoPlayerRef, { url: string }>(({ u
 YouTubeFeedPlayer.displayName = 'YouTubeFeedPlayer';
 
 export const PostCard: React.FC<PostCardProps> = ({ post }) => {
-    const { registerPost, unregisterPost, reportVisibility } = useFeed();
+    const { registerPost, unregisterPost, reportVisibility, triggerRefresh } = useFeed();
     const { openLightbox } = useLightbox();
     const router = useRouter();
     const containerRef = React.useRef<HTMLDivElement>(null);
@@ -383,6 +384,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
                     </div>
                 </div>
                 <div className="flex items-center space-x-2">
+                    <PostOptionsMenu post={post} />
                     {post.pinned && <Pin className="w-4 h-4 text-blue-500 rotate-45" />}
                     {getIcon()}
                 </div>

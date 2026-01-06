@@ -19,8 +19,11 @@ interface CreateMeetingModalProps {
     initialDescription?: string;
 }
 
+import { useBible } from '@/context/BibleContext';
+
 export default function CreateMeetingModal({ isOpen, onClose, initialTopic = '', initialDate, initialDescription = '' }: CreateMeetingModalProps) {
     const { googleAccessToken, user, signInWithGoogle, clearGmailToken } = useAuth();
+    const { openCollaboration } = useBible();
     const [topic, setTopic] = useState(initialTopic);
     const [startTime, setStartTime] = useState('');
     const [selectedUsers, setSelectedUsers] = useState<PublicUser[]>([]); // Refactored to hold User Objects
@@ -89,8 +92,21 @@ export default function CreateMeetingModal({ isOpen, onClose, initialTopic = '',
                 linkedResourceType: linkedResource?.type
             });
 
-            const { meetLink } = result.data;
+            const { meetLink, meetingId } = result.data;
             setSuccessLink(meetLink);
+
+            // AUTO-JOIN COLLABORATION SESSION
+            // This ensures the host is immediately in the correct context to share the meeting ID
+            if (meetingId) {
+                console.log('[CreateMeetingModal] SUCCESS: Meeting Created with ID:', meetingId);
+                console.log('[CreateMeetingModal] Auto-joining meeting session now...');
+                // We use a slight delay or immediate call? Immediate is fine as long as modal doesn't unmount context.
+                // The modal is inside the layout which has the provider, so it should be fine.
+                openCollaboration(`meeting-${meetingId}-notes`, topic || 'Meeting Notes');
+                console.log('[CreateMeetingModal] openCollaboration called with:', `meeting-${meetingId}-notes`);
+            } else {
+                console.error('[CreateMeetingModal] WARNING: meetingId missing in result!', result.data);
+            }
 
             // --- CLIENT-SIDE GMAIL SENDING ---
             // Backend invite often fails due to service limits.

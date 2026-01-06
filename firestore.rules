@@ -95,6 +95,13 @@ service cloud.firestore {
       }
     }
 
+    // Invitations (Shared Scrolls)
+    match /invitations/{invitationId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.resource.data.fromUser.uid == request.auth.uid;
+      allow update, delete: if request.auth != null && (resource.data.toUserId == request.auth.uid || resource.data.fromUser.uid == request.auth.uid);
+    }
+
     // Default deny
     match /{document=**} {
       allow read, write: if false;

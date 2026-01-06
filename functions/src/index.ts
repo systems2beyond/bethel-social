@@ -4,6 +4,9 @@ import { onCall, onRequest } from 'firebase-functions/v2/https';
 // import * as logger from 'firebase-functions/logger';
 import { defineSecret } from 'firebase-functions/params';
 const googleApiKey = defineSecret('GOOGLE_API_KEY');
+const fbAccessToken = defineSecret('FB_ACCESS_TOKEN');
+const fbPageId = defineSecret('FB_PAGE_ID');
+const fbVerifyToken = defineSecret('FB_VERIFY_TOKEN');
 if (!admin.apps.length) {
     admin.initializeApp();
 }
@@ -12,7 +15,7 @@ if (!admin.apps.length) {
 import { facebookWebhook, syncFacebookPosts, syncFacebookLiveStatus } from './social/facebook';
 import { syncYoutubeContent } from './social/youtube';
 
-export const manualFacebookSync = onRequest(async (req, res) => {
+export const manualFacebookSync = onRequest({ secrets: [fbAccessToken, fbPageId] }, async (req, res) => {
     const backfill = req.query.backfill === 'true';
     await syncFacebookPosts(backfill);
     res.send(`Facebook sync executed (Backfill: ${backfill}).`);
@@ -105,12 +108,12 @@ export { onMeetingCreated } from './notifications';
 export * from './meeting'; // Export meeting functions
 
 
-export const syncFacebook = onSchedule('every 10 minutes', async (event) => {
+export const syncFacebook = onSchedule({ schedule: 'every 10 minutes', secrets: [fbAccessToken, fbPageId] }, async (event) => {
     await syncFacebookPosts();
     await syncFacebookLiveStatus();
 });
 
-export const fbWebhook = onRequest(facebookWebhook);
+export const fbWebhook = onRequest({ secrets: [fbVerifyToken, fbAccessToken, fbPageId] }, facebookWebhook);
 
 export const syncYoutube = onSchedule({ schedule: 'every 10 minutes', secrets: [googleApiKey] }, async (event) => {
     await syncYoutubeContent();
@@ -133,3 +136,4 @@ export { ingestSermonWebhook } from './ai/sermons';
 export { search } from './ai/search';
 export { saveImageProxy } from './media/images';
 export { fetchUrlContent } from './media/reader';
+export { generateTiptapToken } from './collaboration/token';

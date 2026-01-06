@@ -317,7 +317,7 @@ export default function NotesPage() {
                                 </p>
                                 <div className="flex items-center justify-between mt-2">
                                     <span className="text-[10px] text-gray-400 font-medium">
-                                        {note.updatedAt?.toDate ? note.updatedAt.toDate().toLocaleDateString() : 'Recently'}
+                                        {note.updatedAt?.toDate ? note.updatedAt.toDate().toLocaleDateString() : (note.updatedAt instanceof Date ? note.updatedAt.toLocaleDateString() : 'Recently')}
                                     </span>
                                     <button
                                         onClick={(e) => handleDelete(e, note.id)}

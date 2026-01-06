@@ -36,20 +36,23 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.fetchUrlContent = exports.saveImageProxy = exports.search = exports.ingestSermonWebhook = exports.updateUserRole = exports.onCommentWritten = exports.backfillEvents = exports.extractEventFromPost = exports.ingest = exports.chat = exports.manualYoutubeSync = exports.syncYoutube = exports.fbWebhook = exports.syncFacebook = exports.onMeetingCreated = exports.ingestSocialPost = exports.scheduledWebsiteCrawl = exports.ingestContent = exports.debugPosts = exports.manualFacebookSync = void 0;
+exports.generateTiptapToken = exports.fetchUrlContent = exports.saveImageProxy = exports.search = exports.ingestSermonWebhook = exports.updateUserRole = exports.onCommentWritten = exports.backfillEvents = exports.extractEventFromPost = exports.ingest = exports.chat = exports.manualYoutubeSync = exports.syncYoutube = exports.fbWebhook = exports.syncFacebook = exports.onMeetingCreated = exports.ingestSocialPost = exports.scheduledWebsiteCrawl = exports.ingestContent = exports.debugPosts = exports.manualFacebookSync = void 0;
 const admin = __importStar(require("firebase-admin"));
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const https_1 = require("firebase-functions/v2/https");
 // import * as logger from 'firebase-functions/logger';
 const params_1 = require("firebase-functions/params");
 const googleApiKey = (0, params_1.defineSecret)('GOOGLE_API_KEY');
+const fbAccessToken = (0, params_1.defineSecret)('FB_ACCESS_TOKEN');
+const fbPageId = (0, params_1.defineSecret)('FB_PAGE_ID');
+const fbVerifyToken = (0, params_1.defineSecret)('FB_VERIFY_TOKEN');
 if (!admin.apps.length) {
     admin.initializeApp();
 }
 // Import social functions
 const facebook_1 = require("./social/facebook");
 const youtube_1 = require("./social/youtube");
-exports.manualFacebookSync = (0, https_1.onRequest)(async (req, res) => {
+exports.manualFacebookSync = (0, https_1.onRequest)({ secrets: [fbAccessToken, fbPageId] }, async (req, res) => {
     const backfill = req.query.backfill === 'true';
     await (0, facebook_1.syncFacebookPosts)(backfill);
     res.send(`Facebook sync executed (Backfill: ${backfill}).`);
@@ -132,11 +135,11 @@ __exportStar(require("./ai/meetings"), exports);
 var notifications_1 = require("./notifications");
 Object.defineProperty(exports, "onMeetingCreated", { enumerable: true, get: function () { return notifications_1.onMeetingCreated; } });
 __exportStar(require("./meeting"), exports); // Export meeting functions
-exports.syncFacebook = (0, scheduler_1.onSchedule)('every 10 minutes', async (event) => {
+exports.syncFacebook = (0, scheduler_1.onSchedule)({ schedule: 'every 10 minutes', secrets: [fbAccessToken, fbPageId] }, async (event) => {
     await (0, facebook_1.syncFacebookPosts)();
     await (0, facebook_1.syncFacebookLiveStatus)();
 });
-exports.fbWebhook = (0, https_1.onRequest)(facebook_1.facebookWebhook);
+exports.fbWebhook = (0, https_1.onRequest)({ secrets: [fbVerifyToken, fbAccessToken, fbPageId] }, facebook_1.facebookWebhook);
 exports.syncYoutube = (0, scheduler_1.onSchedule)({ schedule: 'every 10 minutes', secrets: [googleApiKey] }, async (event) => {
     await (0, youtube_1.syncYoutubeContent)();
 });
@@ -161,4 +164,6 @@ var images_1 = require("./media/images");
 Object.defineProperty(exports, "saveImageProxy", { enumerable: true, get: function () { return images_1.saveImageProxy; } });
 var reader_1 = require("./media/reader");
 Object.defineProperty(exports, "fetchUrlContent", { enumerable: true, get: function () { return reader_1.fetchUrlContent; } });
+var token_1 = require("./collaboration/token");
+Object.defineProperty(exports, "generateTiptapToken", { enumerable: true, get: function () { return token_1.generateTiptapToken; } });
 //# sourceMappingURL=index.js.map

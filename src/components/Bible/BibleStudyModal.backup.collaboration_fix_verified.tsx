@@ -1231,7 +1231,6 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                 fallbackId={`fellowship-${tabs.find(t => t.id === activeTabId)?.reference.book}-${tabs.find(t => t.id === activeTabId)?.reference.chapter}`}
                                 onJoinScroll={handleJoinFellowshipScroll}
                                 onEditorReady={setEditor}
-                                debugLabel="Fellowship"
                             />
                         ) : (
                             /* --- PERSONAL NOTES VIEW --- */
@@ -1292,8 +1291,6 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                         // Ensure collaborationId is undefined for personal notes
                                         collaborationId={undefined}
                                         user={tiptapUser}
-                                        authReady={!!user} // Pass auth state for local editor too (good practice)
-                                        debugLabel="PersonalNotes"
                                     />
                                 </div>
                             </div>
@@ -1351,10 +1348,8 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                     currentContent={editor?.getHTML() || ''}
                     scrollId={generatedShareId}
                     onShareComplete={(newScrollId) => {
-                        const contentToShare = editor?.getHTML() || '';
-                        console.log('[BibleStudyModal] Sharing Content:', contentToShare.slice(0, 50) + '...', 'Length:', contentToShare.length);
                         // Switch the sender to the new collaboration session immediately
-                        setCollaborationInitialContent(contentToShare);
+                        setCollaborationInitialContent(editor?.getHTML() || '');
                         setCollaborationId(newScrollId);
                         setRightPaneView('fellowship');
                     }}

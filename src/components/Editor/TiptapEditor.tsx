@@ -17,7 +17,7 @@ import { StickerPopover } from './StickerPopover';
 import Collaboration from '@tiptap/extension-collaboration';
 import CollaborationCursor from '@tiptap/extension-collaboration-cursor';
 import * as Y from 'yjs';
-import { WebsocketProvider } from 'y-websocket';
+import { HocuspocusProvider } from '@hocuspocus/provider';
 import { cn } from '@/lib/utils';
 
 interface TiptapEditorProps {
@@ -28,9 +28,12 @@ interface TiptapEditorProps {
     onAskAi?: (query: string, autoSend?: boolean) => void;
     showToolbar?: boolean;
     onEditorReady?: (editor: any) => void;
-    onLinkClick?: (url: string) => void;
+    onLinkClick?: (href: string) => void;
+    authReady?: boolean;
     collaborationId?: string;
     user?: { name: string; color: string; };
+    onAwarenessUpdate?: (users: { name: string; color: string }[]) => void;
+    debugLabel?: string;
 }
 
 // ... (skipping unchanged parts) ...
@@ -197,7 +200,7 @@ const CustomLink = Link.extend({
     },
 });
 
-const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, onChange, placeholder, className = '', onAskAi, showToolbar = true, onEditorReady, onLinkClick, collaborationId, user }, ref) => {
+const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, onChange, placeholder, className = '', onAskAi, showToolbar = true, onEditorReady, onLinkClick, authReady = true, collaborationId, user, onAwarenessUpdate, debugLabel }, ref) => {
     const onAskAiRef = React.useRef(onAskAi);
     const onLinkClickRef = React.useRef(onLinkClick);
     const [isPaperStyle, setIsPaperStyle] = React.useState(false);
@@ -216,35 +219,174 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
 
     // Manage Provider lifecycle
     useEffect(() => {
-        if (!yDoc || !collaborationId) return;
-        // Phase 2: Production on GCP Cloud Run
-        const newProvider = new WebsocketProvider(
-            'wss://y-websocket-server-503876827928.us-central1.run.app',
-            collaborationId,
-            yDoc
-        );
-
-        newProvider.on('status', (event: any) => {
-            console.log('[Tiptap] Provider connection status:', event.status);
-        });
-
-
-        // Add user awareness
-        if (user) {
-            newProvider.awareness.setLocalStateField('user', {
-                name: user.name,
-                color: user.color,
-            });
+        // Strict Auth Check: Must have doc, ID, AND user, AND authReady to generate token
+        if (!yDoc || !collaborationId || !user || !authReady) {
+            console.log(`[Tiptap${debugLabel ? `-${debugLabel}` : ''}] initProvider skipped:`, { hasYDoc: !!yDoc, hasId: !!collaborationId, id: collaborationId, hasUser: !!user, authReady });
+            return;
         }
 
-        setProvider(newProvider);
+        let activeProvider: HocuspocusProvider | null = null;
+        let isMounted = true;
+        let connectionTimeout: NodeJS.Timeout | null = null;
+
+        const initProvider = async () => {
+            console.log(`[Tiptap${debugLabel ? `-${debugLabel}` : ''}] initProvider started for:`, collaborationId);
+            try {
+                // 1. Fetch Secure Token
+                const { functions, auth } = await import('@/lib/firebase');
+
+                if (!auth.currentUser) {
+                    console.error('[Tiptap] Error: SDK auth.currentUser is missing, but React user prop is present.');
+                    throw new Error('Firebase SDK not authenticated');
+                }
+
+                // FORCE REFRESH: Ensure we have a valid, non-expired token before call
+                console.log('[Tiptap] Forcing token refresh...');
+                const idToken = await auth.currentUser.getIdToken(true);
+
+                const { httpsCallable } = await import('firebase/functions');
+                const generateToken = httpsCallable(functions, 'generateTiptapToken');
+                console.log('[Tiptap] Calling generateTiptapToken for user:', auth.currentUser.uid);
+
+                // Add 10s timeout to fail fast
+                const timeoutPromise = new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Token generation timed out after 10s')), 10000)
+                );
+
+                const result = await Promise.race([
+                    generateToken({ documentName: collaborationId, auth_token: idToken }),
+                    timeoutPromise
+                ]) as { data: { token: string } };
+
+                const token = result.data.token;
+
+                if (!isMounted) return;
+
+                console.log('[Tiptap] Token generated successfully. Initializing HocuspocusProvider...');
+
+                // 2. Connect with Token using HocuspocusProvider
+                const newProvider = new HocuspocusProvider({
+                    url: 'wss://8mze8q2m.collab.tiptap.cloud',
+                    name: collaborationId,
+                    token: token,
+                    document: yDoc,
+                });
+
+                console.log('[Tiptap] HocuspocusProvider initialized. Setting up listeners...');
+
+                // Add 5s timeout for connection fallback
+                // Hocuspocus uses 'sync' event, but we can also check internal state or assume not synced if timeout hits
+                // We'll rely on the fact that if 'sync' event hasn't fired, we are not synced.
+                connectionTimeout = setTimeout(() => {
+                    if (isMounted) {
+                        console.warn(`[Tiptap${debugLabel ? `-${debugLabel}` : ''}] Connection timed out (5s). Fallback to local content.`);
+                        // Fix CRASH: Ensure editor exists and is not destroyed before checking isEmpty
+                        if (content && editor && !editor.isDestroyed && editor.isEmpty) {
+                            console.log(`[Tiptap${debugLabel ? `-${debugLabel}` : ''}] Fallback: Injecting local content.`);
+                            editor.commands.setContent(content);
+                        }
+                    }
+                }, 5000);
+
+                const handleSynced = () => {
+                    if (connectionTimeout) clearTimeout(connectionTimeout);
+                    console.log(`[Tiptap${debugLabel ? `-${debugLabel}` : ''}] Synced event received. Clearing fallback timeout.`);
+                };
+
+                newProvider.on('status', (event: { status: string }) => {
+                    console.log(`[Tiptap${debugLabel ? `-${debugLabel}` : ''}] Provider connection status:`, event.status);
+                });
+
+                newProvider.on('disconnect', (event: any) => {
+                    console.log(`[Tiptap${debugLabel ? `-${debugLabel}` : ''}] Provider DISCONNECTED. Reason:`, event);
+                    if (event.code === 4401) {
+                        console.error('[Tiptap] Auth Failed: Unauthorized (4401). Check Secret/Token.');
+                    }
+                });
+
+                newProvider.on('authenticationFailed', (data: any) => {
+                    console.error(`[Tiptap${debugLabel ? `-${debugLabel}` : ''}] Authentication FAILED explicitly:`, data);
+                });
+
+                newProvider.on('authenticated', () => {
+                    console.log(`[Tiptap${debugLabel ? `-${debugLabel}` : ''}] Authentication SUCCESS.`);
+                    // Force start sync
+                    newProvider.sendStateless(JSON.stringify({ type: 'initial-sync-request' })); // Just a ping
+                });
+
+                // Hocuspocus uses 'synced' for the event
+                newProvider.on('synced', handleSynced);
+
+                // Add user awareness
+                if (user && newProvider.awareness) {
+                    newProvider.awareness.setLocalStateField('user', {
+                        name: user.name,
+                        color: user.color,
+                    });
+                }
+
+                // Monitor Awareness Changes
+                let lastAwarenessUpdate = 0;
+                let animationFrameId: number;
+
+                const handleAwarenessUpdate = () => {
+                    // Throttling updates to max once per 500ms or using rAF to prevent render thrashing
+                    const now = Date.now();
+                    if (now - lastAwarenessUpdate > 1000) {
+                        lastAwarenessUpdate = now;
+                        if (!newProvider.awareness) return;
+                        const states = newProvider.awareness.getStates();
+                        const users = Array.from(states.values()).map((s: any) => s.user).filter(Boolean);
+                        if (onAwarenessUpdate) {
+                            onAwarenessUpdate(users);
+                        }
+                    } else {
+                        // Schedule a trailing update
+                        cancelAnimationFrame(animationFrameId);
+                        animationFrameId = requestAnimationFrame(() => {
+                            if (!newProvider.awareness) return;
+                            const states = newProvider.awareness.getStates();
+                            const users = Array.from(states.values()).map((s: any) => s.user).filter(Boolean);
+                            if (onAwarenessUpdate) {
+                                onAwarenessUpdate(users);
+                            }
+                        });
+                    }
+                };
+
+                if (newProvider.awareness) {
+                    newProvider.awareness.on('change', handleAwarenessUpdate);
+                }
+
+                activeProvider = newProvider;
+                setProvider(newProvider);
+
+            } catch (err: any) {
+                if (!isMounted) return;
+                console.error('[Tiptap] Failed to init provider:', err);
+                if (err.message && err.message.includes('timed out')) {
+                    console.log('[Tiptap] Retrying connection in 3s...');
+                    setTimeout(() => {
+                        if (isMounted) initProvider();
+                    }, 3000);
+                }
+            }
+        };
+
+        initProvider();
 
         return () => {
             console.log('[Tiptap] Destroying provider');
-            newProvider.destroy();
+            isMounted = false;
+
+            if (connectionTimeout) clearTimeout(connectionTimeout);
+
+            if (activeProvider) {
+                activeProvider.destroy();
+            }
             setProvider(null);
         }
-    }, [yDoc, collaborationId, user]);
+    }, [yDoc, collaborationId, user, authReady]);
 
 
 
@@ -338,26 +480,73 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
     // Phase 3: Content Seeding Logic
     // If we are connecting to a new Yjs session (empty doc), we manually inject the initial content.
     useEffect(() => {
-        if (!editor || !provider || !collaborationId || !content || !yDoc) return;
+        // DEBUG: Trace Seeding Prerequisites
+        if (collaborationId) {
+            console.log('[Tiptap] Seeding Check:', {
+                hasEditor: !!editor,
+                hasProvider: !!provider,
+                hasContent: !!content,
+                contentLength: content?.length,
+                hasYDoc: !!yDoc
+            });
+        }
+
+        if (!editor || !provider || !collaborationId || !yDoc) return; // Removed !content check to allow empty/default sync logs
 
         const handleSynced = (event: any) => {
-            if (provider.synced) {
+            // HocuspocusProvider does not have a 'synced' property, relying on the event itself
+            if (true) {
                 const fragment = yDoc.getXmlFragment('default');
-                if (fragment.length === 0) {
-                    console.log('[Tiptap] Seeding initial content into empty Yjs doc');
-                    editor.commands.setContent(content);
+                const fragmentContent = fragment.toJSON();
+                console.log('[Tiptap DEBUG] Provider Synced.', {
+                    collabId: collaborationId,
+                    localContentLength: content?.length || 0,
+                    remoteFragment: fragmentContent,
+                    remoteLength: fragment.length
+                });
+
+                // Check if remote is "effectively empty"
+                // Tiptap default empty node is often: "<p></p>" which might be represented as [{type: 'paragraph'}] or similar in Yjs XML
+                // We check for: 0 blocks OR 1 block with 0 children OR 1 block with 1 empty text child
+                const firstBlock = fragment.length > 0 ? fragment.get(0) : null;
+                let isRemoteEmpty = fragment.length === 0;
+
+                if (!isRemoteEmpty && fragment.length === 1 && firstBlock) {
+                    if (firstBlock.length === 0) {
+                        isRemoteEmpty = true;
+                    } else if (firstBlock.length === 1) {
+                        // TS Fix: Treat as any to access .get() safely (Y.XmlElement has .get, Y.XmlText does not)
+                        const block = firstBlock as any;
+                        if (block.get) {
+                            const firstChild = block.get(0);
+                            // Check if child is empty (e.g. empty Y.XmlText has length 0)
+                            if (firstChild && firstChild.length === 0) {
+                                isRemoteEmpty = true;
+                            }
+                        }
+                    }
+                }
+
+                // Extra Debug Logging
+                if (content && isRemoteEmpty) {
+                    console.log('[Tiptap DEBUG] SEEDING: Injecting content into empty Yjs doc...');
+                    try {
+                        // FORCE UPDATE: Using object format as required by Tiptap types
+                        editor.commands.setContent(content, { emitUpdate: true });
+                        console.log('[Tiptap DEBUG] Seeding command fired.');
+                    } catch (e) {
+                        console.error('[Tiptap DEBUG] Seeding FAILED:', e);
+                    }
                 } else {
-                    console.log('[Tiptap] Remote content found, skipping seed');
+                    console.log('[Tiptap DEBUG] Seeding SKIPPED. Reason:', !content ? 'No Local Content' : 'Remote Not Empty');
                 }
             }
         };
 
-        provider.on('synced', handleSynced);
 
-        // Immediate check
-        if (provider.synced) {
-            handleSynced({ status: 'synced' });
-        }
+
+        // Use 'synced' event for Hocuspocus
+        provider.on('synced', handleSynced);
 
         return () => {
             provider.off('synced', handleSynced);
