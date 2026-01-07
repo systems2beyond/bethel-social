@@ -1,6 +1,7 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Book, ChevronLeft, ChevronRight, Copy, Share2, Edit3 } from 'lucide-react';
 import { useBible } from '@/context/BibleContext';
@@ -9,6 +10,12 @@ import BibleReader from './BibleReader';
 
 export default function BibleModal() {
     const { isOpen, closeBible, reference, version } = useBible();
+    const pathname = usePathname();
+
+    // Close on route change
+    useEffect(() => {
+        if (isOpen) closeBible();
+    }, [pathname, isOpen, closeBible]);
 
     // Prevent background scroll when open
     React.useEffect(() => {

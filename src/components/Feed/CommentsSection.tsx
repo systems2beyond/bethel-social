@@ -5,7 +5,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { db } from '@/lib/firebase';
 import { ShareMenu } from './ShareMenu';
-import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, deleteDoc, setDoc, increment, getDoc } from 'firebase/firestore';
+import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, deleteDoc, setDoc, increment, getDoc, updateDoc } from 'firebase/firestore';
 import { Post, Comment } from '@/types';
 import { User, Send, MessageCircle, Heart, X, Smile } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
@@ -13,9 +13,10 @@ import EmojiPicker, { EmojiClickData, Theme } from 'emoji-picker-react';
 
 interface CommentsSectionProps {
     post: Post;
+    onCommentAdded?: () => void;
 }
 
-export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
+export const CommentsSection: React.FC<CommentsSectionProps> = ({ post, onCommentAdded }) => {
     const postId = post.id;
     const { user, userData } = useAuth();
     const [comments, setComments] = useState<Comment[]>([]);
@@ -43,10 +44,39 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
         u.handle.toLowerCase().includes(mentionQuery.toLowerCase())
     );
 
+    const [collapsedThreads, setCollapsedThreads] = useState<Set<string>>(new Set());
+
+    const getCommentsCollection = () => {
+        if (post.groupId) {
+            return collection(db, 'groups', post.groupId, 'posts', postId, 'comments');
+        }
+        return collection(db, 'posts', postId, 'comments');
+    };
+
+    const getPostRef = () => {
+        if (post.groupId) {
+            return doc(db, 'groups', post.groupId, 'posts', postId);
+        }
+        return doc(db, 'posts', postId);
+    };
+
+    const getCommentRef = (commentId: string) => {
+        if (post.groupId) {
+            return doc(db, 'groups', post.groupId, 'posts', postId, 'comments', commentId);
+        }
+        return doc(db, 'posts', postId, 'comments', commentId);
+    };
+
+    const getCommentLikeRef = (commentId: string, userId: string) => {
+        if (post.groupId) {
+            return doc(db, 'groups', post.groupId, 'posts', postId, 'comments', commentId, 'likes', userId);
+        }
+        return doc(db, 'posts', postId, 'comments', commentId, 'likes', userId);
+    };
+
     useEffect(() => {
-        console.log('CommentsSection v2 loaded');
         const q = query(
-            collection(db, 'posts', postId, 'comments'),
+            getCommentsCollection(),
             orderBy('timestamp', 'asc')
         );
 
@@ -59,7 +89,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
         });
 
         return () => unsubscribe();
-    }, [postId]);
+    }, [postId, post.groupId]);
 
     const handleEmojiClick = (emojiData: EmojiClickData) => {
         setNewComment(prev => prev + emojiData.emoji);
@@ -70,7 +100,6 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
         const val = e.target.value;
         setNewComment(val);
 
-        // Simple mention detection
         const lastWord = val.split(' ').pop();
         if (lastWord && lastWord.startsWith('@') && lastWord.length > 1) {
             setMentionQuery(lastWord.slice(1));
@@ -82,13 +111,11 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
 
     const insertMention = (handle: string) => {
         const words = newComment.split(' ');
-        words.pop(); // Remove the partial mention
+        words.pop();
         setNewComment([...words, `@${handle} `].join(' '));
         setShowMentions(false);
         textareaRef.current?.focus();
     };
-
-
 
     const handleAddComment = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -100,7 +127,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
 
         setLoading(true);
         try {
-            await addDoc(collection(db, 'posts', postId, 'comments'), {
+            await addDoc(getCommentsCollection(), {
                 postId,
                 author: {
                     id: user.uid,
@@ -108,15 +135,23 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
                     avatarUrl: user.photoURL
                 },
                 content: newComment,
-                mediaUrl: null, // Add media support to Comment type if needed
-                timestamp: Date.now(), // Use client timestamp for immediate sort, server timestamp for consistency
+                mediaUrl: null,
+                timestamp: Date.now(),
                 parentId: replyingTo ? replyingTo.id : (activeThread ? activeThread.id : (focusedCommentId || null))
             });
+
+            await updateDoc(getPostRef(), {
+                comments: increment(1)
+            });
+
+            if (onCommentAdded) {
+                onCommentAdded();
+            }
+
             setNewComment('');
             setShowEmojiPicker(false);
             setReplyingTo(null);
 
-            // If replying, ensure the thread is expanded
             if (replyingTo) {
                 setExpandedThreads(prev => new Set(prev).add(replyingTo.id));
             }
@@ -133,17 +168,15 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
             return;
         }
 
-        const likeRef = doc(db, 'posts', postId, 'comments', commentId, 'likes', user.uid);
-        const commentRef = doc(db, 'posts', postId, 'comments', commentId);
+        const likeRef = getCommentLikeRef(commentId, user.uid);
+        const commentRef = getCommentRef(commentId);
 
         try {
             const likeDoc = await getDoc(likeRef);
             if (likeDoc.exists()) {
-                // Unlike
                 await deleteDoc(likeRef);
                 await setDoc(commentRef, { likes: increment(-1) }, { merge: true });
             } else {
-                // Like
                 await setDoc(likeRef, {
                     timestamp: serverTimestamp(),
                     userId: user.uid,
@@ -156,8 +189,6 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
             console.error("Error toggling comment like:", error);
         }
     };
-
-    const [collapsedThreads, setCollapsedThreads] = useState<Set<string>>(new Set());
 
     const toggleThreadExpand = (commentId: string) => {
         setExpandedThreads(prev => {
@@ -183,9 +214,6 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
         });
     };
 
-
-
-    // Helper to get ancestors of a comment
     const getAncestors = (commentId: string, allComments: Comment[]): Comment[] => {
         const ancestors: Comment[] = [];
         let currentComment = allComments.find(c => c.id === commentId);
@@ -201,7 +229,6 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
         return ancestors;
     };
 
-    // Helper to get all descendants (children, grandchildren, etc.)
     const getAllDescendants = (parentId: string, allComments: Comment[]): Comment[] => {
         const directChildren = allComments.filter(c => c.parentId === parentId);
         let descendants = [...directChildren];
@@ -218,7 +245,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post }) => {
         // Check if user liked this comment
         useEffect(() => {
             if (!user) return;
-            const likeRef = doc(db, 'posts', postId, 'comments', comment.id, 'likes', user.uid);
+            const likeRef = getCommentLikeRef(comment.id, user.uid);
             // Real-time listener for my like status
             const unsubscribe = onSnapshot(likeRef, (doc) => {
                 setIsLiked(doc.exists());

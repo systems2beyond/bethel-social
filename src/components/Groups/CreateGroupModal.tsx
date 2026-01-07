@@ -2,11 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Loader2, Users, Upload, MapPin, Tag, Wand2, ImageIcon } from 'lucide-react';
+import { X, Loader2, Users, Upload, MapPin, Tag, Wand2, ImageIcon, Search, UserPlus, Check } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { GroupsService, CreateGroupData } from '@/lib/groups';
+import { UsersService, UserProfile } from '@/lib/users';
 import { toast } from 'sonner';
 
 interface CreateGroupModalProps {
@@ -31,6 +32,12 @@ export default function CreateGroupModal({ isOpen, onClose }: CreateGroupModalPr
     const [iconPreview, setIconPreview] = useState<string | null>(null);
     const [isGeneratingIcon, setIsGeneratingIcon] = useState(false);
 
+    // Invite State
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState<UserProfile[]>([]);
+    const [isSearching, setIsSearching] = useState(false);
+    const [selectedUsers, setSelectedUsers] = useState<UserProfile[]>([]);
+
     // Reset form when opening
     useEffect(() => {
         if (isOpen) {
@@ -40,12 +47,48 @@ export default function CreateGroupModal({ isOpen, onClose }: CreateGroupModalPr
             setPrivacy('private');
             setLocation('');
             setTagsInput('');
-            setTagsInput('');
             setBannerFile(null);
             setIconFile(null);
             setIconPreview(null);
+            // Reset invite state
+            setSearchQuery('');
+            setSearchResults([]);
+            setSelectedUsers([]);
         }
     }, [isOpen]);
+
+    // Debounced Search
+    useEffect(() => {
+        const timer = setTimeout(async () => {
+            if (searchQuery.length >= 2) {
+                setIsSearching(true);
+                try {
+                    const results = await UsersService.searchUsers(searchQuery);
+                    setSearchResults(results);
+                } catch (error) {
+                    console.error("Search failed", error);
+                } finally {
+                    setIsSearching(false);
+                }
+            } else {
+                setSearchResults([]);
+            }
+        }, 300);
+
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
+
+    const handleSelectUser = (user: UserProfile) => {
+        if (!selectedUsers.some(u => u.uid === user.uid)) {
+            setSelectedUsers([...selectedUsers, user]);
+        }
+        setSearchQuery(''); // Clear search after selecting
+        setSearchResults([]);
+    };
+
+    const handleRemoveUser = (uid: string) => {
+        setSelectedUsers(selectedUsers.filter(u => u.uid !== uid));
+    };
 
     const handleIconSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
@@ -116,15 +159,32 @@ export default function CreateGroupModal({ isOpen, onClose }: CreateGroupModalPr
 
             const result = await GroupsService.createGroup(groupData, bannerFile || undefined, iconFile || undefined);
 
-            if (result.status === 'pending') {
-                toast.success('Group created! It is awaiting admin approval to become public.');
-                onClose();
+            // Handle Invites
+            if (selectedUsers.length > 0) {
+                let inviteCount = 0;
+                for (const invitedUser of selectedUsers) {
+                    try {
+                        await GroupsService.inviteMember(result.id, invitedUser.uid);
+                        inviteCount++;
+                    } catch (err) {
+                        console.error(`Failed to invite ${invitedUser.displayName}`, err);
+                    }
+                }
+                if (inviteCount > 0) {
+                    toast.success(`Group created and ${inviteCount} invites sent!`);
+                } else {
+                    toast.success('Group created, but failed to send invites.');
+                }
             } else {
-                toast.success('Group created successfully!');
-                onClose();
-                router.push(`/groups/${result.id}`);
+                toast.success(result.status === 'pending'
+                    ? 'Group created! It is awaiting admin approval.'
+                    : 'Group created successfully!');
             }
 
+            onClose();
+            if (result.status === 'active') {
+                router.push(`/groups/${result.id}`);
+            }
         } catch (error) {
             console.error('Failed to create group:', error);
             toast.error('Failed to create group. Please try again.');
@@ -255,6 +315,23 @@ export default function CreateGroupModal({ isOpen, onClose }: CreateGroupModalPr
                                     </div>
                                 </div>
 
+                                {/* Banner Image */}
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                                        <Upload className="w-3.5 h-3.5" /> Banner Image (Optional)
+                                    </label>
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={(e) => {
+                                            if (e.target.files && e.target.files[0]) {
+                                                setBannerFile(e.target.files[0]);
+                                            }
+                                        }}
+                                        className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-blue-900/20 dark:file:text-blue-400 transition-all"
+                                    />
+                                </div>
+
                                 {/* Group Icon Section */}
                                 <div className="space-y-3 pt-2">
                                     <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
@@ -310,21 +387,89 @@ export default function CreateGroupModal({ isOpen, onClose }: CreateGroupModalPr
                                     </div>
                                 </div>
 
-                                {/* Banner Image */}
-                                <div>
-                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                                        <Upload className="w-3.5 h-3.5" /> Banner Image (Optional)
+                                {/* Invite Members Section */}
+                                <div className="border-t border-gray-100 dark:border-zinc-800 pt-4 mt-4">
+                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                                        <UserPlus className="w-3.5 h-3.5" /> Invite Members (Optional)
                                     </label>
-                                    <input
-                                        type="file"
-                                        accept="image/*"
-                                        onChange={(e) => {
-                                            if (e.target.files && e.target.files[0]) {
-                                                setBannerFile(e.target.files[0]);
-                                            }
-                                        }}
-                                        className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-blue-900/20 dark:file:text-blue-400 transition-all"
-                                    />
+
+                                    <div className="relative mb-3">
+                                        <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+                                        <input
+                                            type="text"
+                                            placeholder="Search users to invite..."
+                                            value={searchQuery}
+                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                            className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-700 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm"
+                                        />
+                                    </div>
+
+                                    {/* Selected Users */}
+                                    {selectedUsers.length > 0 && (
+                                        <div className="flex flex-wrap gap-2 mb-3">
+                                            {selectedUsers.map(user => (
+                                                <div key={user.uid} className="flex items-center gap-1 pl-2 pr-1 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-full text-xs font-medium border border-blue-100 dark:border-blue-800">
+                                                    <span>{user.displayName}</span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleRemoveUser(user.uid)}
+                                                        className="p-0.5 hover:bg-blue-100 dark:hover:bg-blue-800 rounded-full transition-colors"
+                                                    >
+                                                        <X className="w-3 h-3" />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* Search Results */}
+                                    {searchQuery.length >= 2 && (
+                                        <div className="bg-white dark:bg-zinc-800 rounded-xl border border-gray-100 dark:border-zinc-700 max-h-48 overflow-y-auto shadow-lg">
+                                            {isSearching ? (
+                                                <div className="flex justify-center py-4">
+                                                    <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+                                                </div>
+                                            ) : searchResults.length === 0 ? (
+                                                <div className="text-center py-4 text-xs text-gray-500">
+                                                    No users found
+                                                </div>
+                                            ) : (
+                                                <div className="p-1">
+                                                    {searchResults.map(user => {
+                                                        const isSelected = selectedUsers.some(u => u.uid === user.uid);
+                                                        return (
+                                                            <button
+                                                                key={user.uid}
+                                                                type="button"
+                                                                onClick={() => handleSelectUser(user)}
+                                                                disabled={isSelected}
+                                                                className={`w-full flex items-center gap-2 p-2 rounded-lg text-left transition-colors ${isSelected
+                                                                    ? 'opacity-50 cursor-default'
+                                                                    : 'hover:bg-gray-50 dark:hover:bg-zinc-700/50'
+                                                                    }`}
+                                                            >
+                                                                <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400 overflow-hidden flex-shrink-0">
+                                                                    {user.photoURL ? (
+                                                                        <img src={user.photoURL} alt={user.displayName} className="w-full h-full object-cover" />
+                                                                    ) : (
+                                                                        <span className="font-medium text-xs">
+                                                                            {user.displayName.substring(0, 2).toUpperCase()}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <div className="flex-1 min-w-0">
+                                                                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                                                        {user.displayName}
+                                                                    </p>
+                                                                </div>
+                                                                {isSelected && <Check className="w-4 h-4 text-blue-500" />}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Footer Actions */}
@@ -342,7 +487,7 @@ export default function CreateGroupModal({ isOpen, onClose }: CreateGroupModalPr
                                         className="px-6 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-lg shadow-blue-500/20 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                                        Create Group
+                                        Create Group {selectedUsers.length > 0 && `& Invite ${selectedUsers.length}`}
                                     </button>
                                 </div>
                             </form>

@@ -236,12 +236,17 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
     const { user, userData } = useAuth();
     const [isLiked, setIsLiked] = React.useState(false);
     const [likeCount, setLikeCount] = React.useState(post.likes || 0);
+    const [commentCount, setCommentCount] = React.useState(post.comments || 0);
     const [showComments, setShowComments] = React.useState(false);
 
     // Real-time likes listener
     React.useEffect(() => {
         console.log(`[PostCard] Setting up likes listener for ${post.id}`);
-        const likesRef = collection(db, 'posts', post.id, 'likes');
+        // Determine correct path for likes based on group or global post
+        const likesRef = post.groupId
+            ? collection(db, 'groups', post.groupId, 'posts', post.id, 'likes')
+            : collection(db, 'posts', post.id, 'likes');
+
         const unsubscribe = onSnapshot(likesRef, (snapshot) => {
             console.log(`[PostCard] Likes update for ${post.id}: count=${snapshot.size}, user=${user?.uid}`);
             setLikeCount(snapshot.size);
@@ -255,7 +260,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
         });
 
         return () => unsubscribe();
-    }, [post.id, user]);
+    }, [post.id, post.groupId, user]);
 
     const handleLike = async () => {
         if (!user) {
@@ -265,7 +270,10 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
         }
 
         console.log(`[PostCard] Toggling like for ${post.id}. Current state: ${isLiked}`);
-        const likeRef = doc(db, 'posts', post.id, 'likes', user.uid);
+        const likeRef = post.groupId
+            ? doc(db, 'groups', post.groupId, 'posts', post.id, 'likes', user.uid)
+            : doc(db, 'posts', post.id, 'likes', user.uid);
+
         try {
             if (isLiked) {
                 await deleteDoc(likeRef);
@@ -338,7 +346,6 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
                 </p>
             </div>
 
-            {/* Media */}
             {/* Media */}
             {(post.mediaUrl || (post.images && post.images.length > 0)) && (
                 <div className="mt-2 group">
@@ -431,7 +438,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
                 >
                     <MessageCircle className="w-5 h-5" />
                     <span className="text-sm font-medium">
-                        {post.comments && post.comments > 0 ? `${post.comments} Comments` : 'Comment'}
+                        {commentCount > 0 ? `${commentCount} Comments` : 'Comment'}
                     </span>
                 </button>
 
@@ -449,7 +456,10 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
             {/* Comments Section */}
             {showComments && (
                 <div className="px-4 pb-4 animate-in slide-in-from-top-2 duration-200">
-                    <CommentsSection post={post} />
+                    <CommentsSection
+                        post={post}
+                        onCommentAdded={() => setCommentCount(prev => prev + 1)}
+                    />
                 </div>
             )}
         </motion.div>

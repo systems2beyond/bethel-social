@@ -4,12 +4,9 @@ description: Manual deployment workflow for Netlify Frontend and Firebase Backen
 
 # Deploy Frontend (Netlify)
 
-1. Build the project
-// turbo
-npm run build
+1. Build and Deploy to Netlify Production
+npx netlify deploy --prod --build
 
-2. Deploy to Netlify Production
-npx netlify deploy --prod --dir=out
 
 # Deploy Backend (Firebase)
 

@@ -125,13 +125,29 @@ export const GroupsService = {
      * Get Pending Groups (For Admin)
      */
     getPendingGroups: async () => {
-        const q = query(
-            collection(db, GROUPS_COLLECTION),
-            where('status', '==', 'pending'),
-            orderBy('createdAt', 'desc')
-        );
-        const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() || {}) } as Group));
+        try {
+            const q = query(
+                collection(db, GROUPS_COLLECTION),
+                where('status', '==', 'pending'),
+                orderBy('createdAt', 'desc')
+            );
+            const snapshot = await getDocs(q);
+            return snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() || {}) } as Group));
+        } catch (error: any) {
+            console.error("Error fetching pending groups (likely missing index):", error);
+            // Fallback: Try without sorting if index is missing
+            if (error.code === 'failed-precondition') {
+                const q = query(
+                    collection(db, GROUPS_COLLECTION),
+                    where('status', '==', 'pending')
+                );
+                const snapshot = await getDocs(q);
+                // Sort manually in client
+                const docs = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() || {}) } as Group));
+                return docs.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
+            }
+            throw error;
+        }
     },
 
     /**
@@ -234,8 +250,15 @@ export const GroupsService = {
      */
     createGroupPost: async (groupId: string, data: any) => {
         const postsRef = collection(db, GROUPS_COLLECTION, groupId, 'posts');
+
+        // Remove undefined values
+        const cleanData = Object.entries(data).reduce((acc, [key, value]) => ({
+            ...acc,
+            [key]: value === undefined ? null : value
+        }), {});
+
         await addDoc(postsRef, {
-            ...data,
+            ...cleanData,
             timestamp: Date.now(),
             createdAt: serverTimestamp(),
             groupId, // explicit reference

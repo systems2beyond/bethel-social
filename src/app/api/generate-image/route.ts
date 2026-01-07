@@ -35,29 +35,60 @@ export async function POST(req: Request) {
 
         const lower = prompt.toLowerCase();
 
-        // 1. Determine Icon
+        // 1. Determine Icon (with randomness)
+        const iconKeys = Object.keys(ICONS);
         let iconPath = ICONS.cross; // Default
-        let iconScale = "0.6"; // Default scale
+        let iconScale = 0.5 + (Math.random() * 0.2); // Random scale between 0.5 and 0.7
 
-        if (lower.match(/music|choir|sing|worship|praise/)) { iconPath = ICONS.music; }
-        else if (lower.match(/bible|study|read|word|scripture/)) { iconPath = ICONS.bible; iconScale = "0.5"; }
-        else if (lower.match(/love|care|support|women/)) { iconPath = ICONS.heart; }
-        else if (lower.match(/youth|kid|child|teen|star|bright/)) { iconPath = ICONS.star; }
-        else if (lower.match(/mission|outreach|world|global/)) { iconPath = ICONS.globe; }
+        // Add random rotation and position offset
+        const rotation = Math.floor(Math.random() * 20) - 10; // -10 to 10 degrees
+        const translateX = 106 + (Math.floor(Math.random() * 20) - 10);
+        const translateY = 106 + (Math.floor(Math.random() * 20) - 10);
 
-        // 2. Determine Color
+        if (lower.match(/music|choir|sing|worship|praise/)) {
+            iconPath = ICONS.music;
+        } else if (lower.match(/bible|study|read|word|scripture/)) {
+            iconPath = ICONS.bible;
+        } else if (lower.match(/love|care|support|women/)) {
+            iconPath = ICONS.heart;
+        } else if (lower.match(/youth|kid|child|teen|star|bright/)) {
+            iconPath = ICONS.star;
+        } else if (lower.match(/mission|outreach|world|global/)) {
+            iconPath = ICONS.globe;
+        } else {
+            // If no match, pick a random religious icon occasionally for variety
+            if (Math.random() > 0.7) {
+                const randomKey = iconKeys[Math.floor(Math.random() * iconKeys.length)] as keyof typeof ICONS;
+                iconPath = ICONS[randomKey];
+            }
+        }
+
+        // 2. Determine Color (with randomness)
+        const gradientKeys = Object.keys(GRADIENTS);
         let gradient = GRADIENTS.gold; // Default
+
         if (lower.match(/youth|kid|child|love|care/)) gradient = GRADIENTS.warm;
         else if (lower.match(/bible|study|men/)) gradient = GRADIENTS.cool;
         else if (lower.match(/worship|music|royal/)) gradient = GRADIENTS.spiritual;
         else if (lower.match(/mission|outreach|growth/)) gradient = GRADIENTS.nature;
+        else {
+            // Randomize default gradient
+            const randomKey = gradientKeys[Math.floor(Math.random() * gradientKeys.length)] as keyof typeof GRADIENTS;
+            gradient = GRADIENTS[randomKey];
+        }
+
+        // Randomize gradient direction
+        const gradX1 = Math.floor(Math.random() * 100);
+        const gradY1 = Math.floor(Math.random() * 100);
+        const gradX2 = 100 - gradX1;
+        const gradY2 = 100 - gradY1;
 
         // 3. Construct SVG
         // Note: Using Buffer.from for base64 encoding
         const svg = `
         <svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
             <defs>
-                <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <linearGradient id="grad" x1="${gradX1}%" y1="${gradY1}%" x2="${gradX2}%" y2="${gradY2}%">
                     <stop offset="0%" style="stop-color:${gradient[0]};stop-opacity:1" />
                     <stop offset="100%" style="stop-color:${gradient[1]};stop-opacity:1" />
                 </linearGradient>
@@ -69,7 +100,7 @@ export async function POST(req: Request) {
             <rect width="512" height="512" fill="url(#grad)" rx="128" ry="128" />
             
             <!-- Icon -->
-            <g transform="translate(106, 106) scale(${iconScale})" fill="white" filter="url(#shadow)">
+            <g transform="translate(${translateX}, ${translateY}) rotate(${rotation} 150 150) scale(${iconScale})" fill="white" filter="url(#shadow)">
                 <path d="${iconPath}" />
             </g>
         </svg>`;

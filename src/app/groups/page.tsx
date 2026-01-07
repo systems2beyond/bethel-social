@@ -308,13 +308,7 @@ export default function GroupsPage() {
                 </>
             )}
 
-            {/* DEBUG BLOCK - REMOVE BEFORE PROD */}
-            <div className="mt-8 p-4 bg-black/80 text-green-400 font-mono text-xs rounded-lg overflow-auto max-h-40">
-                <p>DEBUG INFO:</p>
-                <p>User ID: {user?.uid}</p>
-                <p>Invites Count: {invites.length}</p>
-                <p>Invite Error In State: {inviteError ? JSON.stringify(inviteError) : 'null'}</p>
-            </div>
+
 
             <CreateGroupModal
                 isOpen={isCreateModalOpen}

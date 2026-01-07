@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Sparkles, BookOpen, Search as SearchIcon, Maximize2, Minimize2, Loader2, ChevronDown, Edit3, RotateCw, History, TrendingUp, Clock, ArrowRight, Youtube, Globe, Users, Plus, LayoutGrid, ExternalLink, Mic, Book, ChevronRight, Folder, Share2 } from 'lucide-react';
+import { usePathname } from 'next/navigation';
+import { X, Sparkles, BookOpen, Search as SearchIcon, Maximize2, Minimize2, Loader2, ChevronDown, Edit3, RotateCw, History, TrendingUp, Clock, ArrowRight, Youtube, Globe, Users, Plus, LayoutGrid, ExternalLink, Mic, Book, ChevronRight, Folder, Share2, ChevronLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -52,6 +53,13 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
     const [editor, setEditor] = useState<any>(null);
     const [notes, setNotes] = useState('');
     const [noteTitle, setNoteTitle] = useState(contextNoteTitle || 'General Bible Study');
+
+    const pathname = usePathname();
+
+    // Close on route change
+    useEffect(() => {
+        if (isStudyOpen) closeStudy();
+    }, [pathname, closeStudy, isStudyOpen]);
 
     // DEBUG: Trace collaborationId
     useEffect(() => {
@@ -128,7 +136,11 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
     const [isSearching, setIsSearching] = useState(false);
     const [isIndexing, setIsIndexing] = useState(false); // New state for loading index
     const [rightPaneView, setRightPaneView] = useState<'notes' | 'fellowship' | 'search'>('notes');
+
     const showResults = rightPaneView === 'search'; // Derived for backward compat in render
+
+    // Mobile Search State
+    const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
 
 
     // Autocomplete & History
@@ -551,10 +563,40 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                         <h2 className="font-semibold text-gray-900 dark:text-white">Bible Study</h2>
                     </div>
 
+                    {/* Mobile: Search Toggle Button (Visible only when search is CLOSED on mobile) */}
+                    <div className={cn("sm:hidden", isMobileSearchOpen ? "hidden" : "block")}>
+                        <button
+                            onClick={() => setIsMobileSearchOpen(true)}
+                            className="p-2 -ml-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full"
+                        >
+                            <SearchIcon className="w-5 h-5" />
+                        </button>
+                    </div>
+
                     {/* Centered Search Bar with "Google-Like" Dropdown */}
-                    <div className="flex-1 max-w-xl mx-auto relative z-50">
-                        <form onSubmit={handleSearchSubmit} className="relative shadow-sm rounded-lg">
-                            <div className="flex items-center gap-2 relative bg-gray-100 dark:bg-zinc-800 rounded-lg pr-2 border-transparent focus-within:bg-white dark:focus-within:bg-zinc-900 focus-within:shadow-md focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
+                    {/* On Mobile: Hidden unless isMobileSearchOpen is true. On Desktop: Always Flex. */}
+                    <div className={cn(
+                        "flex-1 max-w-xl mx-auto relative z-50 min-w-0 transition-all duration-200",
+                        // Mobile: Absolute positioning when open to cover header, or hidden when closed
+                        "sm:relative sm:block sm:opacity-100 sm:pointer-events-auto",
+                        isMobileSearchOpen
+                            ? "absolute inset-x-0 top-1/2 -translate-y-1/2 bg-white dark:bg-zinc-900 z-[70] block opacity-100 px-2"
+                            : "hidden"
+                    )}>
+                        <form onSubmit={handleSearchSubmit} className="relative shadow-sm rounded-lg flex items-center gap-2">
+                            {/* Mobile Back Button (Only visible when mobile search is OPEN) */}
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setIsMobileSearchOpen(false);
+                                    setSearchQuery(''); // Optional: clear query on close? Maybe not.
+                                }}
+                                className="sm:hidden p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400"
+                            >
+                                <ChevronLeft className="w-5 h-5" />
+                            </button>
+
+                            <div className="flex-1 flex items-center gap-2 relative bg-gray-100 dark:bg-zinc-800 rounded-lg pr-2 border-transparent focus-within:bg-white dark:focus-within:bg-zinc-900 focus-within:shadow-md focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
                                 {/* Version Selector */}
                                 <div className="relative border-r border-gray-300 dark:border-zinc-700">
                                     <select
@@ -727,72 +769,74 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                     </div>
 
 
-                    {/* Actions */}
-                    <div className="flex items-center gap-2 shrink-0">
+                </div>
+                {/* Hide other actions when Mobile Search is Open to avoid clutter/overlap if we use absolute positioning */}
+                <div className={cn("flex items-center gap-2 shrink-0", isMobileSearchOpen ? "hidden sm:flex" : "flex")}>
 
+
+                    <button
+                        onClick={() => handleAskAi('')}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded-full hover:bg-purple-200 dark:hover:bg-purple-900/60 transition-colors font-medium text-xs sm:text-sm"
+                    >
+                        <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                        <span className="hidden sm:inline">Ask AI</span>
+                        <span className="inline sm:hidden">AI</span>
+                    </button>
+
+                    <div className="w-px h-6 bg-gray-200 dark:bg-zinc-800 mx-1" />
+
+                    {/* View Switcher (Tabs) */}
+                    <div className="flex bg-gray-100 dark:bg-zinc-800 rounded-full p-1 border border-gray-200 dark:border-zinc-700">
                         <button
-                            onClick={() => handleAskAi('')}
-                            className="flex items-center gap-2 px-3 py-1.5 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded-full hover:bg-purple-200 dark:hover:bg-purple-900/60 transition-colors font-medium text-xs sm:text-sm"
+                            onClick={() => {
+                                setRightPaneView('notes');
+                                // Ensure split ratio is visible
+                                if (splitRatio > 0.3 && splitRatio < 0.9) { } // Keep current if valid
+                                else if (splitRatio > 0.9) setSplitRatio(0.5); // If reader maximized, restore split
+                                else if (splitRatio < 0.1) setSplitRatio(0.2); // If notes hidden, show them
+                                else setSplitRatio(0.5); // Default
+                            }}
+                            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all ${rightPaneView !== 'fellowship'
+                                ? 'bg-white dark:bg-zinc-700 text-gray-900 dark:text-white shadow-sm'
+                                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                                }`}
                         >
-                            <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                            <span className="hidden sm:inline">Ask AI</span>
-                            <span className="inline sm:hidden">AI</span>
+                            <Edit3 className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">Notes</span>
                         </button>
-
-                        <div className="w-px h-6 bg-gray-200 dark:bg-zinc-800 mx-1" />
-
-                        {/* View Switcher (Tabs) */}
-                        <div className="flex bg-gray-100 dark:bg-zinc-800 rounded-full p-1 border border-gray-200 dark:border-zinc-700">
-                            <button
-                                onClick={() => {
-                                    setRightPaneView('notes');
-                                    // Ensure split ratio is visible
-                                    if (splitRatio > 0.3 && splitRatio < 0.9) { } // Keep current if valid
-                                    else if (splitRatio > 0.9) setSplitRatio(0.5); // If reader maximized, restore split
-                                    else if (splitRatio < 0.1) setSplitRatio(0.2); // If notes hidden, show them
-                                    else setSplitRatio(0.5); // Default
-                                }}
-                                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all ${rightPaneView !== 'fellowship'
-                                    ? 'bg-white dark:bg-zinc-700 text-gray-900 dark:text-white shadow-sm'
-                                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-                                    }`}
-                            >
-                                <Edit3 className="w-3.5 h-3.5" />
-                                <span className="hidden sm:inline">Notes</span>
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setRightPaneView('fellowship');
-                                    // Ensure split ratio is visible
-                                    if (splitRatio > 0.3 && splitRatio < 0.9) { }
-                                    else if (splitRatio > 0.9) setSplitRatio(0.5);
-                                    else if (splitRatio < 0.1) setSplitRatio(0.2);
-                                    else setSplitRatio(0.5);
-                                }}
-                                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all ${rightPaneView === 'fellowship'
-                                    ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-sm'
-                                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-                                    }`}
-                            >
-                                <Users className="w-3.5 h-3.5" />
-                                <span className="hidden sm:inline">Fellowship</span>
-                            </button>
-                        </div>
-
-                        <div className="w-px h-6 bg-gray-200 dark:bg-zinc-800 mx-1" />
-
                         <button
-                            onClick={toggleReaderMaximize}
-                            className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors text-gray-500"
-                            title={isReaderMaximized ? "Restore Split View" : "Full Screen Reader"}
+                            onClick={() => {
+                                setRightPaneView('fellowship');
+                                // Ensure split ratio is visible
+                                if (splitRatio > 0.3 && splitRatio < 0.9) { }
+                                else if (splitRatio > 0.9) setSplitRatio(0.5);
+                                else if (splitRatio < 0.1) setSplitRatio(0.2);
+                                else setSplitRatio(0.5);
+                            }}
+                            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all ${rightPaneView === 'fellowship'
+                                ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-sm'
+                                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                                }`}
                         >
-                            {isReaderMaximized ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
-                        </button>
-                        <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors">
-                            <X className="w-5 h-5 text-gray-500" />
+                            <Users className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">Fellowship</span>
                         </button>
                     </div>
+
+                    <div className="w-px h-6 bg-gray-200 dark:bg-zinc-800 mx-1" />
+
+                    <button
+                        onClick={toggleReaderMaximize}
+                        className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors text-gray-500"
+                        title={isReaderMaximized ? "Restore Split View" : "Full Screen Reader"}
+                    >
+                        {isReaderMaximized ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
+                    </button>
+                    <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors">
+                        <X className="w-5 h-5 text-gray-500" />
+                    </button>
                 </div>
+
 
                 {/* Scrollable Content Container (Flex Column) */}
                 <div className="flex-1 overflow-hidden relative flex flex-col overscroll-contain">
