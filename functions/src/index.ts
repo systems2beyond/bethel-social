@@ -115,7 +115,7 @@ export const syncFacebook = onSchedule({ schedule: 'every 10 minutes', secrets: 
 
 export const fbWebhook = onRequest({ secrets: [fbVerifyToken, fbAccessToken, fbPageId] }, facebookWebhook);
 
-export const syncYoutube = onSchedule({ schedule: 'every 10 minutes', secrets: [googleApiKey] }, async (event) => {
+export const syncYoutube = onSchedule({ schedule: 'every 3 minutes', secrets: [googleApiKey] }, async (event) => {
     await syncYoutubeContent();
 });
 

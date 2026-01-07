@@ -2,7 +2,10 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Play, Radio } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { Play, Radio, XCircle } from 'lucide-react';
 import Image from 'next/image';
 import { useLightbox } from '@/context/LightboxContext';
 
@@ -10,10 +13,34 @@ import { Post } from '@/types';
 
 interface LiveStreamBannerProps {
     post: Post;
+    onDismiss?: () => void;
 }
 
-export const LiveStreamBanner = ({ post }: LiveStreamBannerProps) => {
+export const LiveStreamBanner = ({ post, onDismiss }: LiveStreamBannerProps) => {
     const { openLightbox } = useLightbox();
+
+    const { userData } = useAuth();
+    const [isEnding, setIsEnding] = React.useState(false);
+
+    const handleEndLive = async (e: React.MouseEvent) => {
+        e.stopPropagation(); // Prevent opening lightbox
+        if (!confirm('Are you sure you want to end this live stream? This will remove the banner for everyone.')) return;
+
+        setIsEnding(true);
+        try {
+            const postRef = doc(db, 'posts', post.id);
+            await updateDoc(postRef, {
+                isLive: false,
+                pinned: false
+            });
+            if (onDismiss) onDismiss();
+        } catch (error) {
+            console.error('Error ending live stream:', error);
+            alert('Failed to end live stream');
+        } finally {
+            setIsEnding(false);
+        }
+    };
 
     if (!post.mediaUrl) return null;
 
@@ -50,9 +77,21 @@ export const LiveStreamBanner = ({ post }: LiveStreamBannerProps) => {
 
                 {/* Content Section */}
                 <div className="flex-1 text-center md:text-left">
-                    <div className="inline-flex items-center gap-2 bg-red-500/80 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-3 animate-pulse">
-                        <Radio className="w-3 h-3" />
-                        Live Now
+                    <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-3">
+                        <div className="inline-flex items-center gap-2 bg-red-500/80 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider animate-pulse">
+                            <Radio className="w-3 h-3" />
+                            Live Now
+                        </div>
+                        {userData?.role === 'admin' && (
+                            <button
+                                onClick={handleEndLive}
+                                disabled={isEnding}
+                                className="px-3 py-1 bg-black/30 hover:bg-black/50 backdrop-blur-sm text-white text-xs rounded-lg transition-colors flex items-center gap-2 border border-white/10 z-10"
+                            >
+                                <XCircle className="w-3 h-3" />
+                                {isEnding ? 'Ending...' : 'End Live Stream'}
+                            </button>
+                        )}
                     </div>
 
                     <h2 className="text-2xl md:text-3xl font-bold mb-2 line-clamp-2">

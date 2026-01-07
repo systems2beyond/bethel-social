@@ -44,123 +44,112 @@ function getYoutube() {
     }
     return youtubeClient;
 }
+// Hardcoded Channel ID for Bethel Metropolitan Baptist Church (St. Petersburg)
+// Handle: @BMBCFamily
+// Hardcoded Channel ID for Bethel Metropolitan Baptist Church (St. Petersburg)
+// Handle: @BMBCFamily
+const KNOWN_CHANNEL_ID = 'UCSCjB283HWz8AfxNYfD0yrA';
+const UPLOADS_PLAYLIST_ID = 'UUSCjB283HWz8AfxNYfD0yrA'; // Channel ID with UU instead of UC
 const syncYoutubeContent = async () => {
-    var _a, _b, _c, _d, _e, _f, _g;
-    logger.info('Starting YouTube sync...');
-    const API_KEY = process.env.GOOGLE_API_KEY || process.env.GOOGLE_AI_API_KEY;
-    let CHANNEL_ID = process.env.YOUTUBE_CHANNEL_ID;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j;
+    logger.info('Starting YouTube sync (Efficient Mode)...');
+    const API_KEY = process.env.GOOGLE_API_KEY || process.env.GOOGLE_AI_API_KEY || process.env.GOOGLE_SEARCH_API_KEY;
+    // Prefer environment variable, fallback to known efficient ID
+    const CHANNEL_ID = process.env.YOUTUBE_CHANNEL_ID || KNOWN_CHANNEL_ID;
     if (!API_KEY) {
-        logger.error('Missing Google API Key (GOOGLE_API_KEY or GOOGLE_AI_API_KEY)');
+        // Try fetching from Firestore (Dynamic Config)
+        const settingsDoc = await admin.firestore().doc('settings/integrations').get();
+        if (settingsDoc.exists) {
+            const data = settingsDoc.data();
+            if ((_a = data === null || data === void 0 ? void 0 : data.youtube) === null || _a === void 0 ? void 0 : _a.apiKey) {
+                logger.info('Using YouTube API Key from Firestore settings.');
+                // We need to re-assign constants. Let's change loops slightly or use mutable vars.
+            }
+        }
+    }
+    // Dynamic Resolution
+    let activeApiKey = API_KEY;
+    let activeChannelId = CHANNEL_ID;
+    if (!activeApiKey || !activeChannelId) {
+        try {
+            const settingsDoc = await admin.firestore().doc('settings/integrations').get();
+            if (settingsDoc.exists) {
+                const data = settingsDoc.data();
+                if (!activeApiKey && ((_b = data === null || data === void 0 ? void 0 : data.youtube) === null || _b === void 0 ? void 0 : _b.apiKey)) {
+                    activeApiKey = data.youtube.apiKey;
+                }
+                if (process.env.YOUTUBE_CHANNEL_ID === undefined && ((_c = data === null || data === void 0 ? void 0 : data.youtube) === null || _c === void 0 ? void 0 : _c.channelId)) {
+                    // Only override default KNOWN_CHANNEL_ID if the user actively set one in settings, 
+                    // OR if we strictly want to valid empty defaults. 
+                    // Logic: If Env Var is set, it wins. If not, check DB. If not, check Hardcoded Default? 
+                    // Actually, if DB has a channel ID, we should probably prefer it over the hardcoded default, but NOT the Env Var.
+                    activeChannelId = data.youtube.channelId;
+                }
+            }
+        }
+        catch (e) {
+            logger.error('Error reading settings', e);
+        }
+    }
+    if (!activeApiKey) {
+        logger.error('Missing Google API Key (Env or Firestore)');
         return;
     }
-    logger.info(`Using API Key: ${API_KEY.substring(0, 10)}...`);
     try {
-        // 0. Resolve Channel ID if missing
-        // 0. Resolve Channel ID if missing
-        if (!CHANNEL_ID) {
-            logger.info('Resolving channel ID for @BMBCFamily...');
-            try {
-                const channelResponse = await getYoutube().channels.list({
-                    key: API_KEY,
-                    forHandle: 'BMBCFamily',
-                    part: ['id']
-                });
-                if (channelResponse.data.items && channelResponse.data.items.length > 0) {
-                    CHANNEL_ID = channelResponse.data.items[0].id || undefined;
-                    logger.info(`Resolved Channel ID: ${CHANNEL_ID}`);
-                }
-                else {
-                    // Fallback to search if handle lookup fails
-                    logger.warn('Handle lookup failed, falling back to search...');
-                    const searchResponse = await getYoutube().search.list({
-                        key: API_KEY,
-                        q: 'BMBCFamily',
-                        type: ['channel'],
-                        part: ['id'],
-                        maxResults: 1,
-                    });
-                    if (searchResponse.data.items && searchResponse.data.items.length > 0) {
-                        CHANNEL_ID = ((_a = searchResponse.data.items[0].id) === null || _a === void 0 ? void 0 : _a.channelId) || undefined;
-                        logger.info(`Resolved Channel ID via search: ${CHANNEL_ID}`);
-                    }
-                }
-            }
-            catch (err) {
-                logger.error('Error resolving channel ID:', err);
-            }
-            if (!CHANNEL_ID) {
-                logger.error('Could not resolve channel ID for @BMBCFamily');
-                return;
-            }
-        }
-        // 1. Fetch latest videos
-        const response = await getYoutube().search.list({
-            key: API_KEY,
-            channelId: CHANNEL_ID,
-            part: ['snippet'], // Search only supports snippet
-            order: 'date',
-            maxResults: 10, // Increased from 5
-            type: ['video'],
-        });
-        // 2. Fetch currently LIVE video
-        const liveResponse = await getYoutube().search.list({
-            key: API_KEY,
-            channelId: CHANNEL_ID,
+        // 1. Fetch latest videos from Uploads playlist (Cost: 1 unit)
+        // This includes live streams (usually) and recent uploads.
+        const playlistResponse = await getYoutube().playlistItems.list({
+            key: activeApiKey,
+            playlistId: UPLOADS_PLAYLIST_ID,
             part: ['snippet'],
-            type: ['video'],
-            eventType: 'live',
-            maxResults: 1,
+            maxResults: 10, // Fetch last 10 to be safe
         });
-        // 3. Fetch recently COMPLETED live videos (Standard search misses these sometimes)
-        const completedResponse = await getYoutube().search.list({
-            key: API_KEY,
-            channelId: CHANNEL_ID,
-            part: ['snippet'],
-            type: ['video'],
-            eventType: 'completed',
-            order: 'date',
-            maxResults: 3,
-        });
-        const searchItems = [
-            ...(response.data.items || []),
-            ...(liveResponse.data.items || []),
-            ...(completedResponse.data.items || [])
-        ];
-        const uniqueVideoIds = Array.from(new Set(searchItems.map(item => { var _a; return (_a = item.id) === null || _a === void 0 ? void 0 : _a.videoId; }).filter(id => !!id)));
-        if (uniqueVideoIds.length === 0) {
-            logger.info('No videos found.');
+        const playlistItems = playlistResponse.data.items || [];
+        // Extract video IDs
+        const videoIds = playlistItems
+            .map((item) => { var _a, _b; return (_b = (_a = item.snippet) === null || _a === void 0 ? void 0 : _a.resourceId) === null || _b === void 0 ? void 0 : _b.videoId; })
+            .filter((id) => !!id);
+        if (videoIds.length === 0) {
+            logger.info('No videos found in Uploads playlist.');
             return;
         }
-        // 3. Fetch Video Details (needed for liveStreamingDetails)
+        // 2. Fetch Video Details to check Live status (Cost: 1 unit)
         const videoDetailsResponse = await getYoutube().videos.list({
-            key: API_KEY,
-            id: uniqueVideoIds,
+            key: activeApiKey,
+            id: videoIds,
             part: ['snippet', 'liveStreamingDetails']
         });
         const items = videoDetailsResponse.data.items || [];
-        logger.info(`Found ${items.length} videos. Processing...`);
+        logger.info(`Fetched details for ${items.length} videos.`);
         const db = admin.firestore();
         const batch = db.batch();
         for (const item of items) {
             if (!item.snippet || !item.id)
                 continue;
-            // Determine best timestamp: Actual Start -> Scheduled Start -> Published At
+            // Double check channel ID
+            if (item.snippet.channelId !== activeChannelId) {
+                logger.warn(`Skipping video ${item.id} from wrong channel: ${item.snippet.channelId} (Expected: ${activeChannelId})`);
+                continue;
+            }
+            // Determine best timestamp
             let timestamp = new Date(item.snippet.publishedAt || new Date().toISOString()).getTime();
-            if ((_b = item.liveStreamingDetails) === null || _b === void 0 ? void 0 : _b.actualStartTime) {
+            if ((_d = item.liveStreamingDetails) === null || _d === void 0 ? void 0 : _d.actualStartTime) {
                 timestamp = new Date(item.liveStreamingDetails.actualStartTime).getTime();
             }
-            else if ((_c = item.liveStreamingDetails) === null || _c === void 0 ? void 0 : _c.scheduledStartTime) {
+            else if ((_e = item.liveStreamingDetails) === null || _e === void 0 ? void 0 : _e.scheduledStartTime) {
                 timestamp = new Date(item.liveStreamingDetails.scheduledStartTime).getTime();
             }
-            logger.info(`Processing video: ${item.snippet.title} (${item.id}) - Time: ${new Date(timestamp).toISOString()}`);
+            // Determine if truly live
+            const isLive = item.snippet.liveBroadcastContent === 'live';
             const video = {
                 id: item.id,
                 title: item.snippet.title || 'Untitled Video',
                 description: item.snippet.description || '',
-                thumbnailUrl: ((_e = (_d = item.snippet.thumbnails) === null || _d === void 0 ? void 0 : _d.high) === null || _e === void 0 ? void 0 : _e.url) || ((_g = (_f = item.snippet.thumbnails) === null || _f === void 0 ? void 0 : _f.default) === null || _g === void 0 ? void 0 : _g.url) || '',
+                thumbnailUrl: ((_g = (_f = item.snippet.thumbnails) === null || _f === void 0 ? void 0 : _f.high) === null || _g === void 0 ? void 0 : _g.url) || ((_j = (_h = item.snippet.thumbnails) === null || _h === void 0 ? void 0 : _h.default) === null || _j === void 0 ? void 0 : _j.url) || '',
                 publishedAt: new Date(timestamp).toISOString(),
                 videoId: item.id,
-                isLive: item.snippet.liveBroadcastContent === 'live',
+                isLive: isLive,
+                channelId: item.snippet.channelId,
             };
             const postRef = db.collection('posts').doc(`yt_${video.id}`);
             batch.set(postRef, {
@@ -179,23 +168,53 @@ const syncYoutubeContent = async () => {
                 isLive: video.isLive,
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
             }, { merge: true });
-            // CLEANUP: Remove any Facebook posts that were ingested before this YouTube sync
-            // This handles the race condition where FB sync runs first
+            // CLEANUP: Remove duplicate Facebook posts
+            // (Only do this cheaply if needed, or query specifically. skipping to save reads/writes for now unless critical?)
+            // Keeping it for now as it's cleaner.
             const fbDuplicates = await db.collection('posts')
                 .where('youtubeVideoId', '==', video.id)
                 .get();
             if (!fbDuplicates.empty) {
                 fbDuplicates.forEach(doc => {
-                    logger.info(`Removing duplicate Facebook post ${doc.id} for YouTube video ${video.id}`);
                     batch.delete(doc.ref);
                 });
             }
-            else {
-                logger.info(`No Facebook duplicates found for YouTube video ${video.id}`);
-            }
         }
+        // 3. Cleanup: Unmark any YouTube posts that are 'live' in DB but NOT in our current live list
+        // Since we fetched the latest uploads, if a stream ended, it's either in this list as 'none'/'completed'
+        // OR it's old enough to fall off the list.
+        // Any video IN the list with isLive=false will be updated by the loop above.
+        // But what if a video falls off the list (e.g. very old)? It shouldn't be live anyway.
+        // The main risk is a video that WAS live, now ended, and we update it.
+        // We still need to find any 'isLive: true' in DB and check if it's still valid.
+        // But we only have the status of the 10 videos we fetched.
+        // Use the same logic: Get all DB live posts. checking against the "live" ones we just found.
+        const currentLiveVideoIds = items
+            .filter((i) => { var _a; return ((_a = i.snippet) === null || _a === void 0 ? void 0 : _a.liveBroadcastContent) === 'live'; })
+            .map((i) => i.id);
+        const stuckLivePosts = await db.collection('posts')
+            .where('type', '==', 'youtube')
+            .where('isLive', '==', true)
+            .get();
+        stuckLivePosts.forEach(doc => {
+            const data = doc.data();
+            // If the video is NOT in our currently live list
+            if (!currentLiveVideoIds.includes(data.sourceId)) {
+                // Check if we just updated it in the loop above (e.g. it was in the list but isLive=false)
+                // If we updated it in the batch already, the batch update 'wins' or merges.
+                // But specifically for 'isLive: false', simple unmark is fine.
+                // If the video was IN the fetch list, the loop already set isLive=false (if it's not live).
+                // If the video was NOT in the fetch list (e.g. older), it's definitely not live anymore (assuming we fetch enough history).
+                // So safe to unmark.
+                logger.info(`Unmarking live post: ${doc.id}`);
+                batch.update(doc.ref, {
+                    isLive: false,
+                    pinned: false
+                });
+            }
+        });
         await batch.commit();
-        logger.info(`Successfully synced ${items.length} YouTube videos.`);
+        logger.info(`Synced ${items.length} videos. Live: ${currentLiveVideoIds.length}. Cleaned up ${stuckLivePosts.size} potentially stale.`);
     }
     catch (error) {
         logger.error('Error syncing YouTube content:', error);

@@ -3,10 +3,12 @@
 import React, { useState, useEffect } from 'react';
 import { addDoc, collection, serverTimestamp, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { Loader2, Send, Users, Flag, Pin, LayoutDashboard, AlertCircle, CheckCircle, Trash2, ExternalLink } from 'lucide-react';
+import { Loader2, Send, Users, Flag, Pin, LayoutDashboard, AlertCircle, CheckCircle, Trash2, ExternalLink, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import Image from 'next/image';
+import { GroupsService } from '@/lib/groups';
+import { Group } from '@/types';
 
 interface Report {
     id: string;
@@ -33,7 +35,7 @@ interface PinnedPost {
 
 export default function AdminPage() {
     const { userData } = useAuth();
-    const [activeTab, setActiveTab] = useState<'overview' | 'reports' | 'pinned'>('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'reports' | 'pinned' | 'groups'>('overview');
 
     // Overview State
     const [content, setContent] = useState('');
@@ -47,6 +49,10 @@ export default function AdminPage() {
     // Pinned Posts State
     const [pinnedPosts, setPinnedPosts] = useState<PinnedPost[]>([]);
     const [loadingPinned, setLoadingPinned] = useState(true);
+
+    // Groups State
+    const [pendingGroups, setPendingGroups] = useState<Group[]>([]);
+    const [loadingGroups, setLoadingGroups] = useState(true);
 
     // Fetch Reports
     useEffect(() => {
@@ -71,6 +77,47 @@ export default function AdminPage() {
             return () => unsubscribe();
         }
     }, [activeTab]);
+
+    // Fetch Pending Groups
+    useEffect(() => {
+        if (activeTab === 'groups') {
+            loadPendingGroups();
+        }
+    }, [activeTab]);
+
+    const loadPendingGroups = async () => {
+        setLoadingGroups(true);
+        try {
+            const data = await GroupsService.getPendingGroups();
+            setPendingGroups(data);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setLoadingGroups(false);
+        }
+    };
+
+    const handleApproveGroup = async (groupId: string) => {
+        if (!confirm('Approve this group?')) return;
+        try {
+            await GroupsService.approveGroup(groupId);
+            setPendingGroups(prev => prev.filter(g => g.id !== groupId));
+        } catch (e) {
+            console.error(e);
+            alert('Failed to approve group');
+        }
+    };
+
+    const handleRejectGroup = async (groupId: string) => {
+        if (!confirm('Reject (delete) this group request?')) return;
+        try {
+            await GroupsService.rejectGroup(groupId);
+            setPendingGroups(prev => prev.filter(g => g.id !== groupId));
+        } catch (e) {
+            console.error(e);
+            alert('Failed to reject group');
+        }
+    };
 
     const handleCreatePost = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -180,6 +227,14 @@ export default function AdminPage() {
                         <Pin className="w-4 h-4" />
                         <span>Pinned Posts</span>
                     </button>
+                    <button
+                        onClick={() => setActiveTab('groups')}
+                        className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'groups' ? 'bg-purple-50 text-purple-700 shadow-sm' : 'text-gray-600 hover:bg-gray-50'
+                            }`}
+                    >
+                        <Users className="w-4 h-4" />
+                        <span>Pending Groups</span>
+                    </button>
                 </div>
 
                 {/* Tab Content */}
@@ -207,6 +262,21 @@ export default function AdminPage() {
                                     </Link>
 
                                     {/* Add more quick actions here in future */}
+                                    <Link
+                                        href="/admin/integrations"
+                                        className="flex items-center justify-between p-3 rounded-lg border border-gray-200 hover:border-purple-500 hover:bg-purple-50 transition-all group"
+                                    >
+                                        <div className="flex items-center space-x-3">
+                                            <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 group-hover:bg-purple-200 transition-colors">
+                                                <Settings className="w-5 h-5" />
+                                            </div>
+                                            <div>
+                                                <h3 className="font-medium text-gray-900">Integrations</h3>
+                                                <p className="text-xs text-gray-500">Connect Facebook & YouTube</p>
+                                            </div>
+                                        </div>
+                                        <ExternalLink className="w-4 h-4 text-gray-400 group-hover:text-purple-500" />
+                                    </Link>
                                 </div>
                             </div>
 
@@ -346,6 +416,58 @@ export default function AdminPage() {
                                                             className="text-blue-600 hover:text-blue-700 text-xs font-medium px-2 py-1 rounded hover:bg-blue-50"
                                                         >
                                                             Unpin
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {activeTab === 'groups' && (
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                            {loadingGroups ? (
+                                <div className="p-8 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
+                            ) : pendingGroups.length === 0 ? (
+                                <div className="p-8 text-center text-gray-500">No pending group requests.</div>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left">
+                                        <thead className="bg-gray-50 border-b border-gray-200">
+                                            <tr>
+                                                <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Group Name</th>
+                                                <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Description</th>
+                                                <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Type</th>
+                                                <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase text-right">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                            {pendingGroups.map((group) => (
+                                                <tr key={group.id} className="hover:bg-gray-50 transition-colors">
+                                                    <td className="px-6 py-4">
+                                                        <span className="font-medium text-gray-900">{group.name}</span>
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <p className="text-sm text-gray-600 line-clamp-2 max-w-xs">{group.description}</p>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-sm text-gray-500 capitalize">
+                                                        {group.type}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-right space-x-2">
+                                                        <button
+                                                            onClick={() => handleRejectGroup(group.id)}
+                                                            className="text-red-600 hover:text-red-700 text-xs font-medium px-3 py-1.5 rounded hover:bg-red-50 border border-transparent hover:border-red-200 transition-all"
+                                                        >
+                                                            Reject
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleApproveGroup(group.id)}
+                                                            className="bg-green-600 hover:bg-green-700 text-white text-xs font-medium px-3 py-1.5 rounded shadow-sm hover:shadow transition-all"
+                                                        >
+                                                            Approve
                                                         </button>
                                                     </td>
                                                 </tr>

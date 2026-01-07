@@ -5,6 +5,7 @@ export interface Post {
     type: PostType;
     content: string;
     mediaUrl?: string;
+    images?: string[];
     thumbnailUrl?: string;
     sourceId?: string;
     timestamp: number; // Unix timestamp
@@ -16,6 +17,45 @@ export interface Post {
     likes?: number;
     comments?: number;
     externalUrl?: string;
+    groupId?: string; // Optional: if post belongs to a group
+}
+
+export type GroupPrivacy = 'public' | 'private';
+export type GroupType = 'ministry' | 'community';
+export type GroupRole = 'admin' | 'moderator' | 'member';
+
+export interface Group {
+    id: string;
+    name: string;
+    description: string;
+    bannerImage?: string;
+    icon?: string;
+    type: GroupType;
+    privacy: GroupPrivacy;
+    status: 'pending' | 'active' | 'suspended';
+    tags: string[];
+    location?: string;
+    memberCount: number;
+    lastActivityAt: any; // Firestore Timestamp
+    createdBy: string;
+    createdAt: any; // Firestore Timestamp
+    settings?: {
+        postingPermission: 'everyone' | 'admins_only';
+        invitePermission: 'everyone' | 'admins_only';
+        joinPolicy: 'open' | 'request';
+    };
+}
+
+export interface GroupMember {
+    userId: string;
+    groupId: string;
+    role: GroupRole;
+    status: 'active' | 'invited' | 'banned' | 'pending'; // 'pending' for private requests
+    joinedAt: any; // Firestore Timestamp
+    user?: { // Hydrated user data for UI
+        displayName: string;
+        photoURL?: string;
+    };
 }
 
 export interface Event {
@@ -82,4 +122,17 @@ export interface Meeting {
         verse?: number;
     };
     createdAt: number;
+}
+
+export interface GroupEvent {
+    id: string;
+    groupId: string;
+    title: string;
+    description: string;
+    startDate: any; // Firestore Timestamp
+    endDate?: any; // Firestore Timestamp
+    location: string;
+    imageUrl?: string;
+    createdBy: string;
+    createdAt: any; // Firestore Timestamp
 }

@@ -250,15 +250,7 @@ function UserSection() {
                 <p className="text-xs text-gray-500 truncate">{user.email}</p>
             </div>
 
-            {isAdmin && (
-                <button
-                    onClick={() => router.push('/admin')}
-                    className="p-1.5 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
-                    title="Admin Settings"
-                >
-                    <Settings className="w-4 h-4 text-gray-500 hover:text-blue-600" />
-                </button>
-            )}
+
 
             <button
                 onClick={() => router.push('/settings')}
@@ -268,13 +260,7 @@ function UserSection() {
                 <Settings className="w-4 h-4 text-gray-500 hover:text-blue-600" />
             </button>
 
-            <button
-                onClick={signOut}
-                className="p-1.5 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
-                title="Sign Out"
-            >
-                <LogOut className="w-4 h-4 text-gray-400 hover:text-red-500" />
-            </button>
+
         </div>
     );
 }

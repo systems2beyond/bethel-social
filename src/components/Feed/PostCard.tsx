@@ -28,69 +28,7 @@ interface PostCardProps {
 import { useFeed } from '@/context/FeedContext';
 import { useLightbox } from '@/context/LightboxContext';
 
-const VideoPlayer = ({ url, postId }: { url: string; postId: string }) => {
-    const iframeRef = React.useRef<HTMLIFrameElement>(null);
-    const containerRef = React.useRef<HTMLDivElement>(null);
-    const { registerPost, unregisterPost, reportVisibility } = useFeed();
 
-    React.useEffect(() => {
-        // Register video with context
-        registerPost(
-            postId,
-            {
-                type: 'video',
-                mediaUrl: url,
-                play: () => {
-                    if (iframeRef.current && iframeRef.current.contentWindow) {
-                        iframeRef.current.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*');
-                    }
-                },
-                pause: () => {
-                    if (iframeRef.current && iframeRef.current.contentWindow) {
-                        iframeRef.current.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*');
-                    }
-                }
-            }
-        );
-
-        return () => unregisterPost(postId);
-    }, [postId, registerPost, unregisterPost, url]);
-
-    React.useEffect(() => {
-        const observer = new IntersectionObserver(
-            (entries) => {
-                entries.forEach((entry) => {
-                    reportVisibility(postId, entry.intersectionRatio, entry.boundingClientRect);
-                });
-            },
-            { threshold: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0] }
-        );
-
-        if (containerRef.current) {
-            observer.observe(containerRef.current);
-        }
-
-        return () => observer.disconnect();
-    }, [postId, reportVisibility]);
-
-    // Ensure enablejsapi=1 is present
-    const embedUrl = url.includes('?')
-        ? `${url}&enablejsapi=1`
-        : `${url}?enablejsapi=1`;
-
-    return (
-        <div ref={containerRef} className="aspect-video">
-            <iframe
-                ref={iframeRef}
-                src={embedUrl}
-                title="Post video"
-                className="w-full h-full"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-            />
-        </div>
-    );
-};
 
 interface VideoPlayerRef {
     play: () => void;
@@ -212,6 +150,9 @@ const YouTubeFeedPlayer = React.forwardRef<VideoPlayerRef, { url: string }>(({ u
 
         return () => events.forEach(event => document.removeEventListener(event, handleFullscreenChange));
     }, []);
+
+    // Only render iframe once origin is determined to avoid API errors
+    if (!origin) return <div className="w-full h-full bg-black/10 animate-pulse" />;
 
     return (
         <div className="aspect-video bg-black">
@@ -398,23 +339,75 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
             </div>
 
             {/* Media */}
-            {post.mediaUrl && (
-                <div className="mt-2 relative aspect-video bg-black group">
+            {/* Media */}
+            {(post.mediaUrl || (post.images && post.images.length > 0)) && (
+                <div className="mt-2 group">
                     {post.type === 'youtube' ? (
-                        <YouTubeFeedPlayer ref={videoPlayerRef} url={post.mediaUrl} />
-                    ) : post.type === 'video' ? (
-                        <NativeVideoPlayer ref={videoPlayerRef} url={post.mediaUrl} poster={post.thumbnailUrl} />
-                    ) : (
-                        <div
-                            className="w-full h-full cursor-pointer"
-                            onClick={() => openLightbox(post.mediaUrl!, 'image')}
-                        >
-                            <img
-                                src={post.mediaUrl}
-                                alt="Post content"
-                                className="w-full h-full object-cover"
-                            />
+                        <div className="relative aspect-video bg-black">
+                            <YouTubeFeedPlayer ref={videoPlayerRef} url={post.mediaUrl!} />
                         </div>
+                    ) : post.type === 'video' ? (
+                        <div className="relative aspect-video bg-black">
+                            <NativeVideoPlayer ref={videoPlayerRef} url={post.mediaUrl!} poster={post.thumbnailUrl} />
+                        </div>
+                    ) : (
+                        (() => {
+                            const images = post.images && post.images.length > 0 ? post.images : [post.mediaUrl!];
+
+                            if (images.length === 1) {
+                                return (
+                                    <div
+                                        className="relative aspect-video bg-black cursor-pointer overflow-hidden rounded-lg"
+                                        onClick={() => openLightbox(images, 'image', 0)}
+                                    >
+                                        <img
+                                            src={images[0]}
+                                            alt="Post content"
+                                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                        />
+                                    </div>
+                                );
+                            }
+
+                            return (
+                                <div className={cn(
+                                    "grid gap-0.5 overflow-hidden rounded-lg cursor-pointer aspect-video",
+                                    images.length === 2 ? "grid-cols-2" : "grid-cols-2"
+                                )}>
+                                    {images.slice(0, 4).map((src, index) => {
+                                        const isLast = index === 3;
+                                        const remaining = images.length - 4;
+
+                                        // Layout Logic
+                                        let className = "relative w-full h-full bg-gray-100 dark:bg-zinc-800";
+
+                                        // For 3 images: First image takes left half (row-span-2)
+                                        if (images.length === 3 && index === 0) {
+                                            className += " row-span-2";
+                                        }
+
+                                        return (
+                                            <div
+                                                key={index}
+                                                className={className}
+                                                onClick={() => openLightbox(images, 'image', index)}
+                                            >
+                                                <img
+                                                    src={src}
+                                                    alt={`Content ${index + 1}`}
+                                                    className="w-full h-full object-cover hover:opacity-90 transition-opacity"
+                                                />
+                                                {isLast && remaining > 0 && (
+                                                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm">
+                                                        <span className="text-white font-bold text-2xl">+{remaining}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            );
+                        })()
                     )}
                 </div>
             )}

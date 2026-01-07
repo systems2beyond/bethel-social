@@ -2,7 +2,7 @@ const axios = require('axios');
 
 async function testToken() {
     const PAGE_ID = '120720411275822';
-    const ACCESS_TOKEN = 'EAAYtDq4SmQcBQXKQHA953wIOgWTxZCwpId0N0sJNoZCcobGmpZBhtXkc2zKGV6B2BaZB6vxf644zOLLtoThjsKLHHXnJ93H784dYxLCmZCxQdyDG1sxwONgZCvJbTkG6Q5s3FtJAZBbxO664fse1qKAxI6tLGfRW6uOVrNzuZA9Jr0fHPAinWsEB35ZBWNznY4fdz5Ezls35kya8ZCYlhFXOHhiNctmuAhU1Pu7R2KHPLm5ZBbluTFlWors3QZDZD';
+    const ACCESS_TOKEN = 'EAAYtDq4SmQcBQZAz3ZA4WhleosVPRJyiwvk639mMsJNjtMzBJXfAnLnxcyUpxIKXIyN63FjSKI6aKlXeeINBOkB5YuO5uCgGY5SNFJDgOEDWOYZC0uTyMSylqm2Kyr3ZBZBWn34mO4TvNJ54N5hZCc6pLC41j1QsOZBMXrUhvfIhObvPZCbB9LrxRmggzZCsaUOSGe4Va6NtlJD39XyATDUZAdenBqjbuPgRpVAccjivTBx9XZB3WfWtKSmXAZDZD';
 
     console.log(`Testing token for Page ID: ${PAGE_ID}`);
 
@@ -10,13 +10,13 @@ async function testToken() {
         const url = `https://graph.facebook.com/v18.0/${PAGE_ID}/feed`;
         const params = {
             access_token: ACCESS_TOKEN,
-            fields: 'id,message,created_time',
+            fields: 'id,message,created_time,attachments{media,subattachments}',
             limit: 5
         };
 
         const response = await axios.get(url, { params });
         console.log('SUCCESS! Found posts:', response.data.data.length);
-        console.log('Sample Post:', response.data.data[0]);
+        console.log('Sample Post:', JSON.stringify(response.data.data[0], null, 2));
 
     } catch (error) {
         console.error('ERROR!');

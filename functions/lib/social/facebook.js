@@ -41,25 +41,44 @@ const logger = __importStar(require("firebase-functions/logger"));
 const admin = __importStar(require("firebase-admin"));
 const axios_1 = __importDefault(require("axios"));
 const syncFacebookPosts = async (backfill = false) => {
-    var _a, _b, _c, _d, _e;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j;
     logger.info(`Starting Facebook sync (Backfill: ${backfill})...`);
-    const PAGE_ID = process.env.FB_PAGE_ID;
-    const ACCESS_TOKEN = process.env.FB_ACCESS_TOKEN;
-    if (!PAGE_ID || !ACCESS_TOKEN) {
-        logger.error('Missing Facebook credentials (FB_PAGE_ID or FB_ACCESS_TOKEN)');
+    // Determine credentials considering both Env and Firestore
+    let activePageId = process.env.FB_PAGE_ID;
+    let activeAccessToken = process.env.FB_ACCESS_TOKEN;
+    if (!activePageId || !activeAccessToken) {
+        try {
+            // Try fetching from Firestore (Dynamic Config)
+            const settingsDoc = await admin.firestore().doc('settings/integrations').get();
+            if (settingsDoc.exists) {
+                const data = settingsDoc.data();
+                if (((_a = data === null || data === void 0 ? void 0 : data.facebook) === null || _a === void 0 ? void 0 : _a.pageId) && ((_b = data === null || data === void 0 ? void 0 : data.facebook) === null || _b === void 0 ? void 0 : _b.accessToken)) {
+                    activePageId = data.facebook.pageId;
+                    activeAccessToken = data.facebook.accessToken;
+                    logger.info('Using Facebook credentials from Firestore settings.');
+                }
+            }
+        }
+        catch (e) {
+            logger.error('Error reading settings', e);
+        }
+    }
+    if (!activePageId || !activeAccessToken) {
+        logger.error('Missing Facebook credentials (Env Vars or Firestore)');
         return;
     }
+    // Replace usages below with activePageId and activeAccessToken
     try {
         let params = {
-            access_token: ACCESS_TOKEN,
-            fields: 'id,message,full_picture,created_time,permalink_url,attachments{media}',
+            access_token: activeAccessToken,
+            fields: 'id,message,full_picture,created_time,permalink_url,attachments{media,subattachments}',
             limit: backfill ? 50 : 10,
         };
         if (backfill) {
             // Use Unix timestamp in seconds for 'since'
             params.since = Math.floor(new Date('2025-01-01').getTime() / 1000);
         }
-        let url = `https://graph.facebook.com/v18.0/${PAGE_ID}/feed`;
+        let url = `https://graph.facebook.com/v18.0/${activePageId}/feed`;
         let hasNext = true;
         let totalSynced = 0;
         const db = admin.firestore();
@@ -76,7 +95,7 @@ const syncFacebookPosts = async (backfill = false) => {
                 url: url,
                 postCount: fbPosts.length,
                 hasPaging: !!response.data.paging,
-                hasNext: !!((_a = response.data.paging) === null || _a === void 0 ? void 0 : _a.next)
+                hasNext: !!((_c = response.data.paging) === null || _c === void 0 ? void 0 : _c.next)
             });
             if (fbPosts.length === 0) {
                 break;
@@ -93,31 +112,52 @@ const syncFacebookPosts = async (backfill = false) => {
                 let postType = 'facebook';
                 let thumbnailUrl = null;
                 let youtubeVideoId = null;
-                if ((_d = (_c = (_b = post.attachments) === null || _b === void 0 ? void 0 : _b.data[0]) === null || _c === void 0 ? void 0 : _c.media) === null || _d === void 0 ? void 0 : _d.source) {
-                    mediaUrl = post.attachments.data[0].media.source;
-                    if (mediaUrl && (mediaUrl.includes('youtube.com') || mediaUrl.includes('youtu.be'))) {
-                        postType = 'youtube';
-                        // Extract Video ID
-                        const match = mediaUrl.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
-                        if (match && match[1]) {
-                            youtubeVideoId = match[1];
-                            // CHECK: Does this video already exist as a native YouTube post?
-                            const existingYtDoc = await db.collection('posts').doc(`yt_${youtubeVideoId}`).get();
-                            if (existingYtDoc.exists) {
-                                logger.info(`Skipping Facebook post ${post.id} because it duplicates YouTube video ${youtubeVideoId}`);
-                                continue;
+                let images = [];
+                // Handle Attachments (Multi-image or Video)
+                if ((_d = post.attachments) === null || _d === void 0 ? void 0 : _d.data[0]) {
+                    const attachment = post.attachments.data[0];
+                    // 1. Check for Subattachments (Multi-image)
+                    if ((_e = attachment.subattachments) === null || _e === void 0 ? void 0 : _e.data) {
+                        images = attachment.subattachments.data
+                            .map((sub) => { var _a, _b; return (_b = (_a = sub.media) === null || _a === void 0 ? void 0 : _a.image) === null || _b === void 0 ? void 0 : _b.src; })
+                            .filter((src) => !!src);
+                    }
+                    // If no subattachments but we have a main media (single image), put it in images array too
+                    if (images.length === 0 && ((_g = (_f = attachment.media) === null || _f === void 0 ? void 0 : _f.image) === null || _g === void 0 ? void 0 : _g.src)) {
+                        images.push(attachment.media.image.src);
+                    }
+                    // 2. Check for Video
+                    if ((_h = attachment.media) === null || _h === void 0 ? void 0 : _h.source) {
+                        mediaUrl = attachment.media.source;
+                        if (mediaUrl && (mediaUrl.includes('youtube.com') || mediaUrl.includes('youtu.be'))) {
+                            postType = 'youtube';
+                            // Extract Video ID
+                            const match = mediaUrl.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
+                            if (match && match[1]) {
+                                youtubeVideoId = match[1];
+                                // CHECK: Does this video already exist as a native YouTube post?
+                                const existingYtDoc = await db.collection('posts').doc(`yt_${youtubeVideoId}`).get();
+                                if (existingYtDoc.exists) {
+                                    logger.info(`Skipping Facebook post ${post.id} because it duplicates YouTube video ${youtubeVideoId}`);
+                                    continue;
+                                }
                             }
                         }
+                        else {
+                            postType = 'video';
+                        }
+                        thumbnailUrl = post.full_picture || null;
                     }
-                    else {
-                        postType = 'video';
-                    }
-                    thumbnailUrl = post.full_picture || null;
+                }
+                // Fallback: If no attachments data but full_picture exists (legacy/simple post)
+                if (images.length === 0 && post.full_picture && postType === 'facebook') {
+                    images.push(post.full_picture);
                 }
                 batch.set(postRef, {
                     type: postType,
                     content: post.message || '',
                     mediaUrl: mediaUrl || null,
+                    images: images,
                     thumbnailUrl: thumbnailUrl,
                     sourceId: post.id,
                     youtubeVideoId: youtubeVideoId, // Save for reverse-lookup cleanup
@@ -160,7 +200,7 @@ const syncFacebookPosts = async (backfill = false) => {
         const db = admin.firestore();
         await db.collection('system').doc('facebook_sync_debug').set({
             error: error.message,
-            response: ((_e = error.response) === null || _e === void 0 ? void 0 : _e.data) || null,
+            response: ((_j = error.response) === null || _j === void 0 ? void 0 : _j.data) || null,
             timestamp: new Date().toISOString()
         }, { merge: true });
     }

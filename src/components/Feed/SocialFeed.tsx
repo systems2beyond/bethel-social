@@ -188,7 +188,7 @@ export const SocialFeed: React.FC = () => {
                 <p className="text-gray-500 dark:text-gray-400">Stay connected with Bethel Metropolitan</p>
             </div>
 
-            {livePost && <LiveStreamBanner post={livePost} />}
+            {livePost && <LiveStreamBanner post={livePost} onDismiss={() => setLivePost(null)} />}
 
             {nextMeeting && (
                 <div className="mb-6">

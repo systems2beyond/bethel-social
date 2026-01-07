@@ -7,14 +7,16 @@ import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
 import { useFeed } from '@/context/FeedContext';
+import { GroupsService } from '@/lib/groups';
 
 interface PostComposerProps {
     isOpen: boolean;
     onClose: () => void;
     initialContent?: string;
+    groupId?: string;
 }
 
-export function PostComposer({ isOpen, onClose, initialContent = '' }: PostComposerProps) {
+export function PostComposer({ isOpen, onClose, initialContent = '', groupId }: PostComposerProps) {
     const { user, userData } = useAuth();
     const { triggerRefresh } = useFeed();
     const [content, setContent] = useState(initialContent);
@@ -47,29 +49,42 @@ export function PostComposer({ isOpen, onClose, initialContent = '' }: PostCompo
 
         setIsSubmitting(true);
         try {
-            let mediaUrl = null;
-            let mediaType = null;
+            let mediaUrl: string | undefined;
+            let mediaType: string | undefined;
 
             if (mediaFile) {
                 mediaUrl = await uploadMedia(mediaFile);
                 mediaType = mediaFile.type.startsWith('video/') ? 'video' : 'image';
             }
 
-            await addDoc(collection(db, 'posts'), {
-                content,
-                mediaUrl,
-                mediaType,
-                author: {
-                    uid: user.uid,
-                    name: userData?.displayName || user.displayName || 'Anonymous',
-                    avatarUrl: user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`
-                },
-                timestamp: Date.now(),
-                createdAt: serverTimestamp(),
-                likes: 0,
-                comments: 0,
-                type: 'user_post'
-            });
+            if (groupId) {
+                await GroupsService.createGroupPost(groupId, {
+                    content,
+                    mediaUrl,
+                    mediaType,
+                    author: {
+                        name: userData?.displayName || user.displayName || 'Anonymous',
+                        avatarUrl: user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`
+                    },
+                    type: 'user_post'
+                });
+            } else {
+                await addDoc(collection(db, 'posts'), {
+                    content,
+                    mediaUrl,
+                    mediaType,
+                    author: {
+                        uid: user.uid,
+                        name: userData?.displayName || user.displayName || 'Anonymous',
+                        avatarUrl: user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`
+                    },
+                    timestamp: Date.now(),
+                    createdAt: serverTimestamp(),
+                    likes: 0,
+                    comments: 0,
+                    type: 'user_post'
+                });
+            }
 
             setContent('');
             setMediaFile(null);

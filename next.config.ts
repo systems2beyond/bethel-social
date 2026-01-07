@@ -30,7 +30,7 @@ const nextConfig: NextConfig = {
     ],
     unoptimized: true,
   },
-  output: 'export',
+  output: 'standalone',
   trailingSlash: true,
 };
 

@@ -140,7 +140,7 @@ exports.syncFacebook = (0, scheduler_1.onSchedule)({ schedule: 'every 10 minutes
     await (0, facebook_1.syncFacebookLiveStatus)();
 });
 exports.fbWebhook = (0, https_1.onRequest)({ secrets: [fbVerifyToken, fbAccessToken, fbPageId] }, facebook_1.facebookWebhook);
-exports.syncYoutube = (0, scheduler_1.onSchedule)({ schedule: 'every 10 minutes', secrets: [googleApiKey] }, async (event) => {
+exports.syncYoutube = (0, scheduler_1.onSchedule)({ schedule: 'every 3 minutes', secrets: [googleApiKey] }, async (event) => {
     await (0, youtube_1.syncYoutubeContent)();
 });
 exports.manualYoutubeSync = (0, https_1.onRequest)({ secrets: [googleApiKey] }, async (req, res) => {
