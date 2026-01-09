@@ -1,12 +1,24 @@
+
 import React from 'react';
+import DonationWidget from '@/components/Giving/DonationForm';
+import { Metadata } from 'next';
+
+export const metadata: Metadata = {
+    title: 'Giving | Bethel Church',
+    description: 'Support the mission of Bethel Church through safe and secure online giving.',
+};
 
 export default function GivingPage() {
     return (
-        <div className="max-w-4xl mx-auto py-12 px-4 text-center">
-            <h1 className="text-3xl font-bold mb-4">Giving</h1>
-            <p className="text-gray-600 dark:text-gray-400">
-                Online giving options will be available here soon.
-            </p>
+        <div className="min-h-screen bg-gray-50 dark:bg-background flex items-center justify-center p-4 transition-colors duration-300">
+            <div className="w-full max-w-md">
+                <DonationWidget />
+
+                <div className="mt-8 text-center text-sm text-gray-400">
+                    <p>© {new Date().getFullYear()} Bethel Church. All rights reserved.</p>
+                    <p className="mt-1">501(c)(3) Non-Profit Organization.</p>
+                </div>
+            </div>
         </div>
     );
 }

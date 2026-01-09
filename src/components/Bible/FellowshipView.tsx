@@ -248,10 +248,10 @@ export function FellowshipView({ content, collaborationId, userName, userColor, 
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: 'auto', opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
-                        className="bg-white dark:bg-[#0f172a] border-b border-indigo-100 dark:border-indigo-900/30 overflow-hidden"
+                        className="bg-white dark:bg-[#0f172a] border-b border-gray-200 dark:border-indigo-900/30 overflow-hidden"
                     >
                         <div className="p-4 grid gap-4 grid-cols-2">
-                            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5">
+                            <div className="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/5">
                                 <div className="flex items-center gap-3">
                                     <div className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-lg">
                                         <Eye className="w-4 h-4" />
@@ -269,7 +269,7 @@ export function FellowshipView({ content, collaborationId, userName, userColor, 
                                 </button>
                             </div>
 
-                            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5">
+                            <div className="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/5">
                                 <div className="flex items-center gap-3">
                                     <div className="p-2 bg-purple-100 dark:bg-purple-900/30 text-purple-600 rounded-lg">
                                         <Edit2 className="w-4 h-4" />
@@ -300,7 +300,7 @@ export function FellowshipView({ content, collaborationId, userName, userColor, 
                         exit={{ width: 0, opacity: 0 }}
                         className="border-r border-indigo-100 dark:border-indigo-900/30 bg-white dark:bg-[#0B1120] overflow-hidden flex flex-col"
                     >
-                        <div className="p-3 border-b border-indigo-50 dark:border-indigo-900/20 bg-slate-50/50 dark:bg-[#0B1120] flex items-center justify-between">
+                        <div className="p-3 border-b border-indigo-50 dark:border-indigo-900/20 bg-gray-50 dark:bg-[#0B1120] flex items-center justify-between">
                             <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
                                 <MessageSquare className="w-3 h-3" />
                                 Shared with You
@@ -356,7 +356,7 @@ export function FellowshipView({ content, collaborationId, userName, userColor, 
                                                 console.error('[FellowshipView] onJoinScroll prop is missing!');
                                             }
                                         }}
-                                        className="p-3 bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-lg hover:shadow-md hover:border-indigo-200 dark:hover:border-indigo-700 transition-all cursor-pointer group"
+                                        className="p-3 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-lg hover:shadow-md hover:border-blue-300 dark:hover:border-indigo-700 transition-all cursor-pointer group"
                                     >
                                         <div className="flex items-center justify-between mb-2">
                                             <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-full">
@@ -397,7 +397,7 @@ export function FellowshipView({ content, collaborationId, userName, userColor, 
                 <div className="flex-1 overflow-hidden relative flex flex-col">
                     <div className="absolute inset-0 bg-[url('/patterns/grid.svg')] opacity-[0.03] pointer-events-none" /> {/* Subtle pattern */}
                     <div className="h-full flex flex-col">
-                        <div className="border-b border-indigo-50 dark:border-indigo-900/20 px-2 bg-white/50 dark:bg-[#0B1120]/50 backdrop-blur-sm">
+                        <div className="border-b border-indigo-50 dark:border-indigo-900/20 px-2 bg-white/80 dark:bg-[#0B1120]/50 backdrop-blur-sm">
                             {/* Toolbar placeholder */}
                         </div>
 

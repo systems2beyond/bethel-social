@@ -59,9 +59,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     // Update existing user doc (if needed) and load theme
                     const data = userSnap.data();
                     setUserData(data);
-                    if (data.theme) {
-                        setTheme(data.theme);
-                    }
+                    // FIXED: Do not sync theme from Firestore. Let next-themes manage it locally.
+                    // if (data.theme) {
+                    //    setTheme(data.theme);
+                    // }
                 }
             } else {
                 setUserData(null);

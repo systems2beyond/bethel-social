@@ -108,7 +108,7 @@ export default function MeetingList() {
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold text-white">Your Gatherings</h2>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white">Your Gatherings</h2>
                 <button
                     onClick={() => setShowCreateModal(true)}
                     className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-bold shadow-lg shadow-blue-500/20 transition-all active:scale-95"
@@ -120,11 +120,11 @@ export default function MeetingList() {
 
             {meetings.length === 0 ? (
                 <div className="text-center py-12 bg-zinc-900/50 rounded-2xl border border-zinc-800 border-dashed">
-                    <div className="w-16 h-16 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <div className="w-16 h-16 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-blue-500/20">
                         <Calendar className="w-8 h-8 text-blue-500" />
                     </div>
-                    <h3 className="text-lg font-semibold text-zinc-100">No Gatherings Yet</h3>
-                    <p className="text-zinc-500 max-w-sm mx-auto mt-2">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-zinc-100">No Gatherings Yet</h3>
+                    <p className="text-gray-500 dark:text-zinc-500 max-w-sm mx-auto mt-2">
                         Schedule a new meeting to fellowship with others.
                     </p>
                     <button
@@ -209,7 +209,7 @@ function MeetingCard({ meeting, currentUserId }: { meeting: Meeting, currentUser
             animate={{ opacity: 1, y: 0 }}
             className={`
                 group flex flex-col rounded-xl transition-all duration-300 overflow-hidden
-                ${expanded ? 'bg-zinc-900 border border-zinc-700 shadow-xl my-4' : 'hover:bg-zinc-900/50 cursor-pointer border-b border-zinc-800/50 last:border-0'}
+                ${expanded ? 'bg-neutral-100 dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 shadow-xl my-4' : 'bg-neutral-100 dark:bg-transparent hover:bg-neutral-200 dark:hover:bg-zinc-900/50 cursor-pointer border-b border-gray-200 dark:border-zinc-800/50 last:border-0'}
             `}
             onClick={() => !expanded && setExpanded(true)}
         >
@@ -220,14 +220,14 @@ function MeetingCard({ meeting, currentUserId }: { meeting: Meeting, currentUser
                         <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-wide">
                             {new Date(meeting.date).toLocaleString([], { month: 'short' }).toUpperCase()}
                         </span>
-                        <span className="text-xl font-bold text-white leading-none">
+                        <span className="text-xl font-bold text-gray-900 dark:text-white leading-none">
                             {new Date(meeting.date).getDate()}
                         </span>
                     </div>
 
                     <div className="flex flex-col min-w-0 gap-1">
                         <div className="flex items-center gap-2">
-                            <h3 className={`text-base font-semibold truncate ${isPast && !isActive ? 'text-zinc-500' : 'text-zinc-100'}`}>
+                            <h3 className={`text-base font-semibold truncate ${isPast && !isActive ? 'text-gray-500 dark:text-zinc-500' : 'text-gray-900 dark:text-zinc-100'}`}>
                                 {meeting.title}
                             </h3>
 

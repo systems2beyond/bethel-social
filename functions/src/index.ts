@@ -137,3 +137,8 @@ export { search } from './ai/search';
 export { saveImageProxy } from './media/images';
 export { fetchUrlContent } from './media/reader';
 export { generateTiptapToken } from './collaboration/token';
+
+// Stripe Functions
+export { createExpressAccount, getStripeLoginLink } from './stripe/connect';
+export { stripeWebhookHandler as stripeWebhook } from './stripe/webhooks';
+export { createDonationIntent } from './stripe/donations';

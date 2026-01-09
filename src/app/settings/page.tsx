@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { useTheme } from 'next-themes';
 import { useAuth } from '@/context/AuthContext';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
@@ -101,8 +102,77 @@ export default function SettingsPage() {
                             <span>Sign Out</span>
                         </button>
                     </section>
+
+                    {/* Debug Section */}
+                    {isAdmin && (
+                        <section className="pt-8 border-t-2 border-dashed border-red-200 dark:border-red-900/30">
+                            <div className="bg-red-50 dark:bg-red-900/10 p-4 rounded-xl border border-red-200 dark:border-red-900/30">
+                                <h3 className="text-red-800 dark:text-red-400 font-bold mb-2 flex items-center gap-2">
+                                    <Shield className="w-4 h-4" /> Theme Debugger
+                                </h3>
+                                <ThemeDebugSection />
+                            </div>
+                        </section>
+                    )}
                 </div>
             </main>
         </div>
     );
 }
+
+function ThemeDebugSection() {
+    const { theme, setTheme, resolvedTheme, systemTheme } = useTheme();
+    const [mounted, setMounted] = React.useState(false);
+
+    React.useEffect(() => setMounted(true), []);
+
+    if (!mounted) return null;
+
+    return (
+        <div className="space-y-4 text-xs font-mono">
+            <div className="grid grid-cols-2 gap-2">
+                <div className="p-2 bg-white dark:bg-black rounded border border-gray-200 dark:border-gray-800">
+                    <span className="text-gray-500 block">Theme</span>
+                    <span className="font-bold text-gray-900 dark:text-white">{theme}</span>
+                </div>
+                <div className="p-2 bg-white dark:bg-black rounded border border-gray-200 dark:border-gray-800">
+                    <span className="text-gray-500 block">Resolved</span>
+                    <span className="font-bold text-gray-900 dark:text-white">{resolvedTheme}</span>
+                </div>
+                <div className="p-2 bg-white dark:bg-black rounded border border-gray-200 dark:border-gray-800">
+                    <span className="text-gray-500 block">System</span>
+                    <span className="font-bold text-gray-900 dark:text-white">{systemTheme}</span>
+                </div>
+                <div className="p-2 bg-white dark:bg-black rounded border border-gray-200 dark:border-gray-800">
+                    <span className="text-gray-500 block">HTML Class</span>
+                    <span className="font-bold text-gray-900 dark:text-white">{document.documentElement.className}</span>
+                </div>
+            </div>
+
+            <div className="flex gap-2">
+                <button
+                    onClick={() => setTheme('light')}
+                    className="px-3 py-1 bg-gray-200 dark:bg-gray-800 rounded hover:bg-gray-300 dark:hover:bg-gray-700"
+                >
+                    Force Light
+                </button>
+                <button
+                    onClick={() => setTheme('dark')}
+                    className="px-3 py-1 bg-gray-200 dark:bg-gray-800 rounded hover:bg-gray-300 dark:hover:bg-gray-700"
+                >
+                    Force Dark
+                </button>
+                <button
+                    onClick={() => {
+                        localStorage.removeItem('theme');
+                        window.location.reload();
+                    }}
+                    className="px-3 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200"
+                >
+                    Reset Storage
+                </button>
+            </div>
+        </div>
+    );
+}
+

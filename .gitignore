@@ -45,6 +45,8 @@ next-env.d.ts
 
 # Backups
 backups/
+_backups/
 collaboration-server/
 src/components/Bible/FellowshipView.backup.tsx
 src/components/Editor/TiptapEditor.backup.tsx
+_backups/

@@ -43,7 +43,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${caveat.variable} antialiased bg-white dark:bg-black`}
+        className={`${geistSans.variable} ${geistMono.variable} ${caveat.variable} antialiased`}
       >
         <Providers>
           <BibleProvider>
@@ -52,7 +52,7 @@ export default function RootLayout({
               <Sidebar />
 
               {/* Main Content Area */}
-              <main className="flex-1 flex flex-col relative min-w-0 bg-white dark:bg-black transition-colors duration-300">
+              <main className="flex-1 flex flex-col relative min-w-0 transition-colors duration-300">
                 {/* Scrollable Feed Area */}
                 <div className="flex-1 overflow-y-auto scroll-smooth pb-24">
                   <div className="max-w-4xl mx-auto w-full">

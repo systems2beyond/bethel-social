@@ -55,10 +55,14 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
     const [noteTitle, setNoteTitle] = useState(contextNoteTitle || 'General Bible Study');
 
     const pathname = usePathname();
+    const prevPathname = useRef(pathname);
 
     // Close on route change
     useEffect(() => {
-        if (isStudyOpen) closeStudy();
+        if (prevPathname.current !== pathname) {
+            if (isStudyOpen) closeStudy();
+            prevPathname.current = pathname;
+        }
     }, [pathname, closeStudy, isStudyOpen]);
 
     // DEBUG: Trace collaborationId
@@ -139,8 +143,7 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
 
     const showResults = rightPaneView === 'search'; // Derived for backward compat in render
 
-    // Mobile Search State
-    const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
+
 
 
     // Autocomplete & History
@@ -552,50 +555,12 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                 exit={{ opacity: 0, scale: 0.95 }}
                 className="relative w-full max-w-[95vw] sm:max-w-7xl h-[96vh] bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col pb-12 sm:pb-0"
             >
-                {/* Fixed Header with Search - Added Glass Effect to connect visual to pane */}
-                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md z-[60] shrink-0 relative gap-4">
+                {/* Fixed Header with Search - Redesigned Layout */}
+                <div className="flex flex-wrap items-center gap-2 p-3 sm:px-4 sm:py-3 border-b border-gray-100 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md z-[60] shrink-0 relative">
 
-                    {/* Title + Icon (Compact) */}
-                    <div className="flex items-center gap-3 shrink-0 hidden sm:flex">
-                        <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                            <BookOpen className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                        </div>
-                        <h2 className="font-semibold text-gray-900 dark:text-white">Bible Study</h2>
-                    </div>
-
-                    {/* Mobile: Search Toggle Button (Visible only when search is CLOSED on mobile) */}
-                    <div className={cn("sm:hidden", isMobileSearchOpen ? "hidden" : "block")}>
-                        <button
-                            onClick={() => setIsMobileSearchOpen(true)}
-                            className="p-2 -ml-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full"
-                        >
-                            <SearchIcon className="w-5 h-5" />
-                        </button>
-                    </div>
-
-                    {/* Centered Search Bar with "Google-Like" Dropdown */}
-                    {/* On Mobile: Hidden unless isMobileSearchOpen is true. On Desktop: Always Flex. */}
-                    <div className={cn(
-                        "flex-1 max-w-xl mx-auto relative z-50 min-w-0 transition-all duration-200",
-                        // Mobile: Absolute positioning when open to cover header, or hidden when closed
-                        "sm:relative sm:block sm:opacity-100 sm:pointer-events-auto",
-                        isMobileSearchOpen
-                            ? "absolute inset-x-0 top-1/2 -translate-y-1/2 bg-white dark:bg-zinc-900 z-[70] block opacity-100 px-2"
-                            : "hidden"
-                    )}>
+                    {/* 1. Search Bar (Order 1: Mobile Top, Desktop Left) */}
+                    <div className="order-1 flex-1 min-w-[200px] sm:min-w-[320px] lg:min-w-[400px] max-w-full sm:max-w-xl relative">
                         <form onSubmit={handleSearchSubmit} className="relative shadow-sm rounded-lg flex items-center gap-2">
-                            {/* Mobile Back Button (Only visible when mobile search is OPEN) */}
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setIsMobileSearchOpen(false);
-                                    setSearchQuery(''); // Optional: clear query on close? Maybe not.
-                                }}
-                                className="sm:hidden p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400"
-                            >
-                                <ChevronLeft className="w-5 h-5" />
-                            </button>
-
                             <div className="flex-1 flex items-center gap-2 relative bg-gray-100 dark:bg-zinc-800 rounded-lg pr-2 border-transparent focus-within:bg-white dark:focus-within:bg-zinc-900 focus-within:shadow-md focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
                                 {/* Version Selector */}
                                 <div className="relative border-r border-gray-300 dark:border-zinc-700">
@@ -625,11 +590,10 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                         onChange={(e) => {
                                             setSearchQuery(e.target.value);
                                             setShowSuggestions(true);
-                                            // Do NOT show results pane yet, keep it in Notes view
                                         }}
                                         onFocus={() => setShowSuggestions(true)}
-                                        onBlur={() => toggleSuggestions(false)} // Delay hide
-                                        placeholder="Search verses, sermons, notes..."
+                                        onBlur={() => toggleSuggestions(false)}
+                                        placeholder="Search..."
                                         className="w-full pl-9 pr-10 py-2.5 bg-transparent border-none outline-none text-base sm:text-sm text-gray-900 dark:text-white placeholder-gray-500"
                                         autoComplete="off"
                                     />
@@ -658,7 +622,7 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                     transition={{ duration: 0.15 }}
                                     className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-zinc-900 rounded-xl shadow-xl border border-gray-100 dark:border-zinc-800 overflow-hidden z-[60]"
                                 >
-                                    {/* QUICK FILTERS (Only show if NO query or NO matches yet) */}
+                                    {/* QUICK FILTERS */}
                                     {!searchQuery.trim() && (
                                         <div>
                                             <div className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">
@@ -666,7 +630,7 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                                 Quick Access
                                             </div>
                                             <div className="flex flex-wrap gap-2 px-3 pb-2">
-                                                {['Gospels', 'Paul\'s Letters', 'Psalms', 'Proverbs', 'Genesis'].map(tag => (
+                                                {['Gospels', "Paul's Letters", 'Psalms', 'Proverbs', 'Genesis'].map(tag => (
                                                     <button
                                                         key={tag}
                                                         onMouseDown={(e) => {
@@ -682,10 +646,9 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                         </div>
                                     )}
 
-                                    {/* TOP MATCHES / LIVE SEARCH (Show if query exists) */}
+                                    {/* SEARCH RESULTS */}
                                     {searchQuery.trim() && (
                                         <>
-                                            {/* Web Search Option */}
                                             <div className="border-b border-gray-100 dark:border-zinc-800 mb-1">
                                                 <button
                                                     onMouseDown={(e) => {
@@ -718,7 +681,6 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                                             </span>
                                                         </div>
                                                         <div className="max-h-[300px] overflow-y-auto custom-scrollbar p-2">
-                                                            {/* Bible Hits */}
                                                             {unifiedSuggestions?.bible?.slice(0, 3)?.map((hit: any, i: number) => (
                                                                 <button
                                                                     key={`bible-${i}`}
@@ -727,7 +689,7 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                                                         openBible({ book: meta.book, chapter: meta.chapter, verse: meta.verse }, true);
                                                                         setShowSuggestions(false);
                                                                         bibleSearch.saveSearchToHistory(searchQuery);
-                                                                        setSplitRatio(1.0); // Auto-minimize results
+                                                                        setSplitRatio(1.0);
                                                                     }}
                                                                     className="w-full text-left p-3 hover:bg-blue-50 dark:hover:bg-blue-900/10 rounded-xl transition-colors group mb-1"
                                                                 >
@@ -741,12 +703,10 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                                                     </p>
                                                                 </button>
                                                             ))}
-
-                                                            {/* View All */}
                                                             <button
                                                                 onClick={(e) => {
                                                                     e.preventDefault();
-                                                                    setShowSuggestions(false); // Explicitly close dropdown
+                                                                    setShowSuggestions(false);
                                                                     handleSearchSubmit();
                                                                 }}
                                                                 className="w-full text-center py-3 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline border-t border-gray-100 dark:border-zinc-800 mt-2"
@@ -768,75 +728,69 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                         </AnimatePresence>
                     </div>
 
-
-                </div>
-                {/* Hide other actions when Mobile Search is Open to avoid clutter/overlap if we use absolute positioning */}
-                <div className={cn("flex items-center gap-2 shrink-0", isMobileSearchOpen ? "hidden sm:flex" : "flex")}>
-
-
-                    <button
-                        onClick={() => handleAskAi('')}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded-full hover:bg-purple-200 dark:hover:bg-purple-900/60 transition-colors font-medium text-xs sm:text-sm"
-                    >
-                        <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                        <span className="hidden sm:inline">Ask AI</span>
-                        <span className="inline sm:hidden">AI</span>
-                    </button>
-
-                    <div className="w-px h-6 bg-gray-200 dark:bg-zinc-800 mx-1" />
-
-                    {/* View Switcher (Tabs) */}
-                    <div className="flex bg-gray-100 dark:bg-zinc-800 rounded-full p-1 border border-gray-200 dark:border-zinc-700">
-                        <button
-                            onClick={() => {
-                                setRightPaneView('notes');
-                                // Ensure split ratio is visible
-                                if (splitRatio > 0.3 && splitRatio < 0.9) { } // Keep current if valid
-                                else if (splitRatio > 0.9) setSplitRatio(0.5); // If reader maximized, restore split
-                                else if (splitRatio < 0.1) setSplitRatio(0.2); // If notes hidden, show them
-                                else setSplitRatio(0.5); // Default
-                            }}
-                            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all ${rightPaneView !== 'fellowship'
-                                ? 'bg-white dark:bg-zinc-700 text-gray-900 dark:text-white shadow-sm'
-                                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-                                }`}
-                        >
-                            <Edit3 className="w-3.5 h-3.5" />
-                            <span className="hidden sm:inline">Notes</span>
-                        </button>
-                        <button
-                            onClick={() => {
-                                setRightPaneView('fellowship');
-                                // Ensure split ratio is visible
-                                if (splitRatio > 0.3 && splitRatio < 0.9) { }
-                                else if (splitRatio > 0.9) setSplitRatio(0.5);
-                                else if (splitRatio < 0.1) setSplitRatio(0.2);
-                                else setSplitRatio(0.5);
-                            }}
-                            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all ${rightPaneView === 'fellowship'
-                                ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-sm'
-                                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-                                }`}
-                        >
-                            <Users className="w-3.5 h-3.5" />
-                            <span className="hidden sm:inline">Fellowship</span>
+                    {/* 2. Close Button (Order 2: Mobile Top Right, Desktop Far Right) */}
+                    <div className="order-2 sm:order-3 ml-auto sm:ml-0">
+                        <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors flex items-center justify-center bg-gray-50 dark:bg-black/20 sm:bg-transparent">
+                            <X className="w-6 h-6 sm:w-5 sm:h-5 text-gray-500" />
                         </button>
                     </div>
 
-                    <div className="w-px h-6 bg-gray-200 dark:bg-zinc-800 mx-1" />
+                    {/* 3. Controls (Order 3: Mobile Bottom Center, Desktop Center) */}
+                    <div className="order-3 sm:order-2 w-full sm:w-auto flex justify-center sm:flex-1 sm:justify-center items-center gap-6 sm:gap-3 pt-2 sm:pt-0 border-t border-gray-100 dark:border-zinc-800 sm:border-t-0 mt-2 sm:mt-0">
+                        {/* Ask AI */}
+                        <button
+                            onClick={() => handleAskAi('')}
+                            className="flex items-center gap-2 px-4 py-2 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded-full hover:bg-purple-200 dark:hover:bg-purple-900/60 transition-colors font-medium text-xs sm:text-sm"
+                        >
+                            <Sparkles className="w-4 h-4" />
+                            <span>Ask AI</span>
+                        </button>
 
-                    <button
-                        onClick={toggleReaderMaximize}
-                        className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors text-gray-500"
-                        title={isReaderMaximized ? "Restore Split View" : "Full Screen Reader"}
-                    >
-                        {isReaderMaximized ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
-                    </button>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors">
-                        <X className="w-5 h-5 text-gray-500" />
-                    </button>
+                        <div className="w-px h-6 bg-gray-200 dark:bg-zinc-800 hidden sm:block mx-1" />
+
+                        {/* View Switcher (Tabs) */}
+                        <div className="flex bg-gray-100 dark:bg-zinc-800 rounded-full p-1 border border-gray-200 dark:border-zinc-700">
+                            <button
+                                onClick={() => {
+                                    setRightPaneView('notes');
+                                    if (splitRatio > 0.3 && splitRatio < 0.9) { }
+                                    else if (splitRatio > 0.9) setSplitRatio(0.5);
+                                    else if (splitRatio < 0.1) setSplitRatio(0.2);
+                                    else setSplitRatio(0.5);
+                                }}
+                                className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all", rightPaneView !== 'fellowship' ? "bg-white dark:bg-zinc-700 shadow-sm text-gray-900 dark:text-white" : "text-gray-500 dark:text-gray-400")}
+                            >
+                                <Edit3 className="w-3.5 h-3.5" />
+                                <span className={cn("inline", rightPaneView === 'notes' ? "inline" : "hidden sm:inline")}>Notes</span>
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setRightPaneView('fellowship');
+                                    if (splitRatio > 0.3 && splitRatio < 0.9) { }
+                                    else if (splitRatio > 0.9) setSplitRatio(0.5);
+                                    else if (splitRatio < 0.1) setSplitRatio(0.2);
+                                    else setSplitRatio(0.5);
+                                }}
+                                className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all", rightPaneView === 'fellowship' ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-sm" : "text-gray-500 dark:text-gray-400")}
+                            >
+                                <Users className="w-3.5 h-3.5" />
+                                <span className={cn("inline", rightPaneView === 'fellowship' ? "inline" : "hidden sm:inline")}>Fellowship</span>
+                            </button>
+                        </div>
+
+                        <div className="w-px h-6 bg-gray-200 dark:bg-zinc-800 hidden sm:block mx-1" />
+
+                        {/* Maximizer */}
+                        <button
+                            onClick={toggleReaderMaximize}
+                            className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors text-gray-500"
+                            title={isReaderMaximized ? "Restore Split View" : "Full Screen Reader"}
+                        >
+                            {isReaderMaximized ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
+                        </button>
+                    </div>
+
                 </div>
-
 
                 {/* Scrollable Content Container (Flex Column) */}
                 <div className="flex-1 overflow-hidden relative flex flex-col overscroll-contain">

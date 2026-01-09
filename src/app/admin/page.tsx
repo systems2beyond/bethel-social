@@ -1,14 +1,31 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { addDoc, collection, serverTimestamp, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import { Loader2, Send, Users, Flag, Pin, LayoutDashboard, AlertCircle, CheckCircle, Trash2, ExternalLink, Settings } from 'lucide-react';
+import { addDoc, collection, serverTimestamp, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc, setDoc, limit } from 'firebase/firestore';
+import { db, functions } from '@/lib/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { Loader2, Send, Users, Flag, Pin, LayoutDashboard, AlertCircle, CheckCircle, Trash2, ExternalLink, Settings, DollarSign, Plus, CreditCard, ArrowUpRight, Search, Calendar, ChevronDown, Download, Ticket } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import Image from 'next/image';
 import { GroupsService } from '@/lib/groups';
 import { Group } from '@/types';
+import GivingAnalytics from './giving/GivingAnalytics';
+import AdminDonationsTable from './giving/AdminDonationsTable';
+import { Timestamp } from 'firebase/firestore';
+
+interface Donation {
+    id: string;
+    donorId: string;
+    amount: number;
+    tipAmount: number;
+    totalAmount: number;
+    campaign: string;
+    status: string;
+    createdAt: Timestamp | null;
+    donorName?: string;
+    donorEmail?: string;
+}
 
 interface Report {
     id: string;
@@ -35,7 +52,7 @@ interface PinnedPost {
 
 export default function AdminPage() {
     const { userData } = useAuth();
-    const [activeTab, setActiveTab] = useState<'overview' | 'reports' | 'pinned' | 'groups'>('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'reports' | 'pinned' | 'groups' | 'giving' | 'config'>('overview');
 
     // Overview State
     const [content, setContent] = useState('');
@@ -197,7 +214,7 @@ export default function AdminPage() {
         <div className="min-h-screen bg-gray-50 p-8">
             <div className="max-w-6xl mx-auto">
                 <header className="mb-8">
-                    <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
+                    <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard v2</h1>
                     <p className="text-gray-500 mt-2">Manage content, users, and community safety.</p>
                 </header>
 
@@ -205,107 +222,208 @@ export default function AdminPage() {
                 <div className="flex space-x-1 mb-6 bg-white p-1 rounded-xl border border-gray-200 w-fit">
                     <button
                         onClick={() => setActiveTab('overview')}
-                        className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'overview' ? 'bg-blue-50 text-blue-700 shadow-sm' : 'text-gray-600 hover:bg-gray-50'
-                            }`}
+                        className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'overview' ? 'bg-blue-50 text-blue-700 shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
                     >
                         <LayoutDashboard className="w-4 h-4" />
                         <span>Overview</span>
                     </button>
                     <button
                         onClick={() => setActiveTab('reports')}
-                        className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'reports' ? 'bg-yellow-50 text-yellow-700 shadow-sm' : 'text-gray-600 hover:bg-gray-50'
-                            }`}
+                        className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'reports' ? 'bg-yellow-50 text-yellow-700 shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
                     >
                         <Flag className="w-4 h-4" />
                         <span>Reported Content</span>
                     </button>
                     <button
                         onClick={() => setActiveTab('pinned')}
-                        className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'pinned' ? 'bg-blue-50 text-blue-700 shadow-sm' : 'text-gray-600 hover:bg-gray-50'
-                            }`}
+                        className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'pinned' ? 'bg-blue-50 text-blue-700 shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
                     >
                         <Pin className="w-4 h-4" />
                         <span>Pinned Posts</span>
                     </button>
                     <button
                         onClick={() => setActiveTab('groups')}
-                        className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'groups' ? 'bg-purple-50 text-purple-700 shadow-sm' : 'text-gray-600 hover:bg-gray-50'
-                            }`}
+                        className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'groups' ? 'bg-purple-50 text-purple-700 shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
                     >
                         <Users className="w-4 h-4" />
                         <span>Pending Groups</span>
                     </button>
+                    <button
+                        onClick={() => setActiveTab('config')}
+                        className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'config' ? 'bg-gray-100 text-gray-900 shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                        <Settings className="w-4 h-4" />
+                        <span>Configuration</span>
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('giving')}
+                        className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'giving' ? 'bg-green-50 text-green-700 shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                        <DollarSign className="w-4 h-4" />
+                        <span>Giving & Transactions</span>
+                    </button>
                 </div>
 
-                {/* Tab Content */}
+                {/* Content */}
                 <div className="space-y-6">
                     {activeTab === 'overview' && (
-                        <div className="grid gap-6 md:grid-cols-2">
-                            {/* Quick Actions Card */}
-                            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                                <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
-                                <div className="space-y-3">
-                                    <Link
-                                        href="/admin/users"
-                                        className="flex items-center justify-between p-3 rounded-lg border border-gray-200 hover:border-blue-500 hover:bg-blue-50 transition-all group"
-                                    >
-                                        <div className="flex items-center space-x-3">
-                                            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 group-hover:bg-blue-200 transition-colors">
-                                                <Users className="w-5 h-5" />
-                                            </div>
-                                            <div>
-                                                <h3 className="font-medium text-gray-900">Manage Users</h3>
-                                                <p className="text-xs text-gray-500">View and update user roles</p>
-                                            </div>
-                                        </div>
-                                        <ExternalLink className="w-4 h-4 text-gray-400 group-hover:text-blue-500" />
-                                    </Link>
-
-                                    {/* Add more quick actions here in future */}
-                                    <Link
-                                        href="/admin/integrations"
-                                        className="flex items-center justify-between p-3 rounded-lg border border-gray-200 hover:border-purple-500 hover:bg-purple-50 transition-all group"
-                                    >
-                                        <div className="flex items-center space-x-3">
-                                            <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 group-hover:bg-purple-200 transition-colors">
-                                                <Settings className="w-5 h-5" />
-                                            </div>
-                                            <div>
-                                                <h3 className="font-medium text-gray-900">Integrations</h3>
-                                                <p className="text-xs text-gray-500">Connect Facebook & YouTube</p>
-                                            </div>
-                                        </div>
-                                        <ExternalLink className="w-4 h-4 text-gray-400 group-hover:text-purple-500" />
-                                    </Link>
+                        <div className="space-y-6">
+                            {/* Stats Overview - Premium Cards */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center space-x-4 transition-transform hover:scale-[1.02]">
+                                    <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+                                        <Users className="w-6 h-6" />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-gray-500 font-medium">Total Members</p>
+                                        <h3 className="text-2xl font-bold text-gray-900">1,248</h3>
+                                    </div>
+                                </div>
+                                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center space-x-4 transition-transform hover:scale-[1.02]">
+                                    <div className="w-12 h-12 rounded-xl bg-green-50 flex items-center justify-center text-green-600">
+                                        <DollarSign className="w-6 h-6" />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-gray-500 font-medium">Weekly Giving</p>
+                                        <h3 className="text-2xl font-bold text-gray-900">$12,450</h3>
+                                    </div>
+                                </div>
+                                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center space-x-4 transition-transform hover:scale-[1.02]">
+                                    <div className="w-12 h-12 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600">
+                                        <Calendar className="w-6 h-6" />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-gray-500 font-medium">Upcoming Events</p>
+                                        <h3 className="text-2xl font-bold text-gray-900">8</h3>
+                                    </div>
                                 </div>
                             </div>
 
-                            {/* Create Post Card */}
-                            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                                <h2 className="text-lg font-semibold text-gray-900 mb-4">Create Announcement</h2>
-                                <form onSubmit={handleCreatePost} className="space-y-4">
-                                    <textarea
-                                        value={content}
-                                        onChange={(e) => setContent(e.target.value)}
-                                        placeholder="What's happening at Bethel?"
-                                        className="w-full h-32 p-4 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-sm"
-                                        disabled={isSubmitting}
-                                    />
-                                    <div className="flex items-center justify-between">
-                                        <div className="text-xs">
-                                            {postStatus === 'success' && <span className="text-green-600 flex items-center"><CheckCircle className="w-3 h-3 mr-1" /> Posted!</span>}
-                                            {postStatus === 'error' && <span className="text-red-600 flex items-center"><AlertCircle className="w-3 h-3 mr-1" /> Error.</span>}
-                                        </div>
-                                        <button
-                                            type="submit"
-                                            disabled={isSubmitting || !content.trim()}
-                                            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
-                                        >
-                                            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                                            <span>Publish</span>
-                                        </button>
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                {/* Quick Actions Grid */}
+                                <div className="lg:col-span-2 space-y-6">
+                                    <h2 className="text-lg font-bold text-gray-900 flex items-center">
+                                        <LayoutDashboard className="w-5 h-5 mr-2 text-gray-500" />
+                                        Platform Management
+                                    </h2>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <Link href="/admin/events" className="group relative overflow-hidden bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all">
+                                            <div className="absolute top-0 right-0 w-32 h-32 bg-orange-50 rounded-bl-full -mr-10 -mt-10 transition-transform group-hover:scale-110"></div>
+                                            <div className="relative">
+                                                <div className="w-12 h-12 rounded-xl bg-orange-100 flex items-center justify-center text-orange-600 mb-4 group-hover:bg-orange-600 group-hover:text-white transition-colors">
+                                                    <Calendar className="w-6 h-6" />
+                                                </div>
+                                                <h3 className="text-lg font-bold text-gray-900 mb-1">Manage Events</h3>
+                                                <p className="text-sm text-gray-600 mb-4 h-10">Create events, manage tickets, and track attendance.</p>
+                                                <div className="flex items-center text-orange-600 text-sm font-medium group-hover:translate-x-1 transition-transform">
+                                                    View Events <ArrowUpRight className="w-4 h-4 ml-1" />
+                                                </div>
+                                            </div>
+                                        </Link>
+
+                                        <Link href="/admin/users" className="group relative overflow-hidden bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all">
+                                            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-bl-full -mr-10 -mt-10 transition-transform group-hover:scale-110"></div>
+                                            <div className="relative">
+                                                <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 mb-4 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                                                    <Users className="w-6 h-6" />
+                                                </div>
+                                                <h3 className="text-lg font-bold text-gray-900 mb-1">User Directory</h3>
+                                                <p className="text-sm text-gray-600 mb-4 h-10">Manage permissions, roles, and user accounts.</p>
+                                                <div className="flex items-center text-blue-600 text-sm font-medium group-hover:translate-x-1 transition-transform">
+                                                    Manage Users <ArrowUpRight className="w-4 h-4 ml-1" />
+                                                </div>
+                                            </div>
+                                        </Link>
+
+                                        <Link href="/admin/giving" className="group relative overflow-hidden bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all">
+                                            <div className="absolute top-0 right-0 w-32 h-32 bg-green-50 rounded-bl-full -mr-10 -mt-10 transition-transform group-hover:scale-110"></div>
+                                            <div className="relative">
+                                                <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center text-green-600 mb-4 group-hover:bg-green-600 group-hover:text-white transition-colors">
+                                                    <DollarSign className="w-6 h-6" />
+                                                </div>
+                                                <h3 className="text-lg font-bold text-gray-900 mb-1">Giving Center</h3>
+                                                <p className="text-sm text-gray-600 mb-4 h-10">Track donations, manage campaigns, and view reports.</p>
+                                                <div className="flex items-center text-green-600 text-sm font-medium group-hover:translate-x-1 transition-transform">
+                                                    View Finances <ArrowUpRight className="w-4 h-4 ml-1" />
+                                                </div>
+                                            </div>
+                                        </Link>
+
+                                        <Link href="/admin/tickets" className="group relative overflow-hidden bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all">
+                                            <div className="absolute top-0 right-0 w-32 h-32 bg-pink-50 rounded-bl-full -mr-10 -mt-10 transition-transform group-hover:scale-110"></div>
+                                            <div className="relative">
+                                                <div className="w-12 h-12 rounded-xl bg-pink-100 flex items-center justify-center text-pink-600 mb-4 group-hover:bg-pink-600 group-hover:text-white transition-colors">
+                                                    <Ticket className="w-6 h-6" />
+                                                </div>
+                                                <h3 className="text-lg font-bold text-gray-900 mb-1">Ticket Studio</h3>
+                                                <p className="text-sm text-gray-600 mb-4 h-10">Design physical tickets and manage print layouts.</p>
+                                                <div className="flex items-center text-pink-600 text-sm font-medium group-hover:translate-x-1 transition-transform">
+                                                    Open Studio <ArrowUpRight className="w-4 h-4 ml-1" />
+                                                </div>
+                                            </div>
+                                        </Link>
                                     </div>
-                                </form>
+                                </div>
+
+                                {/* Quick Announcement Widget */}
+                                <div className="space-y-6">
+                                    <h2 className="text-lg font-bold text-gray-900 flex items-center">
+                                        <Send className="w-5 h-5 mr-2 text-gray-500" />
+                                        Communications
+                                    </h2>
+                                    <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-3xl p-6 text-white shadow-lg">
+                                        <h3 className="text-lg font-bold mb-2">New Announcement</h3>
+                                        <p className="text-blue-100 text-sm mb-4">Post updates directly to the main feed.</p>
+                                        <form onSubmit={handleCreatePost} className="space-y-4">
+                                            <div className="relative">
+                                                <textarea
+                                                    value={content}
+                                                    onChange={(e) => setContent(e.target.value)}
+                                                    placeholder="What's happening at Bethel?"
+                                                    className="w-full h-32 p-4 rounded-xl bg-white/10 border border-white/20 placeholder-blue-100 text-white focus:ring-2 focus:ring-white/50 focus:border-transparent resize-none text-sm transition-all focus:bg-white/20"
+                                                    disabled={isSubmitting}
+                                                />
+                                            </div>
+                                            <div className="flex items-center justify-between">
+                                                <div className="text-xs">
+                                                    {postStatus === 'success' && <span className="bg-green-500/20 text-green-100 px-2 py-1 rounded-full flex items-center border border-green-500/30"><CheckCircle className="w-3 h-3 mr-1" /> Posted</span>}
+                                                </div>
+                                                <button
+                                                    type="submit"
+                                                    disabled={isSubmitting || !content.trim()}
+                                                    className="flex items-center space-x-2 px-6 py-2.5 bg-white text-blue-600 rounded-xl hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm font-bold shadow-sm"
+                                                >
+                                                    {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                                                    <span>Publish</span>
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
+
+                                    {/* System Status / Mini Config */}
+                                    <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <h3 className="font-semibold text-gray-900 text-sm">System Status</h3>
+                                            <Link href="/admin/config" onClick={() => setActiveTab('config')} className="text-xs text-blue-600 hover:underline">Configure</Link>
+                                        </div>
+                                        <div className="space-y-3">
+                                            <div className="flex items-center justify-between p-2 rounded-lg bg-gray-50">
+                                                <div className="flex items-center space-x-2">
+                                                    <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                                                    <span className="text-sm text-gray-600">Database</span>
+                                                </div>
+                                                <span className="text-xs font-medium text-green-600">Online</span>
+                                            </div>
+                                            <div className="flex items-center justify-between p-2 rounded-lg bg-gray-50">
+                                                <div className="flex items-center space-x-2">
+                                                    <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                                                    <span className="text-sm text-gray-600">Stripe Payments</span>
+                                                </div>
+                                                <span className="text-xs font-medium text-green-600">Active</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -478,8 +596,418 @@ export default function AdminPage() {
                             )}
                         </div>
                     )}
+
+                    {activeTab === 'config' && (
+                        <ConfigurationTab />
+                    )}
+
+                    {activeTab === 'giving' && (
+                        <GivingTab />
+                    )}
                 </div>
             </div>
+        </div>
+    );
+}
+
+
+
+function ConfigurationTab() {
+    const [config, setConfig] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+    const [newCampaignName, setNewCampaignName] = useState('');
+    const [newCampaignDesc, setNewCampaignDesc] = useState('');
+
+    // Webhook State
+    const [webhookUrl, setWebhookUrl] = useState('');
+    const [isSavingWebhook, setIsSavingWebhook] = useState(false);
+
+    // Stripe State
+    const [stripeLoading, setStripeLoading] = useState(false);
+
+    useEffect(() => {
+        const unsub = onSnapshot(doc(db, 'churches', 'default_church'), (doc) => {
+            if (doc.exists()) {
+                const data = doc.data();
+                setConfig(data);
+                if (data.webhookUrl) setWebhookUrl(data.webhookUrl);
+            }
+            setLoading(false);
+        });
+        return () => unsub();
+    }, []);
+
+    const toggleFeature = async (feature: string, currentValue: boolean) => {
+        try {
+            await setDoc(doc(db, 'churches', 'default_church'), {
+                features: {
+                    [feature]: !currentValue
+                }
+            }, { merge: true });
+        } catch (error) {
+            console.error('Error updating config:', error);
+            alert('Failed to update settings');
+        }
+    };
+
+    const addCampaign = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newCampaignName.trim()) return;
+
+        const newCampaign = {
+            id: crypto.randomUUID(),
+            name: newCampaignName,
+            description: newCampaignDesc,
+            isActive: true
+        };
+
+        const currentCampaigns = config?.campaigns || [];
+
+        try {
+            await setDoc(doc(db, 'churches', 'default_church'), {
+                campaigns: [...currentCampaigns, newCampaign]
+            }, { merge: true });
+            setNewCampaignName('');
+            setNewCampaignDesc('');
+        } catch (error) {
+            console.error('Error adding campaign:', error);
+            alert('Failed to add campaign');
+        }
+    };
+
+    const removeCampaign = async (campaignId: string) => {
+        if (!confirm('Are you sure you want to remove this campaign?')) return;
+        const currentCampaigns = config?.campaigns || [];
+        const updatedCampaigns = currentCampaigns.filter((c: any) => c.id !== campaignId);
+
+        try {
+            await setDoc(doc(db, 'churches', 'default_church'), {
+                campaigns: updatedCampaigns
+            }, { merge: true });
+        } catch (error) {
+            console.error('Error removing campaign:', error);
+            alert('Failed to remove campaign');
+        }
+    };
+
+    const handleSaveWebhook = async () => {
+        setIsSavingWebhook(true);
+        try {
+            await setDoc(doc(db, 'churches', 'default_church'), {
+                webhookUrl: webhookUrl.trim()
+            }, { merge: true });
+            // Show success momentarily?
+        } catch (error) {
+            console.error('Error saving webhook:', error);
+            alert('Failed to save webhook URL');
+        } finally {
+            setIsSavingWebhook(false);
+        }
+    };
+
+    const handleConnectStripe = async () => {
+        setStripeLoading(true);
+        try {
+            const createExpressAccount = httpsCallable(functions, 'createExpressAccount');
+            const result = await createExpressAccount({
+                churchId: 'default_church',
+                redirectUrl: window.location.origin
+            });
+            const { url } = result.data as any;
+            window.location.href = url;
+        } catch (error: any) {
+            console.error('Stripe Onboarding Error:', error);
+            // Check for specific error code from backend or legacy string match
+            if (error.message === 'CONNECT_NOT_ENABLED' || (error.message && error.message.includes("signed up for Connect"))) {
+                alert("ACTION REQUIRED: You must enable 'Connect' in your Stripe Dashboard to use this feature.\n\n1. Go to dashboard.stripe.com\n2. Click 'Connect' in the menu\n3. Click 'Enable' or 'Get Started'");
+            } else {
+                alert(`Failed to start onboarding. Error: ${error.message || 'Unknown'}`);
+            }
+            setStripeLoading(false);
+        }
+    };
+
+    const handleStripeDashboard = async () => {
+        setStripeLoading(true);
+        try {
+            const getLoginLink = httpsCallable(functions, 'getStripeLoginLink');
+            const result = await getLoginLink({ churchId: 'default_church' });
+            const { url } = result.data as any;
+            window.open(url, '_blank');
+            setStripeLoading(false);
+        } catch (error) {
+            console.error(error);
+            alert('Failed to get dashboard link.');
+            setStripeLoading(false);
+        }
+    };
+
+    if (loading) return <div className="p-8 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>;
+
+    const stripeStatus = config?.stripeAccountStatus || 'none';
+    const isStripeActive = stripeStatus === 'active';
+
+    return (
+        <div className="space-y-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8">
+                <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center">
+                    <Settings className="w-5 h-5 mr-2 text-gray-500" />
+                    Global Configuration
+                </h2>
+
+                <div className="space-y-8">
+                    {/* Giving Feature Toggle */}
+                    <section className="border-b border-gray-100 pb-8">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-4">
+                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${config?.features?.giving ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'}`}>
+                                    <DollarSign className="w-6 h-6" />
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-semibold text-gray-900">Tithing & Giving System</h3>
+                                    <p className="text-sm text-gray-500 max-w-md">Enable donations, tithes, and payouts via Stripe. When disabled, the Giving tab is hidden from users.</p>
+                                </div>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    className="sr-only peer"
+                                    checked={config?.features?.giving || false}
+                                    onChange={() => toggleFeature('giving', config?.features?.giving)}
+                                />
+                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                            </label>
+                        </div>
+                    </section>
+
+                    {/* Stripe Integration */}
+                    <section className="border-b border-gray-100 pb-8">
+                        <div className="flex items-start justify-between">
+                            <div className="flex items-start space-x-4">
+                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${isStripeActive ? 'bg-purple-100 text-purple-600' : 'bg-gray-100 text-gray-400'}`}>
+                                    <CreditCard className="w-6 h-6" />
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-semibold text-gray-900 flex items-center">
+                                        Payment Gateway
+                                        {isStripeActive && <span className="ml-2 px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full font-medium flex items-center"><CheckCircle className="w-3 h-3 mr-1" /> Active</span>}
+                                    </h3>
+                                    <p className="text-sm text-gray-500 max-w-md mt-1">
+                                        {isStripeActive
+                                            ? 'Your Stripe account is connected and ready to process donations.'
+                                            : 'Connect a Stripe account to receive payouts directly to your bank account.'}
+                                    </p>
+
+                                    <div className="mt-4">
+                                        {isStripeActive ? (
+                                            <button
+                                                onClick={handleStripeDashboard}
+                                                disabled={stripeLoading}
+                                                className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
+                                            >
+                                                {stripeLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <ExternalLink className="w-4 h-4 mr-2" />}
+                                                View Stripe Dashboard
+                                            </button>
+                                        ) : (
+                                            <button
+                                                onClick={handleConnectStripe}
+                                                disabled={stripeLoading}
+                                                className="inline-flex items-center px-4 py-2 bg-purple-600 border border-transparent rounded-lg text-sm font-medium text-white hover:bg-purple-700 transition-colors shadow-sm"
+                                            >
+                                                {stripeLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CreditCard className="w-4 h-4 mr-2" />}
+                                                Connect with Stripe
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* CMS Integration */}
+                    <section className="border-b border-gray-100 pb-8">
+                        <div className="flex items-start justify-between">
+                            <div className="flex items-start space-x-4">
+                                <div className="w-12 h-12 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center">
+                                    <ArrowUpRight className="w-6 h-6" />
+                                </div>
+                                <div className="flex-1">
+                                    <h3 className="text-base font-semibold text-gray-900">CMS Integration (Webhooks)</h3>
+                                    <p className="text-sm text-gray-500 max-w-lg mt-1">
+                                        Automatically send donation data to an external CMS or CRM system. We'll send a POST request with JSON data whenever a donation succeeds.
+                                    </p>
+
+                                    <div className="mt-4 flex items-center gap-3 max-w-md">
+                                        <input
+                                            type="url"
+                                            placeholder="https://your-cms.com/api/webhooks/giving"
+                                            value={webhookUrl}
+                                            onChange={(e) => setWebhookUrl(e.target.value)}
+                                            className="flex-1 rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                        />
+                                        <button
+                                            onClick={handleSaveWebhook}
+                                            disabled={isSavingWebhook}
+                                            className="px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-70 transition-colors"
+                                        >
+                                            {isSavingWebhook ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Campaign Management */}
+                    <section>
+                        <div className="flex items-start space-x-4">
+                            <div className="w-12 h-12 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
+                                <LayoutDashboard className="w-6 h-6" />
+                            </div>
+                            <div className="flex-1">
+                                <h3 className="text-base font-semibold text-gray-900">Campaigns & Designations</h3>
+                                <p className="text-sm text-gray-500 mb-4">Manage the funds that donors can select.</p>
+
+                                <div className="bg-gray-50 rounded-xl border border-gray-200 p-6">
+                                    {/* Add New */}
+                                    <form onSubmit={addCampaign} className="flex gap-3 mb-6">
+                                        <div className="flex-1">
+                                            <input
+                                                type="text"
+                                                value={newCampaignName}
+                                                onChange={(e) => setNewCampaignName(e.target.value)}
+                                                placeholder="Campaign Name (e.g. Missions)"
+                                                className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                            />
+                                        </div>
+                                        <div className="flex-1">
+                                            <input
+                                                type="text"
+                                                value={newCampaignDesc}
+                                                onChange={(e) => setNewCampaignDesc(e.target.value)}
+                                                placeholder="Description (Optional)"
+                                                className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                            />
+                                        </div>
+                                        <button
+                                            type="submit"
+                                            disabled={!newCampaignName.trim()}
+                                            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-sm"
+                                        >
+                                            <Plus className="w-4 h-4" />
+                                        </button>
+                                    </form>
+
+                                    {/* List */}
+                                    <div className="space-y-2">
+                                        {(!config?.campaigns || config.campaigns.length === 0) && (
+                                            <div className="text-center py-6 text-gray-400 bg-white rounded-lg border border-gray-100 border-dashed">
+                                                <p className="text-sm">No custom campaigns. Default "General Fund" is active.</p>
+                                            </div>
+                                        )}
+                                        {config?.campaigns?.map((c: any) => (
+                                            <div key={c.id} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg shadow-sm hover:border-blue-300 transition-colors group">
+                                                <div>
+                                                    <div className="font-medium text-gray-900 text-sm">{c.name}</div>
+                                                    {c.description && <div className="text-xs text-gray-500">{c.description}</div>}
+                                                </div>
+                                                <button
+                                                    onClick={() => removeCampaign(c.id)}
+                                                    className="text-gray-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded-md transition-colors opacity-0 group-hover:opacity-100"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function GivingTab() {
+    const [donations, setDonations] = useState<Donation[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        const donationsRef = collection(db, 'donations');
+        const q = query(
+            donationsRef,
+            where('churchId', '==', 'default_church'),
+            orderBy('createdAt', 'desc'),
+            limit(100)
+        );
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const donationsData: Donation[] = [];
+            snapshot.forEach((doc) => {
+                const data = doc.data();
+                donationsData.push({
+                    id: doc.id,
+                    ...data,
+                    amount: data.amount || 0,
+                    tipAmount: data.tipAmount || 0,
+                    totalAmount: data.totalAmount || 0,
+                    campaign: data.campaign || 'General Fund',
+                    status: data.status || 'pending',
+                } as Donation);
+            });
+            setDonations(donationsData);
+            setLoading(false);
+            setError(null);
+        }, (err) => {
+            console.error("Error fetching donations:", err);
+            if (err.message.includes('offline') || err.message.includes('network') || err.code === 'unavailable') {
+                setError('Unable to load donations. Please check your internet connection or disable ad-blockers.');
+            } else {
+                setError('Failed to load donations.');
+            }
+            setLoading(false);
+        });
+
+        return () => unsubscribe();
+    }, []);
+
+    if (loading) return <div className="p-12 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-gray-300" /></div>;
+
+    return (
+        <div className="space-y-6">
+            <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                <div>
+                    <h2 className="text-lg font-bold text-gray-900">Giving Overview</h2>
+                    <p className="text-sm text-gray-500">Analytics and recent transactions.</p>
+                </div>
+                <Link href="/admin/giving" className="flex items-center text-sm font-medium text-blue-600 hover:text-blue-700">
+                    <Settings className="w-4 h-4 mr-2" />
+                    Manage Settings & Payouts
+                </Link>
+            </div>
+
+            {error && (
+                <div className="bg-red-50 text-red-700 p-4 rounded-lg flex items-center gap-2 border border-red-100">
+                    <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                    <div>
+                        <p className="font-semibold">Connection Error</p>
+                        <p className="text-sm">{error}</p>
+                    </div>
+                </div>
+            )}
+
+            {!error && (
+                <>
+                    {/* Analytics Dashboard */}
+                    <GivingAnalytics donations={donations} />
+
+                    {/* Donations Table */}
+                    <AdminDonationsTable donations={donations} loading={loading} />
+                </>
+            )}
         </div>
     );
 }

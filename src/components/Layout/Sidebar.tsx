@@ -17,11 +17,12 @@ const recentChats = [
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { useMediaQuery } from '@/lib/hooks/useMediaQuery';
-import { Menu, GripVertical } from 'lucide-react';
+import { Menu, GripVertical, DollarSign } from 'lucide-react';
+import { useChurchConfig } from '@/hooks/useChurchConfig';
 
 export function Sidebar() {
     const pathname = usePathname();
-    const { theme, setTheme } = useTheme();
+    const { theme, setTheme, resolvedTheme } = useTheme();
     const { openBible, openStudy } = useBible();
     const [mounted, setMounted] = React.useState(false);
 
@@ -41,9 +42,15 @@ export function Sidebar() {
         }
     }, [isMobileOrTabletPortrait]);
 
+    // Debug initial state - v10 Clean Slate
     React.useEffect(() => {
         setMounted(true);
-    }, []);
+        console.log('[Sidebar] Mounted. Theme:', theme, 'Resolved:', resolvedTheme);
+        console.log('[Sidebar] Mounted. Theme:', theme, 'Resolved:', resolvedTheme);
+        console.log('APP_VERSION: Admin-Giving-Fix-v2');
+    }, [theme, resolvedTheme]);
+
+    const { config } = useChurchConfig();
 
     const navItems = [
         { icon: Home, label: 'Home', href: '/' },
@@ -54,6 +61,11 @@ export function Sidebar() {
         { icon: Calendar, label: 'Events', href: '/events' },
         { icon: Users, label: 'Groups', href: '/groups' },
     ];
+
+    // Conditionally add Giving if enabled in church config
+    if (config?.features?.giving) {
+        navItems.splice(2, 0, { icon: DollarSign, label: 'Giving', href: '/giving' });
+    }
 
     return (
         <>
@@ -164,12 +176,17 @@ export function Sidebar() {
                             {/* User & Settings */}
                             <div className="p-4 border-t border-gray-200 dark:border-zinc-800 space-y-2">
                                 <button
-                                    onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                                    onClick={() => {
+                                        const newTheme = resolvedTheme === 'dark' ? 'light' : 'dark';
+                                        console.log(`[Theme Toggle] Switching to: ${newTheme}`);
+                                        console.log('Pre-Switch Classes:', document.documentElement.classList.toString());
+                                        setTheme(newTheme);
+                                    }}
                                     className="flex items-center space-x-3 px-4 py-3 w-full rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
                                 >
-                                    {mounted && theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+                                    {mounted && resolvedTheme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
                                     <span className="font-medium">
-                                        {mounted && theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+                                        {mounted && resolvedTheme === 'dark' ? 'Light Mode' : 'Dark Mode'}
                                     </span>
                                 </button>
 

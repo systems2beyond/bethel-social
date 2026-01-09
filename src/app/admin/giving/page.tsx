@@ -1,0 +1,245 @@
+'use client';
+
+import React, { useEffect, useState } from 'react';
+import { useAuth } from '@/context/AuthContext';
+import { doc, onSnapshot, collection, query, where, orderBy, limit, Timestamp } from 'firebase/firestore';
+import { db, functions } from '@/lib/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { AlertCircle, CheckCircle, ExternalLink, Loader2, DollarSign, CreditCard } from 'lucide-react';
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
+import AdminDonationsTable from './AdminDonationsTable';
+import GivingAnalytics from './GivingAnalytics';
+
+import { Suspense } from 'react';
+
+// Shared Interface
+interface Donation {
+    id: string;
+    donorId: string;
+    amount: number;
+    tipAmount: number;
+    totalAmount: number;
+    campaign: string;
+    status: string;
+    createdAt: Timestamp | null;
+    donorName?: string;
+    donorEmail?: string;
+}
+
+function AdminGivingContent() {
+    const { userData } = useAuth();
+    const router = useRouter();
+    const searchParams = useSearchParams();
+
+    // Status can be: 'loading', 'none', 'pending', 'active'
+    const [stripeStatus, setStripeStatus] = useState<string>('loading');
+    const [isLoadingUrl, setIsLoadingUrl] = useState(false);
+
+    // Donation Data State
+    const [donations, setDonations] = useState<Donation[]>([]);
+    const [donationsLoading, setDonationsLoading] = useState(true);
+
+    // Check for "status" query param from Stripe redirect
+    useEffect(() => {
+        const status = searchParams.get('status');
+        if (status === 'complete') {
+            // Remove the query param to clean the URL
+            router.replace('/admin/giving');
+        }
+    }, [searchParams, router]);
+
+    const [stripeDetailsSubmitted, setStripeDetailsSubmitted] = useState<boolean>(false);
+
+    useEffect(() => {
+        // Assume single church for now
+        const unsub = onSnapshot(doc(db, 'churches', 'default_church'), (docSnapshot) => {
+            const data = docSnapshot.data();
+            if (data?.stripeAccountStatus) {
+                setStripeStatus(data.stripeAccountStatus);
+            } else {
+                setStripeStatus('none');
+            }
+            if (data?.stripeDetailsSubmitted) {
+                setStripeDetailsSubmitted(data.stripeDetailsSubmitted);
+            }
+        });
+        return () => unsub();
+    }, []);
+
+    // Fetch Donations
+    useEffect(() => {
+        const donationsRef = collection(db, 'donations');
+        const q = query(
+            donationsRef,
+            where('churchId', '==', 'default_church'),
+            orderBy('createdAt', 'desc'),
+            limit(100)
+        );
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const donationsData: Donation[] = [];
+            snapshot.forEach((doc) => {
+                const data = doc.data();
+                donationsData.push({
+                    id: doc.id,
+                    ...data,
+                    // Ensure defaults
+                    amount: data.amount || 0,
+                    tipAmount: data.tipAmount || 0,
+                    totalAmount: data.totalAmount || 0,
+                    campaign: data.campaign || 'General Fund',
+                    status: data.status || 'pending',
+                } as Donation);
+            });
+            setDonations(donationsData);
+            setDonationsLoading(false);
+        }, (err) => {
+            console.error("Error fetching donations:", err);
+            setDonationsLoading(false);
+        });
+
+        return () => unsubscribe();
+    }, []);
+
+
+    const handleOnboard = async () => {
+        setIsLoadingUrl(true);
+        try {
+            const createExpressAccount = httpsCallable(functions, 'createExpressAccount');
+            const result = await createExpressAccount({
+                churchId: 'default_church',
+                redirectUrl: window.location.origin
+            });
+            const { url } = result.data as any;
+            window.location.href = url;
+        } catch (error) {
+            console.error(error);
+            alert('Failed to start onboarding. Check console for details.');
+            setIsLoadingUrl(false);
+        }
+    };
+
+    const handleLoginLink = async () => {
+        setIsLoadingUrl(true);
+        try {
+            const getLoginLink = httpsCallable(functions, 'getStripeLoginLink');
+            const result = await getLoginLink({ churchId: 'default_church' });
+            const { url } = result.data as any;
+            // Open in new tab
+            window.open(url, '_blank');
+            setIsLoadingUrl(false);
+        } catch (error) {
+            console.error(error);
+            alert('Failed to get dashboard link.');
+            setIsLoadingUrl(false);
+        }
+    };
+
+    if (userData?.role !== 'admin') {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center p-4">
+                <AlertCircle className="w-16 h-16 text-red-500 mb-4" />
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
+                <p className="text-gray-600 mb-6">You must be an administrator to view this dashboard.</p>
+                <Link href="/" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    Return Home
+                </Link>
+            </div>
+        );
+    }
+
+    return (
+        <div className="min-h-screen bg-gray-50 p-8">
+            <div className="max-w-4xl mx-auto">
+                <header className="mb-8">
+                    <Link href="/admin" className="text-sm text-gray-500 hover:text-gray-900 mb-2 inline-block">← Back to Admin</Link>
+                    <h1 className="text-3xl font-bold text-gray-900">Giving & Tithing</h1>
+                    <p className="text-gray-500 mt-2">Manage donations, payouts, and your non-profit status.</p>
+                </header>
+
+                {/* Account Status Card */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 mb-8">
+                    <div className="flex items-center justify-between mb-6">
+                        <div className="flex items-center space-x-4">
+                            <div className={`w-12 h-12 rounded-full flex items-center justify-center ${stripeStatus === 'active' ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'}`}>
+                                <DollarSign className="w-6 h-6" />
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-bold text-gray-900">Payment Processor</h2>
+                                <p className="text-sm text-gray-500">
+                                    {stripeStatus === 'active'
+                                        ? 'Stripe is active and ready to accept donations.'
+                                        : (stripeStatus === 'pending_onboarding' || stripeStatus === 'pending_verification') && stripeDetailsSubmitted
+                                            ? 'Verification in progress. You can likely accept donations, but payouts are paused.'
+                                            : stripeStatus === 'pending_onboarding'
+                                                ? 'Resume onboarding to start accepting donations.'
+                                                : 'Connect Stripe to start accepting donations.'}
+                                </p>
+                            </div>
+                        </div>
+                        {stripeStatus === 'active' && (
+                            <span className="bg-green-100 text-green-800 text-xs font-semibold px-3 py-1 rounded-full flex items-center">
+                                <CheckCircle className="w-3 h-3 mr-1" /> Active
+                            </span>
+                        )}
+                        {(stripeStatus === 'pending_onboarding' || stripeStatus === 'pending_verification') && (
+                            <span className="bg-yellow-100 text-yellow-800 text-xs font-semibold px-3 py-1 rounded-full flex items-center">
+                                <Loader2 className="w-3 h-3 mr-1 animate-spin" /> Pending
+                            </span>
+                        )}
+                    </div>
+
+                    <div className="flex items-center space-x-4">
+                        {stripeStatus === 'active' ? (
+                            <button
+                                onClick={handleLoginLink}
+                                disabled={isLoadingUrl}
+                                className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                            >
+                                {isLoadingUrl ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
+                                <span>View Stripe Dashboard</span>
+                            </button>
+                        ) : (
+                            <div className="flex space-x-2">
+                                {(stripeStatus === 'pending_onboarding' || stripeStatus === 'pending_verification') && stripeDetailsSubmitted ? (
+                                    <button
+                                        onClick={handleLoginLink}
+                                        disabled={isLoadingUrl}
+                                        className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                                    >
+                                        {isLoadingUrl ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
+                                        <span>Check Status in Dashboard</span>
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={handleOnboard}
+                                        disabled={isLoadingUrl}
+                                        className="flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-medium"
+                                    >
+                                        {isLoadingUrl ? <Loader2 className="w-5 h-5 animate-spin" /> : <CreditCard className="w-5 h-5" />}
+                                        <span>{stripeStatus === 'pending_onboarding' ? 'Resume Onboarding' : 'Set up Payments'}</span>
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Analytics Dashboard */}
+                <GivingAnalytics donations={donations} />
+
+                {/* Donations Table */}
+                <AdminDonationsTable donations={donations} loading={donationsLoading} />
+            </div>
+        </div>
+    );
+}
+
+export default function AdminGivingPage() {
+    return (
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>}>
+            <AdminGivingContent />
+        </Suspense>
+    );
+}

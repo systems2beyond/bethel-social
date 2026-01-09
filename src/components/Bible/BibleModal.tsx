@@ -11,10 +11,14 @@ import BibleReader from './BibleReader';
 export default function BibleModal() {
     const { isOpen, closeBible, reference, version } = useBible();
     const pathname = usePathname();
+    const prevPathname = React.useRef(pathname);
 
     // Close on route change
     useEffect(() => {
-        if (isOpen) closeBible();
+        if (prevPathname.current !== pathname) {
+            if (isOpen) closeBible();
+            prevPathname.current = pathname;
+        }
     }, [pathname, isOpen, closeBible]);
 
     // Prevent background scroll when open

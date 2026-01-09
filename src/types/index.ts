@@ -1,3 +1,5 @@
+import { Timestamp } from 'firebase/firestore';
+
 export type PostType = 'manual' | 'facebook' | 'youtube' | 'video';
 
 export interface Post {
@@ -58,23 +60,52 @@ export interface GroupMember {
     };
 }
 
+export interface TicketTier {
+    name: string;
+    price: number;
+    quantity: number;
+    type: 'individual' | 'table';
+    seatsPerTable?: number;
+}
+
+export interface FeaturedGuest {
+    name: string;
+    role: string;
+    imageUrl?: string;
+}
+
+export interface EventMedia {
+    url: string;
+    type: 'image' | 'video';
+}
+
 export interface Event {
     id: string;
     title: string;
     description: string;
-    date: { seconds: number; nanoseconds: number };
+    startDate: Timestamp;
+    endDate?: Timestamp;
     location: string;
-    imageUrl?: string;
-    sourcePostId: string;
-    extractedData?: {
-        isEvent: boolean;
-        title?: string;
-        date?: string;
-        time?: string;
-        location?: string;
-        description?: string;
+    geo?: {
+        lat: number;
+        lng: number;
+        placeId: string;
     };
+    featuredGuests: FeaturedGuest[];
+    media: EventMedia[];
+    ticketConfig?: {
+        tiers: TicketTier[];
+        currency: 'USD';
+    };
+    extractedData?: any;
+    status: 'draft' | 'published' | 'past';
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
+    // Legacy fields validation
+    imageUrl?: string;
+    sourcePostId?: string;
 }
+
 
 export interface Comment {
     id: string;

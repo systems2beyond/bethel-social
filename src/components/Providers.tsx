@@ -9,7 +9,18 @@ import { AuthProvider } from '@/context/AuthContext';
 
 export function Providers({ children }: { children: React.ReactNode }) {
     return (
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+        <ThemeProvider
+            attribute="class"
+            defaultTheme="dark"
+            enableSystem={false}
+            themes={['light', 'dark']}
+            value={{
+                light: 'light',
+                dark: 'dark'
+            }}
+            disableTransitionOnChange
+            storageKey="church-theme-preference-v10"
+        >
             <AuthProvider>
                 <FeedProvider>
                     <LightboxProvider>

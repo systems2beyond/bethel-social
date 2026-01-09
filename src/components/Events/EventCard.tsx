@@ -13,7 +13,7 @@ import { formatTextWithLinks } from '@/lib/utils';
 export const EventCard = ({ event }: { event: Event }) => {
     const { openLightbox } = useLightbox();
 
-    const eventDate = new Date(event.date.seconds * 1000);
+    const eventDate = event.startDate.toDate();
     const dateStr = eventDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 
     // Use extracted time string if available (to avoid timezone shifts), otherwise fallback to timestamp
