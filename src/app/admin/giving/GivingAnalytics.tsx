@@ -138,7 +138,7 @@ export default function GivingAnalytics({ donations }: GivingAnalyticsProps) {
                         <h3 className="text-lg font-bold text-gray-900">Donation Trends</h3>
                         <p className="text-sm text-gray-500">Weekly giving over the last month</p>
                     </div>
-                    <div className="h-64 w-full" style={{ minWidth: 0 }}>
+                    <div className="h-64 w-full" style={{ minHeight: '250px', minWidth: 0 }}>
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={analytics.barData}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
@@ -166,7 +166,7 @@ export default function GivingAnalytics({ donations }: GivingAnalyticsProps) {
                         <h3 className="text-lg font-bold text-gray-900">Fund Breakdown</h3>
                         <p className="text-sm text-gray-500">Distribution by envelope/campaign</p>
                     </div>
-                    <div className="h-64 w-full flex items-center justify-center">
+                    <div className="h-64 w-full relative" style={{ minHeight: "250px", minWidth: 0 }}>
                         {analytics.pieData.length > 0 ? (
                             <ResponsiveContainer width="100%" height="100%">
                                 <PieChart>

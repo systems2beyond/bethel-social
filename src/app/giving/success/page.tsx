@@ -38,7 +38,7 @@ function GivingSuccessContent() {
                 </p>
 
                 <Link
-                    href="/feed"
+                    href="/fellowship"
                     className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold shadow-md transition-all flex items-center justify-center"
                 >
                     <span>Return to Community</span>

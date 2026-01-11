@@ -76,11 +76,13 @@ export default function UsersPage() {
     return (
         <div className="min-h-screen bg-gray-50 p-8">
             <div className="max-w-6xl mx-auto">
-                <div className="flex items-center justify-between mb-8">
-                    <h1 className="text-3xl font-bold text-gray-900">User Management</h1>
-                    <Link href="/admin" className="text-blue-600 hover:underline">
-                        Back to Dashboard
+                <div className="mb-8">
+                    <Link href="/admin" className="text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200 mb-2 inline-block">
+                        ← Back to Dashboard
                     </Link>
+                    <div className="flex items-center justify-between">
+                        <h1 className="text-3xl font-bold text-gray-900">User Management</h1>
+                    </div>
                 </div>
 
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -108,8 +110,8 @@ export default function UsersPage() {
                                         <td className="px-6 py-4 text-gray-600">{user.email}</td>
                                         <td className="px-6 py-4">
                                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${user.role === 'admin' ? 'bg-purple-100 text-purple-800' :
-                                                    user.role === 'staff' ? 'bg-blue-100 text-blue-800' :
-                                                        'bg-gray-100 text-gray-800'
+                                                user.role === 'staff' ? 'bg-blue-100 text-blue-800' :
+                                                    'bg-gray-100 text-gray-800'
                                                 }`}>
                                                 {user.role === 'admin' && <Shield className="w-3 h-3 mr-1" />}
                                                 {user.role || 'member'}

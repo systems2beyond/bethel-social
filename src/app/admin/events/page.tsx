@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Plus, Calendar, MapPin, Edit, Ticket, Loader2 } from 'lucide-react';
+import { Plus, Calendar, MapPin, Edit, Ticket, Loader2, ArrowLeft } from 'lucide-react';
 import { EventsService } from '@/lib/services/EventsService';
 import { Event } from '@/types';
 import { useRouter } from 'next/navigation';
@@ -38,6 +38,10 @@ export default function EventsListPage() {
         <div className="space-y-6 max-w-7xl mx-auto p-6">
             <div className="flex justify-between items-center">
                 <div>
+                    <Link href="/admin" className="inline-flex items-center text-sm font-medium text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors mb-4 px-3 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 -ml-3">
+                        <ArrowLeft className="w-4 h-4 mr-2" />
+                        Back to Dashboard
+                    </Link>
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Event Management</h1>
                     <p className="text-gray-500 dark:text-gray-400">Create and manage church events and tickets.</p>
                 </div>

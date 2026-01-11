@@ -18,6 +18,8 @@ export const stripeWebhookHandler = onRequest({ secrets: [stripeSecretKey, strip
     const sig = req.headers['stripe-signature'];
     const endpointSecret = stripeWebhookSecret.value();
 
+    console.log(`[Stripe Webhook] Received request. Headers: ${JSON.stringify(req.headers)}`);
+
     let event: Stripe.Event;
 
     try {
@@ -56,25 +58,76 @@ export const stripeWebhookHandler = onRequest({ secrets: [stripeSecretKey, strip
             }
             case 'payment_intent.succeeded': {
                 const paymentIntent = event.data.object as Stripe.PaymentIntent;
-                const { churchId, donorId, campaign, donationAmount, tipAmount, type } = paymentIntent.metadata;
+                const { churchId, donorId, campaign, donationAmount, tipAmount, type, donationDocId } = paymentIntent.metadata;
+
+                if (!type) {
+                    console.log(`[Stripe Webhook] Warning: Missing 'type' metadata. Metadata: ${JSON.stringify(paymentIntent.metadata)}`);
+                }
 
                 if (type === 'donation') {
-                    // Create donation record
-                    const donationData = {
-                        churchId: churchId || 'default_church',
-                        donorId: donorId || 'anonymous',
-                        amount: parseFloat(donationAmount),
-                        tipAmount: parseFloat(tipAmount),
-                        totalAmount: paymentIntent.amount / 100,
-                        amountCents: paymentIntent.amount,
-                        campaign: campaign || 'General Fund',
-                        status: 'paid',
-                        stripePaymentIntentId: paymentIntent.id,
-                        createdAt: admin.firestore.FieldValue.serverTimestamp()
-                    };
+                    const db = admin.firestore();
+                    let donationRef;
 
-                    await db.collection('donations').add(donationData);
-                    console.log(`Recorded donation ${paymentIntent.id} for ${campaign}`);
+                    if (donationDocId) {
+                        donationRef = db.collection('donations').doc(donationDocId);
+                        const docSnap = await donationRef.get();
+
+                        if (docSnap.exists) {
+                            await donationRef.update({
+                                status: 'paid',
+                                stripePaymentIntentId: paymentIntent.id
+                            });
+                            console.log(`Updated donation ${donationDocId} to paid`);
+                        } else {
+                            // Fallback if doc was deleted or not found
+                            console.warn(`Pending donation ${donationDocId} not found, creating new record.`);
+                            donationRef = db.collection('donations').doc();
+                            await donationRef.set({
+                                churchId: churchId || 'default_church',
+                                donorId: donorId || 'anonymous',
+                                amount: parseFloat(donationAmount),
+                                tipAmount: parseFloat(tipAmount),
+                                totalAmount: paymentIntent.amount / 100,
+                                amountCents: paymentIntent.amount,
+                                campaign: campaign || 'General Fund',
+                                status: 'paid',
+                                stripePaymentIntentId: paymentIntent.id,
+                                createdAt: admin.firestore.FieldValue.serverTimestamp()
+                            });
+                        }
+                    } else {
+                        // Historical fallback (no doc ID in metadata)
+                        // Create donation record
+                        donationRef = db.collection('donations').doc();
+                        await donationRef.set({
+                            churchId: churchId || 'default_church',
+                            donorId: donorId || 'anonymous',
+                            amount: parseFloat(donationAmount),
+                            tipAmount: parseFloat(tipAmount),
+                            totalAmount: paymentIntent.amount / 100,
+                            amountCents: paymentIntent.amount,
+                            campaign: campaign || 'General Fund',
+                            status: 'paid',
+                            stripePaymentIntentId: paymentIntent.id,
+                            createdAt: admin.firestore.FieldValue.serverTimestamp()
+                        });
+                        console.log(`Created new donation record ${donationRef.id} (legacy flow)`);
+                    }
+
+                    // donationRef is now guaranteed to be the document we just updated/created
+                    const paymentMethodDetails = (paymentIntent as any).payment_method_details;
+                    const cardDetails = paymentMethodDetails?.card ? {
+                        cardBrand: paymentMethodDetails.card.brand,
+                        last4: paymentMethodDetails.card.last4,
+                    } : {};
+
+                    await donationRef.update({
+                        ...cardDetails,
+                        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                    });
+
+                    const donationDataForWebhook = (await donationRef.get()).data();
+
 
                     // Outgoing Webhook to CMS
                     try {
@@ -87,7 +140,8 @@ export const stripeWebhookHandler = onRequest({ secrets: [stripeSecretKey, strip
 
                             // Construct payload - convert timestamp to ISO string for portability
                             const payload = {
-                                ...donationData,
+                                ...donationDataForWebhook,
+                                id: donationRef.id,
                                 createdAt: new Date().toISOString(), // Approximate match
                                 eventType: 'donation.created',
                                 paymentMethod: 'card' // Simplified

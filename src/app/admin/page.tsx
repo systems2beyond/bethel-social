@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { addDoc, collection, serverTimestamp, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc, setDoc, limit } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc, setDoc, limit, getCountFromServer, getDocs } from 'firebase/firestore';
 import { db, functions } from '@/lib/firebase';
 import { httpsCallable } from 'firebase/functions';
 import { Loader2, Send, Users, Flag, Pin, LayoutDashboard, AlertCircle, CheckCircle, Trash2, ExternalLink, Settings, DollarSign, Plus, CreditCard, ArrowUpRight, Search, Calendar, ChevronDown, Download, Ticket } from 'lucide-react';
@@ -12,6 +12,7 @@ import { GroupsService } from '@/lib/groups';
 import { Group } from '@/types';
 import GivingAnalytics from './giving/GivingAnalytics';
 import AdminDonationsTable from './giving/AdminDonationsTable';
+import CampaignManager from './giving/CampaignManager';
 import { Timestamp } from 'firebase/firestore';
 
 interface Donation {
@@ -58,6 +59,52 @@ export default function AdminPage() {
     const [content, setContent] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [postStatus, setPostStatus] = useState<'idle' | 'success' | 'error'>('idle');
+    const [stats, setStats] = useState({ members: 0, giving: 0, events: 0 });
+    const [loadingStats, setLoadingStats] = useState(true);
+
+    // Fetch Overview Stats
+    useEffect(() => {
+        if (activeTab === 'overview') {
+            const fetchStats = async () => {
+                setLoadingStats(true); // Don't reset if already loaded? Maybe only on first load.
+                try {
+                    // 1. Members Count
+                    const usersColl = collection(db, 'users');
+                    const membersSnapshot = await getCountFromServer(usersColl);
+                    const membersCount = membersSnapshot.data().count;
+
+                    // 2. Weekly Giving (Last 7 Days)
+                    const sevenDaysAgo = new Date();
+                    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+                    const donationsQuery = query(
+                        collection(db, 'donations'),
+                        where('createdAt', '>=', Timestamp.fromDate(sevenDaysAgo)),
+                        where('status', '==', 'paid')
+                    );
+                    const donationsSnapshot = await getDocs(donationsQuery);
+                    let weeklyGiving = 0;
+                    donationsSnapshot.forEach(doc => {
+                        weeklyGiving += (doc.data().amount || 0);
+                    });
+
+                    // 3. Upcoming Events
+                    const eventsQuery = query(
+                        collection(db, 'events'),
+                        where('startDate', '>=', Timestamp.now())
+                    );
+                    const eventsSnapshot = await getCountFromServer(eventsQuery);
+                    const eventsCount = eventsSnapshot.data().count;
+
+                    setStats({ members: membersCount, giving: weeklyGiving, events: eventsCount });
+                } catch (error) {
+                    console.error("Error fetching admin stats:", error);
+                } finally {
+                    setLoadingStats(false);
+                }
+            };
+            fetchStats();
+        }
+    }, [activeTab]);
 
     // Reports State
     const [reports, setReports] = useState<Report[]>([]);
@@ -276,7 +323,7 @@ export default function AdminPage() {
                                     </div>
                                     <div>
                                         <p className="text-sm text-gray-500 font-medium">Total Members</p>
-                                        <h3 className="text-2xl font-bold text-gray-900">1,248</h3>
+                                        <h3 className="text-2xl font-bold text-gray-900">{loadingStats ? '...' : stats.members.toLocaleString()}</h3>
                                     </div>
                                 </div>
                                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center space-x-4 transition-transform hover:scale-[1.02]">
@@ -285,7 +332,7 @@ export default function AdminPage() {
                                     </div>
                                     <div>
                                         <p className="text-sm text-gray-500 font-medium">Weekly Giving</p>
-                                        <h3 className="text-2xl font-bold text-gray-900">$12,450</h3>
+                                        <h3 className="text-2xl font-bold text-gray-900">{loadingStats ? '...' : `$${stats.giving.toLocaleString()}`}</h3>
                                     </div>
                                 </div>
                                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center space-x-4 transition-transform hover:scale-[1.02]">
@@ -294,7 +341,7 @@ export default function AdminPage() {
                                     </div>
                                     <div>
                                         <p className="text-sm text-gray-500 font-medium">Upcoming Events</p>
-                                        <h3 className="text-2xl font-bold text-gray-900">8</h3>
+                                        <h3 className="text-2xl font-bold text-gray-900">{loadingStats ? '...' : stats.events}</h3>
                                     </div>
                                 </div>
                             </div>
@@ -400,29 +447,6 @@ export default function AdminPage() {
                                         </form>
                                     </div>
 
-                                    {/* System Status / Mini Config */}
-                                    <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-                                        <div className="flex items-center justify-between mb-4">
-                                            <h3 className="font-semibold text-gray-900 text-sm">System Status</h3>
-                                            <Link href="/admin/config" onClick={() => setActiveTab('config')} className="text-xs text-blue-600 hover:underline">Configure</Link>
-                                        </div>
-                                        <div className="space-y-3">
-                                            <div className="flex items-center justify-between p-2 rounded-lg bg-gray-50">
-                                                <div className="flex items-center space-x-2">
-                                                    <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                                                    <span className="text-sm text-gray-600">Database</span>
-                                                </div>
-                                                <span className="text-xs font-medium text-green-600">Online</span>
-                                            </div>
-                                            <div className="flex items-center justify-between p-2 rounded-lg bg-gray-50">
-                                                <div className="flex items-center space-x-2">
-                                                    <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                                                    <span className="text-sm text-gray-600">Stripe Payments</span>
-                                                </div>
-                                                <span className="text-xs font-medium text-green-600">Active</span>
-                                            </div>
-                                        </div>
-                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -615,8 +639,6 @@ export default function AdminPage() {
 function ConfigurationTab() {
     const [config, setConfig] = useState<any>(null);
     const [loading, setLoading] = useState(true);
-    const [newCampaignName, setNewCampaignName] = useState('');
-    const [newCampaignDesc, setNewCampaignDesc] = useState('');
 
     // Webhook State
     const [webhookUrl, setWebhookUrl] = useState('');
@@ -647,46 +669,6 @@ function ConfigurationTab() {
         } catch (error) {
             console.error('Error updating config:', error);
             alert('Failed to update settings');
-        }
-    };
-
-    const addCampaign = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!newCampaignName.trim()) return;
-
-        const newCampaign = {
-            id: crypto.randomUUID(),
-            name: newCampaignName,
-            description: newCampaignDesc,
-            isActive: true
-        };
-
-        const currentCampaigns = config?.campaigns || [];
-
-        try {
-            await setDoc(doc(db, 'churches', 'default_church'), {
-                campaigns: [...currentCampaigns, newCampaign]
-            }, { merge: true });
-            setNewCampaignName('');
-            setNewCampaignDesc('');
-        } catch (error) {
-            console.error('Error adding campaign:', error);
-            alert('Failed to add campaign');
-        }
-    };
-
-    const removeCampaign = async (campaignId: string) => {
-        if (!confirm('Are you sure you want to remove this campaign?')) return;
-        const currentCampaigns = config?.campaigns || [];
-        const updatedCampaigns = currentCampaigns.filter((c: any) => c.id !== campaignId);
-
-        try {
-            await setDoc(doc(db, 'churches', 'default_church'), {
-                campaigns: updatedCampaigns
-            }, { merge: true });
-        } catch (error) {
-            console.error('Error removing campaign:', error);
-            alert('Failed to remove campaign');
         }
     };
 
@@ -858,72 +840,7 @@ function ConfigurationTab() {
                         </div>
                     </section>
 
-                    {/* Campaign Management */}
-                    <section>
-                        <div className="flex items-start space-x-4">
-                            <div className="w-12 h-12 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
-                                <LayoutDashboard className="w-6 h-6" />
-                            </div>
-                            <div className="flex-1">
-                                <h3 className="text-base font-semibold text-gray-900">Campaigns & Designations</h3>
-                                <p className="text-sm text-gray-500 mb-4">Manage the funds that donors can select.</p>
-
-                                <div className="bg-gray-50 rounded-xl border border-gray-200 p-6">
-                                    {/* Add New */}
-                                    <form onSubmit={addCampaign} className="flex gap-3 mb-6">
-                                        <div className="flex-1">
-                                            <input
-                                                type="text"
-                                                value={newCampaignName}
-                                                onChange={(e) => setNewCampaignName(e.target.value)}
-                                                placeholder="Campaign Name (e.g. Missions)"
-                                                className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                            />
-                                        </div>
-                                        <div className="flex-1">
-                                            <input
-                                                type="text"
-                                                value={newCampaignDesc}
-                                                onChange={(e) => setNewCampaignDesc(e.target.value)}
-                                                placeholder="Description (Optional)"
-                                                className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                            />
-                                        </div>
-                                        <button
-                                            type="submit"
-                                            disabled={!newCampaignName.trim()}
-                                            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-sm"
-                                        >
-                                            <Plus className="w-4 h-4" />
-                                        </button>
-                                    </form>
-
-                                    {/* List */}
-                                    <div className="space-y-2">
-                                        {(!config?.campaigns || config.campaigns.length === 0) && (
-                                            <div className="text-center py-6 text-gray-400 bg-white rounded-lg border border-gray-100 border-dashed">
-                                                <p className="text-sm">No custom campaigns. Default "General Fund" is active.</p>
-                                            </div>
-                                        )}
-                                        {config?.campaigns?.map((c: any) => (
-                                            <div key={c.id} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg shadow-sm hover:border-blue-300 transition-colors group">
-                                                <div>
-                                                    <div className="font-medium text-gray-900 text-sm">{c.name}</div>
-                                                    {c.description && <div className="text-xs text-gray-500">{c.description}</div>}
-                                                </div>
-                                                <button
-                                                    onClick={() => removeCampaign(c.id)}
-                                                    className="text-gray-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded-md transition-colors opacity-0 group-hover:opacity-100"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
+                    {/* Campaign Management Moved to Giving Tab */}
                 </div>
             </div>
         </div>
@@ -936,14 +853,7 @@ function GivingTab() {
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        const donationsRef = collection(db, 'donations');
-        const q = query(
-            donationsRef,
-            where('churchId', '==', 'default_church'),
-            orderBy('createdAt', 'desc'),
-            limit(100)
-        );
-
+        const q = query(collection(db, 'donations'), orderBy('createdAt', 'desc'), limit(100));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const donationsData: Donation[] = [];
             snapshot.forEach((doc) => {
@@ -956,6 +866,7 @@ function GivingTab() {
                     totalAmount: data.totalAmount || 0,
                     campaign: data.campaign || 'General Fund',
                     status: data.status || 'pending',
+                    createdAt: data.createdAt // Keep timestamp as is for now
                 } as Donation);
             });
             setDonations(donationsData);
@@ -963,11 +874,9 @@ function GivingTab() {
             setError(null);
         }, (err) => {
             console.error("Error fetching donations:", err);
-            if (err.message.includes('offline') || err.message.includes('network') || err.code === 'unavailable') {
-                setError('Unable to load donations. Please check your internet connection or disable ad-blockers.');
-            } else {
-                setError('Failed to load donations.');
-            }
+            // Don't show error to user immediately if it's just a permission issue initially, but good to know.
+            // Actually let's just log it. If it fails, donations is empty, which is fine.
+            setError('Failed to load donations.');
             setLoading(false);
         });
 
@@ -1001,11 +910,12 @@ function GivingTab() {
 
             {!error && (
                 <>
-                    {/* Analytics Dashboard */}
                     <GivingAnalytics donations={donations} />
 
-                    {/* Donations Table */}
-                    <AdminDonationsTable donations={donations} loading={loading} />
+                    <div className="space-y-6">
+                        <AdminDonationsTable donations={donations} loading={loading} />
+                        <CampaignManager />
+                    </div>
                 </>
             )}
         </div>

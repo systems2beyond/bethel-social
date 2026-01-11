@@ -11,6 +11,8 @@ import { toast } from 'sonner';
 
 import { useChurchConfig } from '@/hooks/useChurchConfig';
 import { ChevronDown, ChevronUp, Plus } from 'lucide-react';
+import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 // Initialize Stripe
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
@@ -23,12 +25,36 @@ const PRESET_AMOUNTS = [50, 100, 250, 500];
 const TIP_PERCENTAGES = [0, 0.03, 0.05, 0.08];
 
 export default function DonationWidget() {
-    const { config } = useChurchConfig();
-    const campaigns = config?.campaigns || DEFAULT_CAMPAIGNS;
+    const [campaigns, setCampaigns] = useState<any[]>(DEFAULT_CAMPAIGNS);
+    // Fetch campaigns from collection
+    React.useEffect(() => {
+        const q = query(collection(db, 'campaigns'), orderBy('name', 'asc'));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const data = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            if (data.length > 0) {
+                setCampaigns(data);
+                // Only reset if current selection is invalid? Or maybe just default to first.
+                // setCampaign(data[0].name); 
+            }
+        });
+        return () => unsubscribe();
+    }, []);
 
     const [step, setStep] = useState<number>(1); // 1: Details, 2: Payment
     const [amount, setAmount] = useState<number>(100);
-    const [campaign, setCampaign] = useState<string>(campaigns[0]?.name || 'General Fund');
+    const [campaign, setCampaign] = useState<string>('General Fund');
+    const [donorName, setDonorName] = useState<string>('');
+    const [donorEmail, setDonorEmail] = useState<string>('');
+
+    // Effect to set default campaign once loaded
+    React.useEffect(() => {
+        if (campaigns.length > 0 && campaign === 'General Fund' && !campaigns.find(c => c.name === 'General Fund')) {
+            setCampaign(campaigns[0].name);
+        }
+    }, [campaigns]);
 
 
     // Tipping
@@ -67,7 +93,9 @@ export default function DonationWidget() {
                 tipAmount: tipAmount * 100,
                 churchId: 'default_church',
                 frequency: 'one_time',
-                campaign: campaign
+                campaign: campaign,
+                donorName: donorName,
+                donorEmail: donorEmail
             });
             const data = result.data as { clientSecret: string };
             setClientSecret(data.clientSecret);
@@ -148,6 +176,27 @@ export default function DonationWidget() {
                             onChange={(e) => setAmount(parseFloat(e.target.value))}
                             className="w-full pl-8 pr-4 py-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-xl font-bold text-gray-900 dark:text-white placeholder-gray-400"
                             placeholder="Enter custom amount"
+                        />
+                    </div>
+                </div>
+
+                {/* Donor Details */}
+                <div className="space-y-4">
+                    <label className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Your Information</label>
+                    <div className="space-y-3">
+                        <input
+                            type="text"
+                            value={donorName}
+                            onChange={(e) => setDonorName(e.target.value)}
+                            className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-gray-900 dark:text-white placeholder-gray-400"
+                            placeholder="Full Name"
+                        />
+                        <input
+                            type="email"
+                            value={donorEmail}
+                            onChange={(e) => setDonorEmail(e.target.value)}
+                            className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-gray-900 dark:text-white placeholder-gray-400"
+                            placeholder="Email Address"
                         />
                     </div>
                 </div>

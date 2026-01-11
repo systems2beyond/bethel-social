@@ -17,7 +17,7 @@ export const createDonationIntent = onCall({ secrets: [stripeSecretKey] }, async
         // Optional: Support guest donations? 
     }
 
-    const { amount, tipAmount, churchId, campaign } = request.data;
+    const { amount, tipAmount, churchId, campaign, donorName, donorEmail } = request.data;
 
     if (!amount || isNaN(amount) || amount < 50) { // Min 50 cents
         throw new HttpsError('invalid-argument', 'Invalid donation amount');
@@ -37,6 +37,26 @@ export const createDonationIntent = onCall({ secrets: [stripeSecretKey] }, async
     const stripe = getStripe();
 
     try {
+
+        // Create Pending Firestore Document
+        const donationRef = db.collection('donations').doc();
+        const pendingDonationData = {
+            churchId: churchId || 'default_church',
+            donorId: request.auth?.uid || 'guest',
+            donorName: donorName || 'Anonymous', // Save name
+            donorEmail: donorEmail || request.auth?.token?.email || null, // Save email
+            amount: amount,
+            tipAmount: tip,
+            totalAmount: totalAmount / 100, // Stored in dollars
+            amountCents: totalAmount,
+            campaign: campaign || 'General Fund',
+            status: 'pending',
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            stripePaymentIntentId: null, // Will be updated
+        };
+
+        await donationRef.set(pendingDonationData);
+
         const paymentIntent = await stripe.paymentIntents.create({
             amount: totalAmount,
             currency: 'usd',
@@ -51,11 +71,19 @@ export const createDonationIntent = onCall({ secrets: [stripeSecretKey] }, async
             metadata: {
                 churchId: churchId || 'default_church',
                 donorId: request.auth?.uid || 'guest',
+                donorName: donorName || 'Anonymous', // Pass to metadata
+                donorEmail: donorEmail || request.auth?.token?.email || 'N/A', // Pass to metadata
                 donationAmount: amount,
                 tipAmount: tip,
                 campaign: campaign || 'General Fund', // Store the campaign
-                type: 'donation'
+                type: 'donation',
+                donationDocId: donationRef.id // Pass the Doc ID to Stripe
             }
+        });
+
+        // Update the pending doc with the PI ID
+        await donationRef.update({
+            stripePaymentIntentId: paymentIntent.id
         });
 
         return {

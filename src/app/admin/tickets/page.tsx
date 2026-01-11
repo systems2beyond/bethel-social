@@ -40,7 +40,7 @@ export default function TicketEventsPage() {
     return (
         <div className="max-w-5xl mx-auto p-8">
             <header className="mb-8">
-                <Link href="/admin" className="text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200 mb-2 inline-block">← Back to Admin</Link>
+                <Link href="/admin" className="text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200 mb-2 inline-block">← Back to Dashboard</Link>
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Ticket Management</h1>
                 <p className="text-gray-500 dark:text-gray-400 mt-2">Select an event to design and manage its tickets.</p>
             </header>
