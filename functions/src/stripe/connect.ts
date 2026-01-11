@@ -60,6 +60,9 @@ export const createExpressAccount = onCall({ secrets: [stripeSecretKey] }, async
                             interval: 'manual', // Platform controls payouts (optional, depends on flow)
                         }
                     }
+                },
+                metadata: {
+                    churchId
                 }
             });
             accountId = account.id;

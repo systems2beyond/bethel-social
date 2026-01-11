@@ -59,26 +59,27 @@ export default function GivingAnalytics({ donations }: GivingAnalyticsProps) {
         }
 
         donations.forEach(d => {
+            console.log('Processing donation:', d.amount, d.status);
             const date = d.createdAt?.toDate ? d.createdAt.toDate() : new Date();
 
             // Only count "paid" or "succeeded"
             if (d.status !== 'paid' && d.status !== 'succeeded') return;
 
             // Total Stats
-            totalRaised += d.amount;
+            totalRaised += (d.amount / 100);
             totalCount++;
             if (d.donorId && d.donorId !== 'anonymous') uniqueDonors.add(d.donorId);
             else if (d.donorEmail) uniqueDonors.add(d.donorEmail);
 
             // Campaign Data
             const campaignName = d.campaign || 'General';
-            campaigns[campaignName] = (campaigns[campaignName] || 0) + d.amount;
+            campaigns[campaignName] = (campaigns[campaignName] || 0) + (d.amount / 100);
 
             // Trend Data (aggregating by week start)
             if (isAfter(date, subDays(now, 35))) { // Roughly last month
                 const weekLabel = format(startOfWeek(date), 'MMM d');
                 if (weeklyTrends[weekLabel] !== undefined) {
-                    weeklyTrends[weekLabel] += d.amount;
+                    weeklyTrends[weekLabel] += (d.amount / 100);
                 }
             }
         });

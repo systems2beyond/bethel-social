@@ -123,11 +123,20 @@ function AdminGivingContent() {
     const handleLoginLink = async () => {
         setIsLoadingUrl(true);
         try {
+            // Open window immediately to avoid popup blockers
+            const newWindow = window.open('', '_blank');
+            if (newWindow) newWindow.document.body.innerHTML = 'Loading Stripe Dashboard...';
+
             const getLoginLink = httpsCallable(functions, 'getStripeLoginLink');
             const result = await getLoginLink({ churchId: 'default_church' });
             const { url } = result.data as any;
-            // Open in new tab
-            window.open(url, '_blank');
+
+            if (newWindow) {
+                newWindow.location.href = url;
+            } else {
+                // Fallback if blocked entirely
+                window.location.href = url;
+            }
             setIsLoadingUrl(false);
         } catch (error) {
             console.error(error);

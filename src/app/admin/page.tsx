@@ -84,7 +84,7 @@ export default function AdminPage() {
                     const donationsSnapshot = await getDocs(donationsQuery);
                     let weeklyGiving = 0;
                     donationsSnapshot.forEach(doc => {
-                        weeklyGiving += (doc.data().amount || 0);
+                        weeklyGiving += ((doc.data().amount || 0) / 100);
                     });
 
                     // 3. Upcoming Events
