@@ -27,6 +27,72 @@ interface Donation {
     donorEmail?: string;
 }
 
+interface Payout {
+    id: string;
+    amount: number;
+    arrival_date: number;
+    status: string;
+}
+
+const PayoutsList = () => {
+    const [payouts, setPayouts] = useState<Payout[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchPayouts = async () => {
+            try {
+                const getRecentPayouts = httpsCallable(functions, 'getRecentPayouts');
+                const result = await getRecentPayouts({ churchId: 'default_church' });
+                const data = result.data as any;
+                setPayouts(data.payouts || []);
+            } catch (err) {
+                console.error('Failed to fetch payouts', err);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchPayouts();
+    }, []);
+
+    if (loading) return <div className="text-sm text-gray-400 py-2">Loading payouts...</div>;
+
+    if (payouts.length === 0) {
+        return <div className="text-sm text-gray-500 py-2">No recent payouts found. Funds are automatically transferred on a rolling basis.</div>;
+    }
+
+    return (
+        <div className="overflow-hidden bg-gray-50 rounded-lg border border-gray-100">
+            <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-100">
+                    <tr>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Arrival Date</th>
+                    </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                    {payouts.map((payout) => (
+                        <tr key={payout.id}>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                ${(payout.amount / 100).toFixed(2)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${payout.status === 'paid' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                                    }`}>
+                                    {payout.status}
+                                </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {new Date(payout.arrival_date * 1000).toLocaleDateString()}
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+};
+
 function AdminGivingContent() {
     const { userData } = useAuth();
     const router = useRouter();
@@ -178,61 +244,64 @@ function AdminGivingContent() {
                                 <h2 className="text-xl font-bold text-gray-900">Payment Processor</h2>
                                 <p className="text-sm text-gray-500">
                                     {stripeStatus === 'active'
-                                        ? 'Stripe is active and ready to accept donations.'
-                                        : (stripeStatus === 'pending_onboarding' || stripeStatus === 'pending_verification') && stripeDetailsSubmitted
-                                            ? 'Verification in progress. You can likely accept donations, but payouts are paused.'
-                                            : stripeStatus === 'pending_onboarding'
-                                                ? 'Resume onboarding to start accepting donations.'
-                                                : 'Connect Stripe to start accepting donations.'}
+                                        ? 'Stripe is active. Recent payouts to your bank account:'
+                                        : 'Connect Stripe to start accepting donations.'}
                                 </p>
                             </div>
                         </div>
-                        {stripeStatus === 'active' && (
-                            <span className="bg-green-100 text-green-800 text-xs font-semibold px-3 py-1 rounded-full flex items-center">
-                                <CheckCircle className="w-3 h-3 mr-1" /> Active
-                            </span>
-                        )}
-                        {(stripeStatus === 'pending_onboarding' || stripeStatus === 'pending_verification') && (
-                            <span className="bg-yellow-100 text-yellow-800 text-xs font-semibold px-3 py-1 rounded-full flex items-center">
-                                <Loader2 className="w-3 h-3 mr-1 animate-spin" /> Pending
-                            </span>
-                        )}
-                    </div>
 
-                    <div className="flex items-center space-x-4">
-                        {stripeStatus === 'active' ? (
-                            <button
-                                onClick={handleLoginLink}
-                                disabled={isLoadingUrl}
-                                className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                            >
-                                {isLoadingUrl ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
-                                <span>View Stripe Dashboard</span>
-                            </button>
-                        ) : (
-                            <div className="flex space-x-2">
-                                {(stripeStatus === 'pending_onboarding' || stripeStatus === 'pending_verification') && stripeDetailsSubmitted ? (
+                        {/* Status Badge or Actions */}
+                        <div className="flex items-center space-x-3">
+                            {stripeStatus === 'active' && (
+                                <>
+                                    <span className="bg-green-100 text-green-800 text-xs font-semibold px-3 py-1 rounded-full flex items-center">
+                                        <CheckCircle className="w-3 h-3 mr-1" /> Active
+                                    </span>
+                                    {/* Demoted "Manage" Button */}
                                     <button
                                         onClick={handleLoginLink}
                                         disabled={isLoadingUrl}
-                                        className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                                        className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors"
+                                        title="Manage Stripe Account"
                                     >
-                                        {isLoadingUrl ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
-                                        <span>Check Status in Dashboard</span>
+                                        <ExternalLink className="w-5 h-5" />
                                     </button>
-                                ) : (
-                                    <button
-                                        onClick={handleOnboard}
-                                        disabled={isLoadingUrl}
-                                        className="flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-medium"
-                                    >
-                                        {isLoadingUrl ? <Loader2 className="w-5 h-5 animate-spin" /> : <CreditCard className="w-5 h-5" />}
-                                        <span>{stripeStatus === 'pending_onboarding' ? 'Resume Onboarding' : 'Set up Payments'}</span>
-                                    </button>
-                                )}
-                            </div>
-                        )}
+                                </>
+                            )}
+                            {(stripeStatus === 'pending_onboarding' || stripeStatus === 'pending_verification') && (
+                                <span className="bg-yellow-100 text-yellow-800 text-xs font-semibold px-3 py-1 rounded-full flex items-center">
+                                    <Loader2 className="w-3 h-3 mr-1 animate-spin" /> Pending
+                                </span>
+                            )}
+                        </div>
                     </div>
+
+                    {/* Payouts List or Onboarding Button */}
+                    {stripeStatus === 'active' ? (
+                        <PayoutsList />
+                    ) : (
+                        <div className="mt-4">
+                            {(stripeStatus === 'pending_onboarding' || stripeStatus === 'pending_verification') && stripeDetailsSubmitted ? (
+                                <button
+                                    onClick={handleLoginLink}
+                                    disabled={isLoadingUrl}
+                                    className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                                >
+                                    {isLoadingUrl ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
+                                    <span>Check Status in Dashboard</span>
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={handleOnboard}
+                                    disabled={isLoadingUrl}
+                                    className="flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-medium"
+                                >
+                                    {isLoadingUrl ? <Loader2 className="w-5 h-5 animate-spin" /> : <CreditCard className="w-5 h-5" />}
+                                    <span>{stripeStatus === 'pending_onboarding' ? 'Resume Onboarding' : 'Set up Payments'}</span>
+                                </button>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* Analytics Dashboard */}

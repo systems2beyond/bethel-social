@@ -116,3 +116,31 @@ export const getStripeLoginLink = onCall({ secrets: [stripeSecretKey] }, async (
         throw new HttpsError('internal', error.message);
     }
 });
+
+/**
+ * Fetches recent payouts for the connected account.
+ */
+export const getRecentPayouts = onCall({ secrets: [stripeSecretKey] }, async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'User must be logged in.');
+
+    const churchId = request.data.churchId || 'default_church';
+    const db = admin.firestore();
+    const doc = await db.collection('churches').doc(churchId).get();
+    const accountId = doc.data()?.stripeAccountId;
+
+    if (!accountId) {
+        return { payouts: [] };
+    }
+
+    const stripe = getStripe();
+    try {
+        const payouts = await stripe.payouts.list({
+            limit: 5,
+        }, { stripeAccount: accountId });
+
+        return { payouts: payouts.data };
+    } catch (error: any) {
+        console.error('Error fetching payouts:', error);
+        throw new HttpsError('internal', error.message);
+    }
+});
