@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 // using standard divs instead of ui/card component library
 
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
@@ -38,6 +38,11 @@ const StatCard = ({ title, value, icon: Icon, subtext }: { title: string, value:
 );
 
 export default function GivingAnalytics({ donations }: GivingAnalyticsProps) {
+    const [isClient, setIsClient] = useState(false);
+
+    useEffect(() => {
+        setIsClient(true);
+    }, []);
 
     // Process Data
     const analytics = useMemo(() => {
@@ -134,41 +139,43 @@ export default function GivingAnalytics({ donations }: GivingAnalyticsProps) {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
                 {/* Trends Chart */}
-                <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+                <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm overflow-hidden">
                     <div className="mb-6">
                         <h3 className="text-lg font-bold text-gray-900">Donation Trends</h3>
                         <p className="text-sm text-gray-500">Weekly giving over the last month</p>
                     </div>
-                    <div className="h-64 w-full" style={{ minHeight: '250px', minWidth: 0 }}>
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={analytics.barData}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#6B7280', fontSize: 12 }} dy={10} />
-                                <YAxis
-                                    axisLine={false}
-                                    tickLine={false}
-                                    tick={{ fill: '#6B7280', fontSize: 12 }}
-                                    tickFormatter={(val) => `$${val}`}
-                                />
-                                <Tooltip
-                                    cursor={{ fill: '#F3F4F6' }}
-                                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                                    formatter={(val: number | string | Array<any> | undefined) => [formatCurrency(Number(val) || 0), 'Amount']}
-                                />
-                                <Bar dataKey="amount" fill="#8B5CF6" radius={[4, 4, 0, 0]} barSize={40} />
-                            </BarChart>
-                        </ResponsiveContainer>
+                    <div className="w-full h-[300px] min-w-0" style={{ minHeight: '300px' }}>
+                        {isClient && (
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={analytics.barData}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#6B7280', fontSize: 12 }} dy={10} />
+                                    <YAxis
+                                        axisLine={false}
+                                        tickLine={false}
+                                        tick={{ fill: '#6B7280', fontSize: 12 }}
+                                        tickFormatter={(val) => `$${val}`}
+                                    />
+                                    <Tooltip
+                                        cursor={{ fill: '#F3F4F6' }}
+                                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                        formatter={(val: number | string | Array<any> | undefined) => [formatCurrency(Number(val) || 0), 'Amount']}
+                                    />
+                                    <Bar dataKey="amount" fill="#8B5CF6" radius={[4, 4, 0, 0]} barSize={40} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        )}
                     </div>
                 </div>
 
                 {/* Breakdown Chart */}
-                <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+                <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm overflow-hidden">
                     <div className="mb-6">
                         <h3 className="text-lg font-bold text-gray-900">Fund Breakdown</h3>
                         <p className="text-sm text-gray-500">Distribution by envelope/campaign</p>
                     </div>
-                    <div className="h-64 w-full relative" style={{ minHeight: "250px", minWidth: 0 }}>
-                        {analytics.pieData.length > 0 ? (
+                    <div className="w-full h-[300px] min-w-0" style={{ minHeight: '300px' }}>
+                        {isClient && analytics.pieData.length > 0 ? (
                             <ResponsiveContainer width="100%" height="100%">
                                 <PieChart>
                                     <Pie
@@ -188,15 +195,16 @@ export default function GivingAnalytics({ donations }: GivingAnalyticsProps) {
                                         formatter={(val: number | string | Array<any> | undefined) => formatCurrency(Number(val) || 0)}
                                         contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                                     />
-                                    <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                                    <Legend verticalAlign="middle" align="right" layout="vertical" iconType="circle" />
                                 </PieChart>
                             </ResponsiveContainer>
                         ) : (
-                            <div className="text-gray-400 text-sm">No data available</div>
+                            <div className="h-full flex items-center justify-center text-gray-400">
+                                {isClient ? 'No data available' : 'Loading...'}
+                            </div>
                         )}
                     </div>
                 </div>
-
             </div>
         </div>
     );

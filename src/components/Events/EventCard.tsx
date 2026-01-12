@@ -3,6 +3,7 @@
 import React from 'react';
 import { Calendar, MapPin, Clock, ExternalLink } from 'lucide-react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { useLightbox } from '@/context/LightboxContext';
 import { useFeed } from '@/context/FeedContext';
@@ -123,7 +124,9 @@ export const EventCard = ({ event }: { event: Event }) => {
                         <span>{timeStr}</span>
                     </div>
 
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2 line-clamp-2">{event.title}</h3>
+                    <Link href={`/events/${event.id}`} className="hover:text-blue-600 transition-colors">
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2 line-clamp-2">{event.title}</h3>
+                    </Link>
 
                     <div className="flex items-center text-gray-500 dark:text-gray-400 text-sm mb-4">
                         <MapPin className="w-4 h-4 mr-1.5 flex-shrink-0" />
@@ -142,7 +145,9 @@ export const EventCard = ({ event }: { event: Event }) => {
                     </div>
 
                     <div className="flex space-x-3 ml-auto">
-                        {/* Add to Calendar Button could go here */}
+                        <Link href={`/events/${event.id}`} className="flex items-center text-sm font-medium text-blue-600 hover:text-blue-700">
+                            View Details <ExternalLink className="w-4 h-4 ml-1" />
+                        </Link>
                     </div>
                 </div>
             </div>

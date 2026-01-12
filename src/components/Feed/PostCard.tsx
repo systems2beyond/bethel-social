@@ -3,7 +3,7 @@
 import React from 'react';
 import { Post } from '@/types';
 import { motion } from 'framer-motion';
-import { Heart, MessageCircle, Share2, Facebook, Youtube, Pin, Sparkles, Play, Trash2 } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Facebook, Youtube, Pin, Sparkles, Play, Trash2, FileText, Download } from 'lucide-react';
 import { CommentsSection } from './CommentsSection';
 import { ShareMenu } from './ShareMenu';
 import { PostOptionsMenu } from './PostOptionsMenu';
@@ -344,78 +344,122 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
                 <p className="text-gray-800 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
                     {formatTextWithLinks(post.content)}
                 </p>
+
+                {/* File Attachments */}
+                {post.attachments && post.attachments.filter(a => a.type === 'file').length > 0 && (
+                    <div className="mt-3 space-y-2">
+                        {post.attachments.filter(a => a.type === 'file').map((file, index) => (
+                            <a
+                                key={index}
+                                href={file.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center p-3 rounded-lg bg-gray-50 dark:bg-zinc-800 border border-gray-100 dark:border-zinc-700 hover:bg-gray-100 dark:hover:bg-zinc-700 transition-colors group"
+                            >
+                                <div className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-lg mr-3">
+                                    <FileText className="w-5 h-5" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{file.name}</p>
+                                    <p className="text-xs text-gray-500">
+                                        {file.mimeType.split('/')[1].toUpperCase()} • {(file.size / 1024 / 1024).toFixed(2)} MB
+                                    </p>
+                                </div>
+                                <Download className="w-4 h-4 text-gray-400 group-hover:text-blue-500 transition-colors" />
+                            </a>
+                        ))}
+                    </div>
+                )}
             </div>
 
             {/* Media */}
-            {(post.mediaUrl || (post.images && post.images.length > 0)) && (
+            {(post.mediaUrl || (post.images && post.images.length > 0) || (post.attachments && post.attachments.some(a => a.type === 'image' || a.type === 'video'))) && (
                 <div className="mt-2 group">
-                    {post.type === 'youtube' ? (
-                        <div className="relative aspect-video bg-black">
-                            <YouTubeFeedPlayer ref={videoPlayerRef} url={post.mediaUrl!} />
-                        </div>
-                    ) : post.type === 'video' ? (
-                        <div className="relative aspect-video bg-black">
-                            <NativeVideoPlayer ref={videoPlayerRef} url={post.mediaUrl!} poster={post.thumbnailUrl} />
-                        </div>
-                    ) : (
-                        (() => {
-                            const images = post.images && post.images.length > 0 ? post.images : [post.mediaUrl!];
+                    {(() => {
+                        // Consolidate Media
+                        const legacyVideo = (post.type === 'youtube' || post.type === 'video') ? { type: post.type, url: post.mediaUrl!, thumbnail: post.thumbnailUrl } : null;
+                        const attachmentVideos = post.attachments?.filter(a => a.type === 'video').map(a => ({ type: 'video' as const, url: a.url, thumbnail: undefined })) || [];
 
-                            if (images.length === 1) {
+                        const video = legacyVideo || attachmentVideos[0]; // Prioritize legacy main video or first attachment video
+
+                        if (video) {
+                            if (video.type === 'youtube') {
                                 return (
-                                    <div
-                                        className="relative aspect-video bg-black cursor-pointer overflow-hidden rounded-lg"
-                                        onClick={() => openLightbox(images, 'image', 0)}
-                                    >
-                                        <img
-                                            src={images[0]}
-                                            alt="Post content"
-                                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                                        />
+                                    <div className="relative aspect-video bg-black">
+                                        <YouTubeFeedPlayer ref={videoPlayerRef} url={video.url} />
+                                    </div>
+                                );
+                            } else {
+                                return (
+                                    <div className="relative aspect-video bg-black">
+                                        <NativeVideoPlayer ref={videoPlayerRef} url={video.url} poster={video.thumbnail} />
                                     </div>
                                 );
                             }
+                        }
 
+                        // Images
+                        const legacyImages = post.images || (post.mediaUrl && !legacyVideo ? [post.mediaUrl] : []);
+                        const attachmentImages = post.attachments?.filter(a => a.type === 'image').map(a => a.url) || [];
+                        const displayImages = [...legacyImages, ...attachmentImages];
+
+                        if (displayImages.length === 0) return null;
+
+                        if (displayImages.length === 1) {
                             return (
-                                <div className={cn(
-                                    "grid gap-0.5 overflow-hidden rounded-lg cursor-pointer aspect-video",
-                                    images.length === 2 ? "grid-cols-2" : "grid-cols-2"
-                                )}>
-                                    {images.slice(0, 4).map((src, index) => {
-                                        const isLast = index === 3;
-                                        const remaining = images.length - 4;
-
-                                        // Layout Logic
-                                        let className = "relative w-full h-full bg-gray-100 dark:bg-zinc-800";
-
-                                        // For 3 images: First image takes left half (row-span-2)
-                                        if (images.length === 3 && index === 0) {
-                                            className += " row-span-2";
-                                        }
-
-                                        return (
-                                            <div
-                                                key={index}
-                                                className={className}
-                                                onClick={() => openLightbox(images, 'image', index)}
-                                            >
-                                                <img
-                                                    src={src}
-                                                    alt={`Content ${index + 1}`}
-                                                    className="w-full h-full object-cover hover:opacity-90 transition-opacity"
-                                                />
-                                                {isLast && remaining > 0 && (
-                                                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm">
-                                                        <span className="text-white font-bold text-2xl">+{remaining}</span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
+                                <div
+                                    className="relative aspect-video bg-black cursor-pointer overflow-hidden rounded-lg mx-4"
+                                    onClick={() => openLightbox(displayImages, 'image', 0)}
+                                >
+                                    <img
+                                        src={displayImages[0]}
+                                        alt="Post content"
+                                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                    />
                                 </div>
                             );
-                        })()
-                    )}
+                        }
+
+                        return (
+                            <div className={cn(
+                                "grid gap-0.5 overflow-hidden rounded-lg cursor-pointer aspect-video mx-4",
+                                displayImages.length === 2 ? "grid-cols-2" : "grid-cols-2"
+                            )}>
+                                {displayImages.slice(0, 4).map((src, index) => {
+                                    const isLast = index === 3;
+                                    const remaining = displayImages.length - 4;
+
+                                    // Layout Logic
+                                    let className = "relative w-full h-full bg-gray-100 dark:bg-zinc-800";
+
+                                    // For 3 images: First image takes left half (row-span-2)
+                                    if (displayImages.length === 3 && index === 0) {
+                                        className += " row-span-2";
+                                    }
+
+                                    return (
+                                        <div
+                                            key={index}
+                                            className={className}
+                                            onClick={() => openLightbox(displayImages, 'image', index)}
+                                        >
+                                            <img
+                                                src={src}
+                                                alt={`Content ${index + 1}`}
+                                                className="w-full h-full object-cover hover:opacity-90 transition-opacity"
+                                            />
+                                            {isLast && remaining > 0 && (
+                                                <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm">
+                                                    <span className="text-white font-bold text-2xl">+{remaining}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        );
+
+                    })()}
                 </div>
             )}
 

@@ -19,7 +19,16 @@ export interface Post {
     likes?: number;
     comments?: number;
     externalUrl?: string;
+    attachments?: Attachment[];
     groupId?: string; // Optional: if post belongs to a group
+}
+
+export interface Attachment {
+    type: 'image' | 'video' | 'file';
+    url: string;
+    name: string;
+    mimeType: string;
+    size: number;
 }
 
 export type GroupPrivacy = 'public' | 'private';
@@ -104,7 +113,23 @@ export interface Event {
     // Legacy fields validation
     imageUrl?: string;
     sourcePostId?: string;
+
+    // New Fields
+    category?: 'General' | 'Meeting' | 'Bible Study' | 'Sunday School';
+    landingPage?: LandingPageConfig;
 }
+
+export interface LandingPageConfig {
+    enabled: boolean;
+    blocks: LandingPageBlock[];
+}
+
+export type LandingPageBlock =
+    | { id: string; type: 'text'; content: string; title?: string }
+    | { id: string; type: 'image'; url: string; caption?: string }
+    | { id: string; type: 'video'; url: string; title?: string } // url can be youtube or direct
+    | { id: string; type: 'file'; url: string; name: string; size?: number }
+    | { id: string; type: 'button'; label: string; url: string; style: 'primary' | 'secondary' };
 
 
 export interface Comment {

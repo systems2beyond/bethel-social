@@ -1,11 +1,23 @@
 [build]
   command = "npm run build"
 
+[[redirects]]
+  from = "/api/saveEvent"
+  to = "https://us-central1-bethel-metro-social.cloudfunctions.net/saveEvent"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/saveEvent"
+  to = "https://us-central1-bethel-metro-social.cloudfunctions.net/saveEvent"
+  status = 200
+  force = true
+
   
 [[headers]]
   for = "/*"
   [headers.values]
-    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://www.youtube.com https://s.ytimg.com https://www.google.com https://www.gstatic.com https://*.firebaseapp.com https://*.firebase.com https://js.stripe.com https://connect-js.stripe.com; frame-src 'self' https: https://js.stripe.com https://hooks.stripe.com https://connect-js.stripe.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.cloudfunctions.net https://www.youtube.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://api.getbible.net https://bible-api.com wss://* https://signaling.yjs.dev https://y-webrtc-signaling-eu.herokuapp.com https://y-webrtc-signaling-us.herokuapp.com https://api.stripe.com https://connect.stripe.com https://b.stripecdn.com; img-src * data: blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com https://r2cdn.perplexity.ai https://b.stripecdn.com;"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://www.youtube.com https://s.ytimg.com https://www.google.com https://www.gstatic.com https://*.firebaseapp.com https://*.firebase.com https://js.stripe.com https://connect-js.stripe.com; frame-src 'self' https: https://js.stripe.com https://hooks.stripe.com https://connect-js.stripe.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.cloudfunctions.net https://www.youtube.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://api.getbible.net https://bible-api.com wss://* https://signaling.yjs.dev https://y-webrtc-signaling-eu.herokuapp.com https://y-webrtc-signaling-us.herokuapp.com https://api.stripe.com https://connect.stripe.com https://b.stripecdn.com; img-src * data: blob:; media-src * data: blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com https://r2cdn.perplexity.ai https://b.stripecdn.com;"
     Cross-Origin-Opener-Policy = "same-origin-allow-popups"
     Cross-Origin-Embedder-Policy = "unsafe-none"
     X-Frame-Options = "DENY"

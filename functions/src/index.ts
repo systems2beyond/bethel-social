@@ -139,6 +139,8 @@ export { fetchUrlContent } from './media/reader';
 export { generateTiptapToken } from './collaboration/token';
 
 // Stripe Functions
-export { createExpressAccount, getStripeLoginLink } from './stripe/connect';
+export { createExpressAccount, getStripeLoginLink, getRecentPayouts } from './stripe/connect';
 export { stripeWebhookHandler as stripeWebhook } from './stripe/webhooks';
 export { createDonationIntent } from './stripe/donations';
+
+export { saveEvent } from './admin/events';

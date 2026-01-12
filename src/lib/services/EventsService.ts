@@ -20,13 +20,27 @@ const COLLECTION_NAME = 'events';
 export const EventsService = {
     async createEvent(eventData: Omit<Event, 'id' | 'createdAt' | 'updatedAt'>) {
         try {
-            const docRef = await addDoc(collection(db, COLLECTION_NAME), {
-                ...eventData,
-                status: eventData.status || 'draft',
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp()
+            const auth = (await import('../../lib/firebase')).auth;
+            const token = await auth.currentUser?.getIdToken();
+
+            if (!token) throw new Error('User not authenticated');
+
+            const response = await fetch('/api/saveEvent', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ event: eventData })
             });
-            return docRef.id;
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to create event');
+            }
+
+            const result = await response.json();
+            return result.id;
         } catch (error) {
             console.error('Error creating event:', error);
             throw error;
@@ -35,11 +49,24 @@ export const EventsService = {
 
     async updateEvent(id: string, updates: Partial<Event>) {
         try {
-            const docRef = doc(db, COLLECTION_NAME, id);
-            await updateDoc(docRef, {
-                ...updates,
-                updatedAt: serverTimestamp()
+            const auth = (await import('../../lib/firebase')).auth;
+            const token = await auth.currentUser?.getIdToken();
+
+            if (!token) throw new Error('User not authenticated');
+
+            const response = await fetch('/api/saveEvent', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ eventId: id, event: updates })
             });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to update event');
+            }
         } catch (error) {
             console.error('Error updating event:', error);
             throw error;
@@ -81,10 +108,30 @@ export const EventsService = {
             }
 
             const querySnapshot = await getDocs(q);
-            return querySnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            } as Event));
+            return querySnapshot.docs.map(doc => {
+                const data = doc.data();
+                const fixDate = (val: any) => {
+                    if (!val) return null;
+                    if (val.toDate && typeof val.toDate === 'function') return val;
+                    if (typeof val === 'object' && typeof val.seconds === 'number') {
+                        return new Timestamp(val.seconds, val.nanoseconds || 0);
+                    }
+                    if (typeof val === 'string') {
+                        try { return Timestamp.fromDate(new Date(val)); } catch (e) { return null; }
+                    }
+                    return val;
+                };
+
+                const startDate = fixDate(data.startDate);
+                const endDate = fixDate(data.endDate);
+
+                return {
+                    id: doc.id,
+                    ...data,
+                    startDate,
+                    endDate,
+                } as Event;
+            });
         } catch (error) {
             console.error('Error fetching events:', error);
             throw error; // Propagate error for UI handling

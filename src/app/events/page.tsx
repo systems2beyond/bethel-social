@@ -11,24 +11,65 @@ export default function EventsPage() {
     const [events, setEvents] = useState<any[]>([]);
     const [meetings, setMeetings] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [debugLog, setDebugLog] = useState<string[]>([]); // Temporary Debug Log
 
     useEffect(() => {
         const fetchData = async () => {
+            const logs: string[] = []; // Collect logs
             try {
                 const now = Timestamp.now();
+                logs.push(`Fetch Start: ${new Date().toISOString()}`);
 
+                // 1. Fetch Events - REMOVED orderBy to ensure we get mixed types (Strings & Timestamps)
                 // 1. Fetch Events
-                const eventsQuery = query(
-                    collection(db, 'events'),
-                    where('date', '>=', now),
-                    orderBy('date', 'asc')
-                );
+                // Query all events and filter client-side to handle potential data type mismatches (Strings vs Timestamps)
+                const eventsQuery = query(collection(db, 'events'));
+                logs.push('Querying events collection (no filter/sort)...');
                 const eventsSnapshot = await getDocs(eventsQuery);
-                const eventsData = eventsSnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data(),
-                    _source: 'event'
-                }));
+                logs.push(`Snapshot size: ${eventsSnapshot.size}`);
+                const eventsData = eventsSnapshot.docs
+                    .map(doc => {
+                        const data = doc.data();
+                        // Hydrate dates
+                        const fixDate = (val: any) => {
+                            if (!val) return null;
+                            if (val.toDate && typeof val.toDate === 'function') return val; // Already Timestamp
+                            if (typeof val === 'object' && typeof val.seconds === 'number') {
+                                return new Timestamp(val.seconds, val.nanoseconds || 0); // Reconstruct from object
+                            }
+                            if (typeof val === 'string') {
+                                try { return Timestamp.fromDate(new Date(val)); } catch (e) { return null; }
+                            }
+                            return null;
+                        };
+
+                        let startDate = fixDate(data.startDate || data.date);
+                        let endDate = fixDate(data.endDate);
+
+                        return {
+                            id: doc.id,
+                            ...data,
+                            startDate,
+                            endDate,
+                            _source: 'event'
+                        };
+                    })
+                    // Client-side filter: Only show future events
+                    .filter(event => {
+                        if (!event.startDate) {
+                            // DEEP DEBUG: Log keys to see what's actually there
+                            logs.push(`Skipping ${event.id}: No startDate. Keys: ${Object.keys(event).join(', ')}`);
+                            return false;
+                        }
+                        const isFuture = event.startDate.toMillis() >= now.toMillis();
+                        if (!isFuture) {
+                            // Optional: log past events if strictly debugging visibility
+                            // logs.push(`Skipping ${event.title}: Past event (${event.startDate.toDate().toISOString()})`);
+                        }
+                        return isFuture;
+                    });
+
+                logs.push(`Events after filter: ${eventsData.length}`);
                 setEvents(eventsData);
 
                 // 2. Fetch Meetings (Need to be careful with query indexes, might need to fetch all and filter client side if index missing)
@@ -50,10 +91,12 @@ export default function EventsPage() {
                 }));
                 setMeetings(meetingsData);
 
-            } catch (error) {
+            } catch (error: any) {
                 console.error('Error fetching data:', error);
+                logs.push(`ERROR: ${error.message}`);
             } finally {
                 setLoading(false);
+                setDebugLog(logs);
             }
         };
 
@@ -66,7 +109,11 @@ export default function EventsPage() {
             if (item.type === 'bible-study') return 'Bible Study';
             return 'Meeting'; // Covers fellowship, prayer. Maybe separate Fellowship?
         }
-        // Events source - keyword matching
+
+        // Use explicit category if available
+        if (item.category) return item.category;
+
+        // Fallback (Legacy)
         const title = (item.title || '').toLowerCase();
         if (title.includes('bible study')) return 'Bible Study';
         if (title.includes('sunday school')) return 'Sunday School';
@@ -82,8 +129,8 @@ export default function EventsPage() {
     };
 
     [...events, ...meetings].sort((a, b) => {
-        const dateA = a._source === 'event' ? a.date.seconds * 1000 : a.startTime;
-        const dateB = b._source === 'event' ? b.date.seconds * 1000 : b.startTime;
+        const dateA = a._source === 'event' ? (a.startDate?.seconds * 1000 || 0) : a.startTime;
+        const dateB = b._source === 'event' ? (b.startDate?.seconds * 1000 || 0) : b.startTime;
         return dateA - dateB;
     }).forEach(item => {
         const cat = getCategory(item);
@@ -150,6 +197,15 @@ export default function EventsPage() {
             <Section title="Meetings" items={categorized['Meeting']} />
             <Section title="Bible Study" items={categorized['Bible Study']} />
             <Section title="Sunday School" items={categorized['Sunday School']} />
+
+            {/* ERROR DEBUGGING PANEL - To be removed after fix */}
+            <div className="mt-12 p-4 bg-gray-100 dark:bg-zinc-800 rounded-lg text-xs font-mono overflow-auto max-h-60 border border-red-500">
+                <h3 className="font-bold text-red-500 mb-2">Debug Info (Take a screenshot if empty):</h3>
+                {debugLog.map((log, i) => (
+                    <div key={i}>{log}</div>
+                ))}
+                <div className="mt-2 text-blue-500">Total Events in State: {events.length}</div>
+            </div>
         </div>
     );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { addDoc, collection, serverTimestamp, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc, setDoc, limit, getCountFromServer, getDocs } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc, setDoc, limit, getCountFromServer, getDocs } from 'firebase/firestore';
 import { db, functions } from '@/lib/firebase';
 import { httpsCallable } from 'firebase/functions';
 import { Loader2, Send, Users, Flag, Pin, LayoutDashboard, AlertCircle, CheckCircle, Trash2, ExternalLink, Settings, DollarSign, Plus, CreditCard, ArrowUpRight, Search, Calendar, ChevronDown, Download, Ticket } from 'lucide-react';
@@ -14,6 +14,7 @@ import GivingAnalytics from './giving/GivingAnalytics';
 import AdminDonationsTable from './giving/AdminDonationsTable';
 import CampaignManager from './giving/CampaignManager';
 import { Timestamp } from 'firebase/firestore';
+import AnnouncementWidget from '@/components/Admin/AnnouncementWidget';
 
 interface Donation {
     id: string;
@@ -56,9 +57,10 @@ export default function AdminPage() {
     const [activeTab, setActiveTab] = useState<'overview' | 'reports' | 'pinned' | 'groups' | 'giving' | 'config'>('overview');
 
     // Overview State
-    const [content, setContent] = useState('');
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [postStatus, setPostStatus] = useState<'idle' | 'success' | 'error'>('idle');
+    // Overview State
+    // const [content, setContent] = useState(''); // Moved to AnnouncementWidget
+    // const [isSubmitting, setIsSubmitting] = useState(false); // Moved
+    // const [postStatus, setPostStatus] = useState<'idle' | 'success' | 'error'>('idle'); // Moved
     const [stats, setStats] = useState({ members: 0, giving: 0, events: 0 });
     const [loadingStats, setLoadingStats] = useState(true);
 
@@ -183,36 +185,7 @@ export default function AdminPage() {
         }
     };
 
-    const handleCreatePost = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!content.trim()) return;
-
-        setIsSubmitting(true);
-        setPostStatus('idle');
-
-        try {
-            await addDoc(collection(db, 'posts'), {
-                type: 'manual',
-                content: content,
-                timestamp: Date.now(),
-                pinned: false,
-                author: {
-                    name: 'Bethel Admin',
-                    avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Admin'
-                },
-                createdAt: serverTimestamp(),
-            });
-
-            setContent('');
-            setPostStatus('success');
-            setTimeout(() => setPostStatus('idle'), 3000);
-        } catch (error) {
-            console.error('Error adding post:', error);
-            setPostStatus('error');
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
+    // handleCreatePost moved to AnnouncementWidget
 
     const handleDismissReport = async (reportId: string) => {
         if (!confirm('Dismiss this report? This will remove it from the list.')) return;
@@ -418,34 +391,7 @@ export default function AdminPage() {
                                         <Send className="w-5 h-5 mr-2 text-gray-500" />
                                         Communications
                                     </h2>
-                                    <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-3xl p-6 text-white shadow-lg">
-                                        <h3 className="text-lg font-bold mb-2">New Announcement</h3>
-                                        <p className="text-blue-100 text-sm mb-4">Post updates directly to the main feed.</p>
-                                        <form onSubmit={handleCreatePost} className="space-y-4">
-                                            <div className="relative">
-                                                <textarea
-                                                    value={content}
-                                                    onChange={(e) => setContent(e.target.value)}
-                                                    placeholder="What's happening at Bethel?"
-                                                    className="w-full h-32 p-4 rounded-xl bg-white/10 border border-white/20 placeholder-blue-100 text-white focus:ring-2 focus:ring-white/50 focus:border-transparent resize-none text-sm transition-all focus:bg-white/20"
-                                                    disabled={isSubmitting}
-                                                />
-                                            </div>
-                                            <div className="flex items-center justify-between">
-                                                <div className="text-xs">
-                                                    {postStatus === 'success' && <span className="bg-green-500/20 text-green-100 px-2 py-1 rounded-full flex items-center border border-green-500/30"><CheckCircle className="w-3 h-3 mr-1" /> Posted</span>}
-                                                </div>
-                                                <button
-                                                    type="submit"
-                                                    disabled={isSubmitting || !content.trim()}
-                                                    className="flex items-center space-x-2 px-6 py-2.5 bg-white text-blue-600 rounded-xl hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm font-bold shadow-sm"
-                                                >
-                                                    {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                                                    <span>Publish</span>
-                                                </button>
-                                            </div>
-                                        </form>
-                                    </div>
+                                    <AnnouncementWidget />
 
                                 </div>
                             </div>

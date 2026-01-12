@@ -47,7 +47,7 @@ export function Sidebar() {
         setMounted(true);
         console.log('[Sidebar] Mounted. Theme:', theme, 'Resolved:', resolvedTheme);
         console.log('[Sidebar] Mounted. Theme:', theme, 'Resolved:', resolvedTheme);
-        console.log('APP_VERSION: Admin-Giving-Fix-v2');
+        console.log('APP_VERSION: Event-Landing-Page-v1.3 (AdBlock Proxy)');
     }, [theme, resolvedTheme]);
 
     const { config } = useChurchConfig();

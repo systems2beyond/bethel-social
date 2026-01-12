@@ -120,27 +120,41 @@ export const getStripeLoginLink = onCall({ secrets: [stripeSecretKey] }, async (
 /**
  * Fetches recent payouts for the connected account.
  */
-export const getRecentPayouts = onCall({ secrets: [stripeSecretKey] }, async (request) => {
-    if (!request.auth) throw new HttpsError('unauthenticated', 'User must be logged in.');
+export const getRecentPayouts = onCall({ secrets: [stripeSecretKey], cors: ['https://bethel-metro-social.netlify.app', 'http://localhost:3000'] }, async (request) => {
+    console.log('[getRecentPayouts] Function called. Auth:', request.auth?.uid);
 
-    const churchId = request.data.churchId || 'default_church';
-    const db = admin.firestore();
-    const doc = await db.collection('churches').doc(churchId).get();
-    const accountId = doc.data()?.stripeAccountId;
-
-    if (!accountId) {
-        return { payouts: [] };
+    if (!request.auth) {
+        console.warn('[getRecentPayouts] Unauthenticated access attempt.');
+        throw new HttpsError('unauthenticated', 'User must be logged in.');
     }
 
-    const stripe = getStripe();
     try {
+        const churchId = request.data.churchId || 'default_church';
+        console.log(`[getRecentPayouts] Fetching for churchId: ${churchId}`);
+
+        const db = admin.firestore();
+        const doc = await db.collection('churches').doc(churchId).get();
+        const accountId = doc.data()?.stripeAccountId;
+
+        console.log(`[getRecentPayouts] Found accountId: ${accountId}`);
+
+        if (!accountId) {
+            console.warn('[getRecentPayouts] No Stripe account ID found.');
+            return { payouts: [] };
+        }
+
+        const stripe = getStripe();
+        console.log('[getRecentPayouts] Stripe instance initialized.');
+
         const payouts = await stripe.payouts.list({
             limit: 5,
         }, { stripeAccount: accountId });
 
+        console.log(`[getRecentPayouts] Fetched ${payouts.data.length} payouts.`);
         return { payouts: payouts.data };
     } catch (error: any) {
-        console.error('Error fetching payouts:', error);
-        throw new HttpsError('internal', error.message);
+        console.error('[getRecentPayouts] Critical error:', error);
+        // Throwing a known HttpsError helps Firebase Return a proper 500/400 instead of a raw crash that might look like CORS
+        throw new HttpsError('internal', `Failed to fetch payouts: ${error.message}`);
     }
 });
