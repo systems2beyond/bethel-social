@@ -96,7 +96,14 @@ export default function EventsListPage() {
                                 <div className="space-y-2 mb-4 text-sm text-gray-600 dark:text-gray-300">
                                     <div className="flex items-center gap-2">
                                         <Calendar className="w-4 h-4 text-gray-400" />
-                                        <span>{event.startDate?.toDate().toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                                        <span>
+                                            {(() => {
+                                                const date = event.startDate?.toDate ? event.startDate.toDate() : null;
+                                                const isValid = date && !isNaN(date.getTime());
+                                                if (isValid) return date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+                                                return `DEBUG: ${JSON.stringify(event.startDate)}`;
+                                            })()}
+                                        </span>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <MapPin className="w-4 h-4 text-gray-400" />

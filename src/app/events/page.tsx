@@ -58,7 +58,7 @@ export default function EventsPage() {
                     .filter(event => {
                         if (!event.startDate) {
                             // DEEP DEBUG: Log keys to see what's actually there
-                            logs.push(`Skipping ${event.id}: No startDate. Keys: ${Object.keys(event).join(', ')}`);
+                            logs.push(`Skipping ${event.id}: No startDate. Val: ${JSON.stringify(event.startDate)} / Date: ${JSON.stringify(event.date)}`);
                             return false;
                         }
                         const isFuture = event.startDate.toMillis() >= now.toMillis();
