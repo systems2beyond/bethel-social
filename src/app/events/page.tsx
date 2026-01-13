@@ -62,11 +62,12 @@ export default function EventsPage() {
                             return false;
                         }
                         const isFuture = event.startDate.toMillis() >= now.toMillis();
-                        if (!isFuture) {
-                            // Optional: log past events if strictly debugging visibility
-                            // logs.push(`Skipping ${event.title}: Past event (${event.startDate.toDate().toISOString()})`);
-                        }
-                        return isFuture;
+                        const isPublished = event.status === 'published';
+
+                        if (!isFuture) logs.push(`Skipping ${event.id}: Past event (${event.startDate.toDate().toLocaleDateString()})`);
+                        if (!isPublished) logs.push(`Skipping ${event.id}: Not published (${event.status})`);
+
+                        return isFuture && isPublished;
                     });
 
                 logs.push(`Events after filter: ${eventsData.length}`);
