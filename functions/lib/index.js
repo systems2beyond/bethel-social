@@ -36,7 +36,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.saveEvent = exports.createDonationIntent = exports.stripeWebhook = exports.getRecentPayouts = exports.getStripeLoginLink = exports.createExpressAccount = exports.generateTiptapToken = exports.fetchUrlContent = exports.saveImageProxy = exports.search = exports.ingestSermonWebhook = exports.updateUserRole = exports.onCommentWritten = exports.backfillEvents = exports.extractEventFromPost = exports.ingest = exports.chat = exports.manualYoutubeSync = exports.syncYoutube = exports.fbWebhook = exports.syncFacebook = exports.onMeetingCreated = exports.ingestSocialPost = exports.scheduledWebsiteCrawl = exports.ingestContent = exports.debugPosts = exports.manualFacebookSync = void 0;
+exports.notifyOnMessage = exports.notifyOnSermon = exports.notifyOnPost = exports.eventGroupJoin = exports.eventGroupAutomation = exports.saveEvent = exports.createEventPaymentIntent = exports.createDonationIntent = exports.stripeWebhook = exports.getRecentPayouts = exports.getStripeLoginLink = exports.createExpressAccount = exports.generateTiptapToken = exports.fetchUrlContent = exports.saveImageProxy = exports.search = exports.ingestSermonWebhook = exports.updateUserRole = exports.onCommentWritten = exports.backfillEvents = exports.extractEventFromPost = exports.ingest = exports.chat = exports.manualYoutubeSync = exports.syncYoutube = exports.fbWebhook = exports.syncFacebook = exports.onMeetingCreated = exports.ingestSocialPost = exports.scheduledWebsiteCrawl = exports.ingestContent = exports.debugPosts = exports.manualFacebookSync = void 0;
 const admin = __importStar(require("firebase-admin"));
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const https_1 = require("firebase-functions/v2/https");
@@ -84,6 +84,10 @@ exports.debugPosts = (0, https_1.onRequest)(async (req, res) => {
             date: new Date(d.data().timestamp).toISOString(),
             timestamp: d.data().timestamp
         }));
+        // CHECK SPECIFIC POST
+        const targetPostId = '120720411275822_1260518452765904';
+        const targetPostDoc = await admin.firestore().collection('posts').doc(targetPostId).get();
+        const targetPost = targetPostDoc.exists ? Object.assign({ id: targetPostDoc.id }, targetPostDoc.data()) : 'NOT FOUND';
         // Simulation Logic
         let simLastDoc = null;
         const simulationLog = [];
@@ -115,6 +119,7 @@ exports.debugPosts = (0, https_1.onRequest)(async (req, res) => {
             count,
             oldest: oldest ? Object.assign({ date: new Date(oldest.timestamp).toISOString() }, oldest) : null,
             newest: newest ? Object.assign({ date: new Date(newest.timestamp).toISOString() }, newest) : null,
+            targetPost, // Added for debugging
             debugInfo,
             gapPosts,
             simulationLog
@@ -175,6 +180,16 @@ var webhooks_1 = require("./stripe/webhooks");
 Object.defineProperty(exports, "stripeWebhook", { enumerable: true, get: function () { return webhooks_1.stripeWebhookHandler; } });
 var donations_1 = require("./stripe/donations");
 Object.defineProperty(exports, "createDonationIntent", { enumerable: true, get: function () { return donations_1.createDonationIntent; } });
-var events_2 = require("./admin/events");
-Object.defineProperty(exports, "saveEvent", { enumerable: true, get: function () { return events_2.saveEvent; } });
+var events_2 = require("./stripe/events");
+Object.defineProperty(exports, "createEventPaymentIntent", { enumerable: true, get: function () { return events_2.createEventPaymentIntent; } });
+var events_3 = require("./admin/events");
+Object.defineProperty(exports, "saveEvent", { enumerable: true, get: function () { return events_3.saveEvent; } });
+__exportStar(require("./communications"), exports);
+var events_4 = require("./triggers/events");
+Object.defineProperty(exports, "eventGroupAutomation", { enumerable: true, get: function () { return events_4.onEventWritten; } });
+Object.defineProperty(exports, "eventGroupJoin", { enumerable: true, get: function () { return events_4.onRegistrationCreated; } });
+var notifications_2 = require("./triggers/notifications");
+Object.defineProperty(exports, "notifyOnPost", { enumerable: true, get: function () { return notifications_2.onPostCreated; } });
+Object.defineProperty(exports, "notifyOnSermon", { enumerable: true, get: function () { return notifications_2.onSermonCreated; } });
+Object.defineProperty(exports, "notifyOnMessage", { enumerable: true, get: function () { return notifications_2.onMessageCreated; } });
 //# sourceMappingURL=index.js.map

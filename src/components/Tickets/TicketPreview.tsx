@@ -23,6 +23,7 @@ interface TicketPreviewProps {
     eventDate: any; // Timestamp or Date
     eventLocation?: string;
     className?: string;
+    eventId: string;
 }
 
 export const TicketPreview: React.FC<TicketPreviewProps> = ({
@@ -30,7 +31,8 @@ export const TicketPreview: React.FC<TicketPreviewProps> = ({
     eventName,
     eventDate,
     eventLocation = 'Main Sanctuary',
-    className = ''
+    className = '',
+    eventId
 }) => {
     // Helper to format date safely
     const formattedDate = React.useMemo(() => {
@@ -61,8 +63,9 @@ export const TicketPreview: React.FC<TicketPreviewProps> = ({
         backgroundColor: config.color,
     };
 
+
     return (
-        <div className={`relative flex shadow-xl rounded-2xl overflow-hidden max-w-[800px] aspect-[2.5/1] ${className}`} style={{ fontFamily: 'var(--font-inter, sans-serif)' }}>
+        <div className={`relative flex flex-col md:flex-row print:flex-row shadow-xl print:shadow-none rounded-2xl print:rounded-xl overflow-hidden print:overflow-visible max-w-[800px] w-full print:w-full min-h-[320px] h-auto mx-auto ${className}`} style={{ fontFamily: 'var(--font-inter, sans-serif)' }}>
 
             {/* Main Ticket Body */}
             <div className="flex-grow p-6 md:p-8 relative flex flex-col justify-between" style={containerStyle}>
@@ -78,7 +81,7 @@ export const TicketPreview: React.FC<TicketPreviewProps> = ({
                             <div className="inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-3 bg-white/20 backdrop-blur-md border border-white/20">
                                 {config.name}
                             </div>
-                            <h2 className="text-2xl md:text-4xl font-black leading-tight mb-2 tracking-tight">
+                            <h2 className="text-xl md:text-3xl font-black leading-tight mb-2 tracking-tight">
                                 {eventName}
                             </h2>
                             <div className="flex items-center space-x-4 text-sm md:text-base opacity-90 font-medium">
@@ -93,19 +96,19 @@ export const TicketPreview: React.FC<TicketPreviewProps> = ({
                             </div>
                         </div>
                         {config.logoUrl && (
-                            <img src={config.logoUrl} alt="Logo" className="w-16 h-16 md:w-20 md:h-20 object-contain drop-shadow-lg" />
+                            <img src={config.logoUrl} alt="Logo" className="w-12 h-12 md:w-16 md:h-16 object-contain drop-shadow-lg" />
                         )}
                     </div>
 
                     <div className="flex items-end justify-between mt-auto pt-8">
                         <div>
                             <p className="text-xs uppercase tracking-widest opacity-60 mb-1">Price</p>
-                            <p className="text-3xl font-bold">{config.price === 0 ? 'FREE' : `$${config.price}`}</p>
+                            <p className="text-2xl font-bold">{config.price === 0 ? 'FREE' : `$${config.price}`}</p>
                         </div>
                         {config.showQrCode && (
                             <div className="bg-white p-2 rounded-lg shadow-sm">
                                 <QRCodeSVG
-                                    value={`https://bethel-metro-social.netlify.app/events/${config.id || 'preview'}`}
+                                    value={typeof window !== 'undefined' ? `${window.location.origin}/events/${eventId}` : `https://bethel-metro-social.netlify.app/events/${eventId}`}
                                     size={80}
                                     level="M"
                                 />
@@ -137,7 +140,7 @@ export const TicketPreview: React.FC<TicketPreviewProps> = ({
                     <p className="text-xs opacity-70 mb-4">{formattedDate}</p>
 
                     <div className="mt-auto pt-4 border-t border-white/20 w-full">
-                        <p className="text-2xl font-black">{config.price === 0 ? 'FREE' : `$${config.price}`}</p>
+                        <p className="text-xl font-black">{config.price === 0 ? 'FREE' : `$${config.price}`}</p>
                     </div>
                 </div>
 

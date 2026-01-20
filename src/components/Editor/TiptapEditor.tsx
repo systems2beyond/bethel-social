@@ -265,8 +265,10 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
                 console.log('[Tiptap] Token generated successfully. Initializing HocuspocusProvider...');
 
                 // 2. Connect with Token using HocuspocusProvider
+                // 2. Connect with Token using HocuspocusProvider
+                // UPDATED: Using Self-Hosted Collaboration Server
                 const newProvider = new HocuspocusProvider({
-                    url: 'wss://8mze8q2m.collab.tiptap.cloud',
+                    url: 'wss://bethel-collab-503876827928.us-central1.run.app',
                     name: collaborationId,
                     token: token,
                     document: yDoc,

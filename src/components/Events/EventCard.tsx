@@ -1,26 +1,45 @@
 'use client';
 
-import React from 'react';
-import { Calendar, MapPin, Clock, ExternalLink } from 'lucide-react';
+import React, { useState } from 'react';
+import { Calendar, MapPin, Clock, Ticket, ArrowRight, Video, CalendarPlus } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { useLightbox } from '@/context/LightboxContext';
 import { useFeed } from '@/context/FeedContext';
-
+import { generateGoogleCalendarUrl, downloadIcsFile } from '@/lib/calendar';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { Event } from '@/types';
 import { formatTextWithLinks } from '@/lib/utils';
+import { RegistrationModal } from './RegistrationModal';
 
 export const EventCard = ({ event }: { event: Event }) => {
     const { openLightbox } = useLightbox();
+    const [isRegistrationOpen, setIsRegistrationOpen] = useState(false);
 
     const eventDate = event.startDate.toDate();
-    const dateStr = eventDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    // Format date parts separately for the "Date Tile"
+    const month = eventDate.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
+    const day = eventDate.getDate();
 
-    // Use extracted time string if available (to avoid timezone shifts), otherwise fallback to timestamp
+    // Format full string for accessibility/context
+    const dateStr = eventDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
     const timeStr = event.extractedData?.time || eventDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 
-    // Helper to get a valid image URL (handling YouTube links)
+    // Location Map Link
+    const mapLink = event.geo?.placeId
+        ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location)}&query_place_id=${event.geo.placeId}`
+        : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location)}`;
+
+
+    // Helper to get a valid image URL
     const getImageUrl = (url?: string) => {
         if (!url) return null;
         if (url.includes('youtube.com') || url.includes('youtu.be')) {
@@ -45,7 +64,7 @@ export const EventCard = ({ event }: { event: Event }) => {
         return url;
     };
 
-    const displayImageUrl = getImageUrl(event.imageUrl);
+    const displayImageUrl = getImageUrl(event.media?.find(m => m.type === 'image' || m.type === 'video')?.url) || getImageUrl(event.imageUrl);
 
     const { registerPost, unregisterPost, reportVisibility } = useFeed();
     const containerRef = React.useRef<HTMLDivElement>(null);
@@ -78,79 +97,170 @@ export const EventCard = ({ event }: { event: Event }) => {
         return () => observer.disconnect();
     }, [event.id, reportVisibility]);
 
+    const hasRegistration = event.registrationConfig?.enabled;
+    const ticketPrice = event.registrationConfig?.ticketPrice;
+    const currency = event.registrationConfig?.currency || 'USD';
+    const formattedPrice = ticketPrice
+        ? new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(ticketPrice)
+        : 'Free';
+
     return (
-        <motion.div
-            ref={containerRef}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-white dark:bg-zinc-900 rounded-xl shadow-sm border border-gray-100 dark:border-zinc-800 overflow-hidden flex flex-col md:flex-row hover:shadow-md transition-shadow duration-300"
-        >
-            {/* Image Section */}
-            <div className="md:w-1/3 relative h-48 md:h-auto bg-gray-100 dark:bg-zinc-800">
-                {displayImageUrl ? (
-                    <div
-                        className="relative w-full h-full cursor-pointer group"
-                        onClick={() => event.imageUrl && openLightbox(event.imageUrl, event.imageUrl.includes('youtu') ? 'video' : 'image')}
-                    >
-                        <Image
-                            src={displayImageUrl}
-                            alt={event.title}
-                            fill
-                            className="object-cover transition-transform duration-500 group-hover:scale-105"
-                        />
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
-                            <span className="bg-black/50 text-white px-3 py-1 rounded-full text-sm backdrop-blur-sm">Expand</span>
+        <>
+            <motion.div
+                ref={containerRef}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="group bg-white dark:bg-zinc-900 rounded-2xl shadow-sm border border-gray-100 dark:border-zinc-800 overflow-hidden flex flex-col hover:shadow-xl hover:border-gray-200 dark:hover:border-zinc-700 transition-all duration-300 relative"
+            >
+                {/* Image Header with Date Tile Overlay */}
+                <div className="relative h-48 sm:h-56 w-full bg-gray-100 dark:bg-zinc-800 overflow-hidden">
+                    {displayImageUrl ? (
+                        <div
+                            className="relative w-full h-full cursor-pointer"
+                            onClick={() => event.imageUrl && openLightbox(event.imageUrl, event.imageUrl.includes('youtu') ? 'video' : 'image')}
+                        >
+                            <Image
+                                src={displayImageUrl}
+                                alt={event.title}
+                                fill
+                                className="object-cover transition-transform duration-700 group-hover:scale-105"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
+                            {(event.imageUrl?.includes('youtu') || event.media?.some(m => m.type === 'video')) && (
+                                <div className="absolute inset-0 flex items-center justify-center opacity-80 group-hover:scale-110 transition-transform">
+                                    <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center border border-white/50">
+                                        <Video className="w-5 h-5 text-white fill-white" />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-zinc-800 dark:to-zinc-900 flex items-center justify-center">
+                            <Calendar className="w-12 h-12 text-blue-200 dark:text-zinc-700" />
+                        </div>
+                    )}
+
+                    {/* Date Tile - Floating */}
+                    <div className="absolute top-4 left-4 bg-white dark:bg-black/80 backdrop-blur-md rounded-xl shadow-lg border border-gray-100 dark:border-zinc-700 flex flex-col items-center justify-center w-14 h-14 sm:w-16 sm:h-16 z-10 text-center leading-none overflow-hidden">
+                        <div className="w-full bg-red-500 text-[10px] sm:text-xs font-bold text-white py-1 uppercase tracking-wider">
+                            {month}
+                        </div>
+                        <div className="flex-1 flex items-center justify-center">
+                            <span className="text-xl sm:text-2xl font-black text-gray-900 dark:text-gray-100">{day}</span>
                         </div>
                     </div>
-                ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-400">
-                        <Calendar className="w-12 h-12 opacity-20" />
-                    </div>
-                )}
 
-                {/* Date Badge (Mobile Overlay) */}
-                <div className="absolute top-4 left-4 md:hidden bg-white/90 dark:bg-black/90 backdrop-blur-sm rounded-lg px-3 py-1 text-center shadow-sm border border-gray-200 dark:border-zinc-700">
-                    <div className="text-xs font-bold text-red-500 uppercase">{eventDate.toLocaleDateString('en-US', { month: 'short' })}</div>
-                    <div className="text-xl font-bold text-gray-900 dark:text-white">{eventDate.getDate()}</div>
+                    {/* Status Badge / Ticket Info */}
+                    <div className="absolute top-4 right-4 flex flex-col gap-2 items-end">
+                        {hasRegistration && (
+                            <div className="bg-blue-600/90 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg backdrop-blur-sm flex items-center gap-1">
+                                <Ticket className="w-3 h-3" />
+                                {formattedPrice === 'Free' ? 'RSVP' : formattedPrice}
+                            </div>
+                        )}
+                    </div>
                 </div>
-            </div>
 
-            {/* Content Section */}
-            <div className="p-6 md:w-2/3 flex flex-col justify-between">
-                <div>
-                    <div className="hidden md:flex items-center space-x-2 text-sm font-bold text-red-500 mb-2 uppercase tracking-wide">
-                        <span>{eventDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}</span>
-                        <span>•</span>
-                        <span>{timeStr}</span>
+                {/* Content Body */}
+                <div className="p-5 sm:p-6 flex flex-col flex-grow">
+                    {/* Meta Row: Time & Category & Calendar */}
+                    <div className="flex items-center justify-between text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-3 font-medium">
+                        <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2.5 py-1 rounded-md">
+                                <Clock className="w-3.5 h-3.5" />
+                                <span>{timeStr}</span>
+                            </div>
+                            {event.category && (
+                                <span className="bg-gray-100 dark:bg-zinc-800 px-2.5 py-1 rounded-md text-gray-600 dark:text-gray-300">
+                                    {event.category}
+                                </span>
+                            )}
+                        </div>
+
+                        {/* Calendar Dropdown */}
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-gray-400 hover:text-gray-900 dark:hover:text-white">
+                                    <CalendarPlus className="w-4 h-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700">
+                                <DropdownMenuItem onClick={() => window.open(generateGoogleCalendarUrl(event), '_blank')}>
+                                    Google Calendar
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => downloadIcsFile(event)}>
+                                    Download .ics (Outlook/Apple)
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
 
-                    <Link href={`/events/${event.id}`} className="hover:text-blue-600 transition-colors">
-                        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2 line-clamp-2">{event.title}</h3>
+                    {/* Title */}
+                    <Link href={`/events/${event.id}`} className="block group-hover:text-blue-600 transition-colors duration-200">
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white leading-tight mb-3 line-clamp-2">
+                            {event.title}
+                        </h3>
                     </Link>
 
-                    <div className="flex items-center text-gray-500 dark:text-gray-400 text-sm mb-4">
-                        <MapPin className="w-4 h-4 mr-1.5 flex-shrink-0" />
-                        <span className="line-clamp-1">{event.location}</span>
-                    </div>
+                    {/* Location with Google Maps Link */}
+                    {/* Location with Google Maps Link */}
+                    {event.location && event.location.trim().length > 0 && (
+                        <a
+                            href={mapLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-start gap-2 text-sm text-gray-600 dark:text-gray-300 mb-4 hover:text-blue-600 dark:hover:text-blue-400 transition-colors group/loc"
+                        >
+                            <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0 text-gray-400 group-hover/loc:text-blue-500 transition-colors" />
+                            <span className="line-clamp-2">{event.location}</span>
+                        </a>
+                    )}
 
-                    <p className="text-gray-600 dark:text-gray-300 text-sm line-clamp-3 mb-4 leading-relaxed">
+                    {/* Description Excerpt */}
+                    <p className="text-gray-500 dark:text-gray-400 text-sm line-clamp-2 leading-relaxed mb-6">
                         {formatTextWithLinks(event.description)}
                     </p>
-                </div>
 
-                <div className="flex items-center justify-between pt-4 border-t border-gray-50 dark:border-zinc-800 mt-auto">
-                    <div className="md:hidden flex items-center text-sm text-gray-500">
-                        <Clock className="w-4 h-4 mr-1.5" />
-                        {timeStr}
-                    </div>
-
-                    <div className="flex space-x-3 ml-auto">
-                        <Link href={`/events/${event.id}`} className="flex items-center text-sm font-medium text-blue-600 hover:text-blue-700">
-                            View Details <ExternalLink className="w-4 h-4 ml-1" />
-                        </Link>
+                    {/* Action Footer */}
+                    <div className="mt-auto pt-5 border-t border-gray-100 dark:border-zinc-800 flex gap-3">
+                        {hasRegistration ? (
+                            <>
+                                <Button
+                                    onClick={() => setIsRegistrationOpen(true)}
+                                    className="flex-1 bg-gray-900 dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-100 font-semibold shadow-sm"
+                                >
+                                    {formattedPrice === 'Free' ? 'Register' : 'Tickets'}
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    className="flex-1 border-gray-200 dark:border-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-800 text-gray-700 dark:text-gray-300"
+                                    asChild
+                                >
+                                    <Link href={`/events/${event.id}`}>
+                                        Details
+                                    </Link>
+                                </Button>
+                            </>
+                        ) : (
+                            <Button
+                                variant="outline"
+                                className="flex-1 width-full border-gray-200 dark:border-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-800"
+                                asChild
+                            >
+                                <Link href={`/events/${event.id}`}>
+                                    View Details
+                                </Link>
+                            </Button>
+                        )}
                     </div>
                 </div>
-            </div>
-        </motion.div>
+            </motion.div>
+            <RegistrationModal
+                isOpen={isRegistrationOpen}
+                onClose={() => setIsRegistrationOpen(false)}
+                event={event}
+            />
+        </>
     );
 };

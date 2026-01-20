@@ -8,6 +8,48 @@ if (!admin.apps.length) {
     admin.initializeApp();
 }
 
+export const uploadImageToStorage = async (imageUrl: string, folder: string, filename?: string): Promise<string> => {
+    try {
+        console.log(`Uploading image: ${imageUrl} to ${folder}`);
+        // 1. Fetch the image
+        const response = await axios.get(imageUrl, {
+            responseType: 'arraybuffer',
+            timeout: 10000, // 10s timeout
+            maxContentLength: 10 * 1024 * 1024 // 10MB max
+        });
+
+        const buffer = Buffer.from(response.data, 'binary');
+        const contentType = response.headers['content-type'] || 'image/jpeg';
+
+        // Determine extension
+        let extension = 'jpg';
+        if (contentType.includes('png')) extension = 'png';
+        else if (contentType.includes('gif')) extension = 'gif';
+        else if (contentType.includes('webp')) extension = 'webp';
+
+        const bucket = admin.storage().bucket();
+        const finalFilename = filename ? `${filename}.${extension}` : `${uuidv4()}.${extension}`;
+        const filePath = `${folder}/${finalFilename}`;
+        const file = bucket.file(filePath);
+
+        await file.save(buffer, {
+            metadata: {
+                contentType: contentType,
+                metadata: {
+                    originalUrl: imageUrl
+                }
+            }
+        });
+
+        await file.makePublic();
+
+        return `https://storage.googleapis.com/${bucket.name}/${filePath}`;
+    } catch (error: any) {
+        console.error('Error uploading image to storage:', error);
+        throw new Error(`Failed to upload image: ${error.message}`);
+    }
+};
+
 export const saveImageProxy = onRequest({
     cors: true // Enable wildcard CORS for now to rule out issues
 }, async (req, res) => {
@@ -29,28 +71,6 @@ export const saveImageProxy = onRequest({
             return;
         }
 
-        // 1. Fetch the image
-        const response = await axios.get(imageUrl, {
-            responseType: 'arraybuffer',
-            timeout: 10000, // 10s timeout
-            maxContentLength: 10 * 1024 * 1024 // 10MB max
-        });
-
-        const buffer = Buffer.from(response.data, 'binary');
-        const contentType = response.headers['content-type'] || 'image/jpeg';
-
-        // Determine extension
-        let extension = 'jpg';
-        if (contentType.includes('png')) extension = 'png';
-        else if (contentType.includes('gif')) extension = 'gif';
-        else if (contentType.includes('webp')) extension = 'webp';
-
-        // 2. Upload to Firebase Storage
-        // Note: In onRequest, we don't have req.auth automatically populated like onCall.
-        // We would normally verify the ID token from the Authorization header.
-        // For now, to keep it simple and working, we'll use a generic 'proxy-uploads' folder
-        // or try to extract the UID if the client sends the token.
-
         // Let's assume the client sends the token in Authorization header
         let uid = 'anonymous';
         const authHeader = req.headers.authorization;
@@ -64,23 +84,7 @@ export const saveImageProxy = onRequest({
             }
         }
 
-        const bucket = admin.storage().bucket();
-        const filename = `user-uploads/${uid}/${uuidv4()}.${extension}`;
-        const file = bucket.file(filename);
-
-        await file.save(buffer, {
-            metadata: {
-                contentType: contentType,
-                metadata: {
-                    originalUrl: imageUrl,
-                    uploadedBy: uid
-                }
-            }
-        });
-
-        await file.makePublic();
-
-        const publicUrl = `https://storage.googleapis.com/${bucket.name}/${filename}`;
+        const publicUrl = await uploadImageToStorage(imageUrl, `user-uploads/${uid}`);
 
         res.status(200).json({ success: true, url: publicUrl });
 

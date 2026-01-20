@@ -35,6 +35,10 @@ export default function TicketDesignerPage() {
     const [activeImageField, setActiveImageField] = useState<'backgroundImageUrl' | 'logoUrl' | null>(null);
     const [uploading, setUploading] = useState(false);
 
+    // Print State
+    const [showPrintModal, setShowPrintModal] = useState(false);
+    const [printQuantity, setPrintQuantity] = useState(1);
+
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, field: 'backgroundImageUrl' | 'logoUrl') => {
         if (e.target.files && e.target.files.length > 0) {
             const file = e.target.files[0];
@@ -89,6 +93,12 @@ export default function TicketDesignerPage() {
                     if (!configSnap.empty) {
                         const data = configSnap.docs[0].data() as TicketConfig;
                         setConfig({ ...data, id: configSnap.docs[0].id });
+                    } else {
+                        // Initialize with defaults from event if available
+                        const defaultPrice = fetchedEvent.registrationConfig?.ticketPrice ||
+                            fetchedEvent.ticketConfig?.tiers?.[0]?.price ||
+                            0;
+                        setConfig(prev => ({ ...prev, price: defaultPrice }));
                     }
                 } else {
                     alert('Event not found');
@@ -127,8 +137,15 @@ export default function TicketDesignerPage() {
     };
 
     const handlePrintRequest = () => {
-        // Simple print trigger for now
-        window.print();
+        setShowPrintModal(true);
+    };
+
+    const confirmPrint = () => {
+        setShowPrintModal(false);
+        // Small delay to allow modal to close and state to update before printing
+        setTimeout(() => {
+            window.print();
+        }, 100);
     };
 
     if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin" /></div>;
@@ -179,7 +196,7 @@ export default function TicketDesignerPage() {
                                     type="text"
                                     value={config.name}
                                     onChange={(e) => setConfig({ ...config, name: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none placeholder:text-gray-500 text-gray-900"
                                     placeholder="e.g. Adult Admission"
                                 />
                             </div>
@@ -189,7 +206,8 @@ export default function TicketDesignerPage() {
                                     type="number"
                                     value={config.price}
                                     onChange={(e) => setConfig({ ...config, price: Number(e.target.value) })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none placeholder:text-gray-500 text-gray-900"
+                                    placeholder="0.00"
                                 />
                             </div>
                         </div>
@@ -247,7 +265,7 @@ export default function TicketDesignerPage() {
                                         type="text"
                                         value={config.backgroundImageUrl || ''}
                                         onChange={(e) => setConfig({ ...config, backgroundImageUrl: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none placeholder:text-gray-600"
                                         placeholder="https://..."
                                     />
                                     <label className="p-2 border border-blue-300 bg-blue-50 hover:bg-blue-100 rounded-lg cursor-pointer transition text-blue-600">
@@ -269,7 +287,7 @@ export default function TicketDesignerPage() {
                                         type="text"
                                         value={config.logoUrl || ''}
                                         onChange={(e) => setConfig({ ...config, logoUrl: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none placeholder:text-gray-600"
                                         placeholder="https://..."
                                     />
                                     <label className="p-2 border border-blue-300 bg-blue-50 hover:bg-blue-100 rounded-lg cursor-pointer transition text-blue-600">
@@ -300,17 +318,38 @@ export default function TicketDesignerPage() {
                 </div>
 
                 {/* Preview Canvas */}
-                <div className="flex-1 bg-gray-100 p-8 flex flex-col items-center justify-center relative overflow-y-auto">
-                    <div className="mb-4 text-sm text-gray-400 font-medium uppercase tracking-wider print:hidden">Live Preview</div>
+                <div className="flex-1 bg-gray-50 flex flex-col items-center justify-center relative overflow-hidden bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px]">
+                    <div className="absolute top-6 left-1/2 -translate-x-1/2 text-xs font-semibold text-gray-500 uppercase tracking-widest bg-white/80 backdrop-blur px-3 py-1 rounded-full border border-gray-200 shadow-sm print:hidden">
+                        Live Preview
+                    </div>
 
                     {/* The Ticket Itself */}
-                    <div className="transform scale-100 md:scale-110 lg:scale-125 transition-transform origin-center print:scale-100 print:transform-none">
-                        <TicketPreview
-                            config={config}
-                            eventName={event?.title || 'Event Title'}
-                            eventDate={event?.startDate}
-                            eventLocation={event?.location}
-                        />
+                    {/* Live Preview (Single Ticket) */}
+                    <div className="p-0 md:p-12 w-full flex flex-col items-center justify-center print:hidden">
+                        <div className="w-full flex justify-center">
+                            <TicketPreview
+                                config={config}
+                                eventName={event?.title || 'Event Title'}
+                                eventDate={event?.startDate}
+                                eventLocation={event?.location}
+                                eventId={eventId as string}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Print Output (Hidden on screen, visible on print) */}
+                    <div id="ticket-print-area" className="hidden print:flex flex-col items-center justify-center w-full">
+                        {Array.from({ length: printQuantity }).map((_, index) => (
+                            <div key={index} className="w-full flex justify-center py-4 border-b-2 border-dashed border-gray-300 last:border-0 page-break-avoid">
+                                <TicketPreview
+                                    config={config}
+                                    eventName={event?.title || 'Event Title'}
+                                    eventDate={event?.startDate}
+                                    eventLocation={event?.location}
+                                    eventId={eventId as string}
+                                />
+                            </div>
+                        ))}
                     </div>
 
                     <div className="mt-12 max-w-md text-center text-sm text-gray-500 print:hidden">
@@ -322,22 +361,89 @@ export default function TicketDesignerPage() {
             {/* Print Styles */}
             <style jsx global>{`
                 @media print {
-                    @page { margin: 0; size: auto; }
-                    body { background: white; }
-                    header, aside, .no-print { display: none !important; }
-                    main { overflow: visible !important; height: auto !important; }
-                    .print-hidden { display: none !important; }
-                    /* Center content for print */
-                    main > div:last-child { 
-                        background: white !important; 
-                        padding: 0 !important; 
-                        justify-content: flex-start !important;
-                        align-items: center !important;
+                    @page { margin: 0.5cm; size: auto; }
+                    body { 
+                        visibility: hidden; 
+                        background: white;
                     }
-                    /* Reset transforms for predictability */
-                    .transform { transform: none !important; }
+                    /* Hide all layout elements */
+                    header, aside, .no-print, nav, footer, .fixed { display: none !important; }
+                    
+                    /* Reset main container */
+                    main { 
+                        overflow: visible !important; 
+                        height: auto !important; 
+                        visibility: hidden;
+                    }
+
+                    /* Only show the ticket area */
+                    #ticket-print-area {
+                        visibility: visible;
+                        position: absolute;
+                        left: 0;
+                        top: 0;
+                        width: 100%;
+                        margin: 0;
+                        padding: 0;
+                        background: white;
+                        background: white;
+                        display: flex !important;
+                        flex-direction: column !important;
+                        align-items: center !important;
+                        justify-content: start !important;
+                    }
+                    
+                    #ticket-print-area * {
+                        visibility: visible;
+                    }
+
+                    .page-break-avoid {
+                        break-inside: avoid;
+                        page-break-inside: avoid;
+                    }
+
+                    /* Ensure background graphics print */
+                    * {
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                    }
                 }
             `}</style>
+
+            {/* Print Quantity Modal */}
+            {showPrintModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm print:hidden">
+                    <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm">
+                        <h3 className="text-lg font-bold mb-4 text-gray-900">Print Tickets</h3>
+                        <div className="mb-6">
+                            <label className="block text-sm font-medium text-gray-900 mb-2">How many copies?</label>
+                            <input
+                                type="number"
+                                min="1"
+                                max="100"
+                                value={printQuantity}
+                                onChange={(e) => setPrintQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-center text-lg font-bold text-gray-900"
+                            />
+                        </div>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setShowPrintModal(false)}
+                                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium text-gray-700"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmPrint}
+                                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold flex items-center justify-center gap-2"
+                            >
+                                <Printer className="w-4 h-4" />
+                                Print
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Image Cropper Modal */}
             {showCropper && selectedImageSrc && (

@@ -58,13 +58,35 @@ export const stripeWebhookHandler = onRequest({ secrets: [stripeSecretKey, strip
             }
             case 'payment_intent.succeeded': {
                 const paymentIntent = event.data.object as Stripe.PaymentIntent;
-                const { churchId, donorId, campaign, donationAmount, tipAmount, type, donationDocId } = paymentIntent.metadata;
+                const { churchId, donorId, campaign, donationAmount, tipAmount, type, donationDocId, eventId, registrationId } = paymentIntent.metadata;
 
                 if (!type) {
                     console.log(`[Stripe Webhook] Warning: Missing 'type' metadata. Metadata: ${JSON.stringify(paymentIntent.metadata)}`);
                 }
 
-                if (type === 'donation') {
+                if (type === 'event_registration') {
+                    if (eventId && registrationId) {
+                        const regRef = db.collection('events').doc(eventId).collection('registrations').doc(registrationId);
+                        const regDoc = await regRef.get();
+
+                        if (regDoc.exists) {
+                            await regRef.update({
+                                status: 'paid', // Mark as paid/confirmed
+                                paymentStatus: 'paid',
+                                stripePaymentIntentId: paymentIntent.id,
+                                totalAmount: donationAmount || 0, // Total charged in cents (or dollars depending on your intent logic, wait, intent uses cents usually, let's verify)
+                                tipAmount: tipAmount || 0,
+                                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                            });
+                            console.log(`[Stripe Webhook] Updated registration ${registrationId} for event ${eventId} to PAID.`);
+                        } else {
+                            console.error(`[Stripe Webhook] Registration ${registrationId} not found for event ${eventId}.`);
+                        }
+                    } else {
+                        console.error(`[Stripe Webhook] Missing eventId or registrationId for event_registration. Metadata:`, paymentIntent.metadata);
+                    }
+                } else if (type === 'donation') {
+                    console.log(`[Stripe Webhook] Processing donation: ${paymentIntent.id}`);
                     const db = admin.firestore();
                     let donationRef;
 

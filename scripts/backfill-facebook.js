@@ -38,8 +38,8 @@ const syncFacebookPosts = async () => {
         const response = await axios.get(`https://graph.facebook.com/v18.0/${PAGE_ID}/feed`, {
             params: {
                 access_token: ACCESS_TOKEN,
-                fields: 'id,message,full_picture,created_time,permalink_url,attachments{media}',
-                limit: 20, // Fetch last 20 posts
+                fields: 'id,message,full_picture,created_time,permalink_url,attachments{media,subattachments}',
+                limit: 100, // Fetch last 100 posts
             },
         });
 
@@ -56,14 +56,42 @@ const syncFacebookPosts = async () => {
 
             // Check for video in attachments
             let mediaUrl = post.full_picture;
-            if (post.attachments && post.attachments.data && post.attachments.data[0].media && post.attachments.data[0].media.source) {
-                mediaUrl = post.attachments.data[0].media.source;
+            let images = [];
+
+            // Helper to get high-res image
+            const getSrc = (mediaObj) => mediaObj?.image?.src || null;
+
+            if (post.attachments && post.attachments.data && post.attachments.data[0]) {
+                const attachment = post.attachments.data[0];
+
+                // 1. Check for Video
+                if (attachment.media && attachment.media.source) {
+                    mediaUrl = attachment.media.source;
+                }
+
+                // 2. Check for Subattachments (Gallery)
+                if (attachment.subattachments && attachment.subattachments.data) {
+                    images = attachment.subattachments.data
+                        .map(sub => sub.media?.image?.src)
+                        .filter(src => !!src);
+                }
+
+                // If no subattachments but we have a main image not used as video
+                if (images.length === 0 && attachment.media?.image?.src) {
+                    images.push(attachment.media.image.src);
+                }
+            }
+
+            // Fallback to full_picture if no images found yet
+            if (images.length === 0 && post.full_picture && !mediaUrl?.includes('mp4')) {
+                images.push(post.full_picture);
             }
 
             batch.set(postRef, {
                 type: 'facebook',
                 content: post.message || '',
                 mediaUrl: mediaUrl || null,
+                images: images, // Save the flattened images array
                 sourceId: post.id,
                 timestamp: new Date(post.created_time).getTime(),
                 pinned: false,
@@ -72,6 +100,7 @@ const syncFacebookPosts = async () => {
                     avatarUrl: null
                 },
                 externalUrl: post.permalink_url,
+                subattachments: post.attachments?.data[0]?.subattachments?.data || null,
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
             }, { merge: true });
             count++;

@@ -24,8 +24,19 @@ const DEFAULT_CAMPAIGNS = [
 const PRESET_AMOUNTS = [50, 100, 250, 500];
 const TIP_PERCENTAGES = [0, 0.03, 0.05, 0.08];
 
-export default function DonationWidget() {
-    const [campaigns, setCampaigns] = useState<any[]>(DEFAULT_CAMPAIGNS);
+interface DonationWidgetProps {
+    initialCampaignId?: string;
+    compact?: boolean;
+    onClose?: () => void;
+}
+
+import { Campaign } from '@/types';
+import { X as CloseIcon } from 'lucide-react';
+
+// ... (existing imports)
+
+export default function DonationWidget({ initialCampaignId, compact = false, onClose }: DonationWidgetProps) {
+    const [campaigns, setCampaigns] = useState<Campaign[]>(DEFAULT_CAMPAIGNS);
     // Fetch campaigns from collection
     React.useEffect(() => {
         const q = query(collection(db, 'campaigns'), orderBy('name', 'asc'));
@@ -33,15 +44,21 @@ export default function DonationWidget() {
             const data = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
-            }));
+            })) as Campaign[];
             if (data.length > 0) {
                 setCampaigns(data);
-                // Only reset if current selection is invalid? Or maybe just default to first.
-                // setCampaign(data[0].name); 
+                // If initialCampaignId is provided, try to find it
+                if (initialCampaignId) {
+                    const found = data.find((c) => c.id === initialCampaignId);
+                    if (found) {
+                        setCampaign(found.name);
+                        return;
+                    }
+                }
             }
         });
         return () => unsubscribe();
-    }, []);
+    }, [initialCampaignId]); // Added dependency
 
     const [step, setStep] = useState<number>(1); // 1: Details, 2: Payment
     const [amount, setAmount] = useState<number>(100);
@@ -51,10 +68,19 @@ export default function DonationWidget() {
 
     // Effect to set default campaign once loaded
     React.useEffect(() => {
+        // Only default to General Fund logic if we haven't already set a campaign via initialCampaignId
         if (campaigns.length > 0 && campaign === 'General Fund' && !campaigns.find(c => c.name === 'General Fund')) {
+            // If initialCampaignId matches one, use it.
+            if (initialCampaignId) {
+                const found = campaigns.find(c => c.id === initialCampaignId);
+                if (found) {
+                    setCampaign(found.name);
+                    return;
+                }
+            }
             setCampaign(campaigns[0].name);
         }
-    }, [campaigns]);
+    }, [campaigns, campaign, initialCampaignId]);
 
 
     // Tipping
@@ -132,33 +158,57 @@ export default function DonationWidget() {
         );
     }
 
+    // Dynamic padding/spacing classes based on compact prop
+    const containerClasses = compact
+        ? "w-full mx-auto bg-white dark:bg-gray-800 rounded-xl overflow-hidden transition-all duration-300 max-h-[85vh] overflow-y-auto"
+        : "w-full max-w-md mx-auto bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 overflow-hidden transition-all duration-300";
+
+    const headerClasses = compact
+        ? "relative bg-transparent p-4 border-b border-gray-100 dark:border-gray-700/50 overflow-hidden transition-colors duration-300"
+        : "relative bg-transparent p-8 border-b border-gray-100 dark:border-gray-700/50 overflow-hidden transition-colors duration-300";
+
+    const bodyClasses = compact
+        ? "p-4 space-y-2" // Reduced space-y-3 to 2
+        : "p-6 md:p-8 space-y-8";
+
+    const inputPadding = compact ? "py-2.5" : "py-4"; // Reduced py-3 to 2.5
+
     return (
-        <div className="w-full max-w-md mx-auto bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 overflow-hidden transition-all duration-300">
+        <div className={containerClasses}>
             {/* Premium Header */}
-            <div className="relative bg-transparent p-8 border-b border-gray-100 dark:border-gray-700/50 overflow-hidden transition-colors duration-300">
+            <div className={headerClasses}>
                 {/* Header content only - no background blobs */}
 
+                {onClose && (
+                    <button
+                        onClick={onClose}
+                        className="absolute right-4 top-4 p-2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors z-20 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
+                    >
+                        <CloseIcon className="w-5 h-5" />
+                    </button>
+                )}
+
                 <div className="relative z-10 text-center">
-                    <div className="w-12 h-12 bg-white dark:bg-gray-800 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-gray-200 dark:border-gray-700 shadow-sm">
-                        <Heart className="w-6 h-6 text-pink-500 fill-pink-500/20" />
+                    <div className={`${compact ? 'w-10 h-10 mb-2' : 'w-12 h-12 mb-4'} bg-white dark:bg-gray-800 rounded-2xl flex items-center justify-center mx-auto border border-gray-200 dark:border-gray-700 shadow-sm`}>
+                        <Heart className={`${compact ? 'w-5 h-5' : 'w-6 h-6'} text-pink-500 fill-pink-500/20`} />
                     </div>
-                    <h2 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">Give to Bethel</h2>
-                    <p className="text-gray-500 dark:text-gray-400 text-sm mt-2 font-medium">Empowering our community, together.</p>
+                    <h2 className={`${compact ? 'text-lg' : 'text-2xl'} font-bold tracking-tight text-gray-900 dark:text-white`}>Giving</h2>
+                    {!compact && <p className="text-gray-500 dark:text-gray-400 text-sm mt-1 font-medium">Empowering our community, together.</p>}
                 </div>
             </div>
 
-            <div className="p-6 md:p-8 space-y-8">
+            <div className={bodyClasses}>
                 {/* Amount Section */}
-                <div className="space-y-4">
+                <div className="space-y-2"> {/* Reduced space-y-3 */}
                     <label className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Select Amount</label>
-                    <div className="grid grid-cols-4 gap-3">
+                    <div className="grid grid-cols-4 gap-2">
                         {PRESET_AMOUNTS.map(val => (
                             <button
                                 key={val}
                                 onClick={() => setAmount(val)}
-                                className={`py-3 rounded-xl text-sm font-bold transition-all duration-200 border ${amount === val
-                                    ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-200 dark:shadow-none'
-                                    : 'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:border-blue-300 dark:hover:border-blue-500 hover:bg-white dark:hover:bg-gray-600'
+                                className={`py-2 rounded-lg text-sm font-bold transition-all duration-200 border ${amount === val
+                                    ? 'bg-blue-600 border-blue-600 text-white shadow-md'
+                                    : 'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:border-blue-300 dark:hover:border-blue-500'
                                     }`}
                             >
                                 ${val}
@@ -174,41 +224,41 @@ export default function DonationWidget() {
                             type="number"
                             value={amount || ''}
                             onChange={(e) => setAmount(parseFloat(e.target.value))}
-                            className="w-full pl-8 pr-4 py-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-xl font-bold text-gray-900 dark:text-white placeholder-gray-400"
+                            className={`w-full pl-8 pr-4 ${inputPadding} bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-xl font-bold text-gray-900 dark:text-white placeholder-gray-400`}
                             placeholder="Enter custom amount"
                         />
                     </div>
                 </div>
 
                 {/* Donor Details */}
-                <div className="space-y-4">
+                <div className="space-y-2"> {/* Reduced space-y-3 */}
                     <label className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Your Information</label>
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                         <input
                             type="text"
                             value={donorName}
                             onChange={(e) => setDonorName(e.target.value)}
-                            className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-gray-900 dark:text-white placeholder-gray-400"
+                            className={`w-full px-4 ${inputPadding} bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-gray-900 dark:text-white placeholder-gray-400`}
                             placeholder="Full Name"
                         />
                         <input
                             type="email"
                             value={donorEmail}
                             onChange={(e) => setDonorEmail(e.target.value)}
-                            className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-gray-900 dark:text-white placeholder-gray-400"
+                            className={`w-full px-4 ${inputPadding} bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-gray-900 dark:text-white placeholder-gray-400`}
                             placeholder="Email Address"
                         />
                     </div>
                 </div>
 
                 {/* Campaign Selection */}
-                <div className="space-y-4">
+                <div className="space-y-2"> {/* Reduced space-y-3 */}
                     <label className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Designation</label>
                     <div className="relative">
                         <select
                             value={campaign}
                             onChange={(e) => setCampaign(e.target.value)}
-                            className="w-full pl-4 pr-10 py-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all appearance-none text-gray-900 dark:text-white font-medium cursor-pointer"
+                            className={`w-full pl-4 pr-10 ${inputPadding} bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all appearance-none text-gray-900 dark:text-white font-medium cursor-pointer`}
                         >
                             {campaigns.map((c: any) => (
                                 <option key={c.id || c.name} value={c.name}>{c.name} {c.description ? `- ${c.description}` : ''}</option>

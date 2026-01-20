@@ -1,5 +1,6 @@
 import * as logger from 'firebase-functions/logger';
 import { onCall } from 'firebase-functions/v2/https';
+// import * as admin from 'firebase-admin';
 import axios from 'axios';
 
 export const search = onCall({ timeoutSeconds: 300, memory: '512MiB' }, async (request) => {
@@ -10,8 +11,36 @@ export const search = onCall({ timeoutSeconds: 300, memory: '512MiB' }, async (r
         return { results: [] };
     }
 
-    const apiKey = process.env.GOOGLE_SEARCH_API_KEY;
-    const cx = process.env.GOOGLE_SEARCH_CX;
+    // 1. Resolve API Keys (Hardcoded for Fix)
+    // TODO: Revert to Env/Firestore after stabilizing
+    const apiKey = 'AIzaSyDY4Dy5hsGQEma3hnuMRf6QANl2YQls66Y';
+    const cx = '963445ad09d264687';
+
+    // try {
+    //     const settingsDoc = await admin.firestore().doc('settings/integrations').get();
+    //     if (settingsDoc.exists) {
+    //         const data = settingsDoc.data();
+    //         // detailed logging for debugging
+    //         logger.info('Firestore Settings Found:', {
+    //             hasGoogle: !!data?.google,
+    //             hasSearch: !!data?.search
+    //         });
+    //
+    //         const fsApiKey = data?.google?.searchApiKey || data?.search?.apiKey || data?.google?.apiKey;
+    //         const fsCx = data?.google?.searchCx || data?.google?.cx;
+    //
+    //         if (fsApiKey) {
+    //             apiKey = fsApiKey;
+    //             logger.info('Using Search API Key from Firestore (overriding/augmenting env).');
+    //         }
+    //         if (fsCx) {
+    //             cx = fsCx;
+    //             logger.info('Using Search CX from Firestore (overriding/augmenting env).');
+    //         }
+    //     }
+    // } catch (error) {
+    //     logger.warn('Failed to fetch settings/integrations for search config', error);
+    // }
 
     logger.info('Env Vars Check:', {
         hasApiKey: !!apiKey,

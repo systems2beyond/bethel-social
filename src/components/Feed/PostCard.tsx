@@ -3,9 +3,8 @@
 import React from 'react';
 import { Post } from '@/types';
 import { motion } from 'framer-motion';
-import { Heart, MessageCircle, Share2, Facebook, Youtube, Pin, Sparkles, Play, Trash2, FileText, Download } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Facebook, Youtube, Pin, Sparkles, Play, Trash2, FileText, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { CommentsSection } from './CommentsSection';
-import { ShareMenu } from './ShareMenu';
 import { PostOptionsMenu } from './PostOptionsMenu';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -27,6 +26,7 @@ interface PostCardProps {
 
 import { useFeed } from '@/context/FeedContext';
 import { useLightbox } from '@/context/LightboxContext';
+import { useBible } from '@/context/BibleContext';
 
 
 
@@ -171,6 +171,7 @@ YouTubeFeedPlayer.displayName = 'YouTubeFeedPlayer';
 export const PostCard: React.FC<PostCardProps> = ({ post }) => {
     const { registerPost, unregisterPost, reportVisibility, triggerRefresh } = useFeed();
     const { openLightbox } = useLightbox();
+    const { openVideo } = useBible();
     const router = useRouter();
     const containerRef = React.useRef<HTMLDivElement>(null);
     const videoPlayerRef = React.useRef<VideoPlayerRef>(null);
@@ -238,6 +239,11 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
     const [likeCount, setLikeCount] = React.useState(post.likes || 0);
     const [commentCount, setCommentCount] = React.useState(post.comments || 0);
     const [showComments, setShowComments] = React.useState(false);
+
+    // Derived Video State
+    const legacyVideo = (post.type === 'youtube' || post.type === 'video') ? { type: post.type, url: post.mediaUrl!, thumbnail: post.thumbnailUrl } : null;
+    const attachmentVideos = post.attachments?.filter(a => a.type === 'video').map(a => ({ type: 'video' as const, url: a.url, thumbnail: undefined })) || [];
+    const video = legacyVideo || attachmentVideos[0];
 
     // Real-time likes listener
     React.useEffect(() => {
@@ -374,25 +380,52 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
 
             {/* Media */}
             {(post.mediaUrl || (post.images && post.images.length > 0) || (post.attachments && post.attachments.some(a => a.type === 'image' || a.type === 'video'))) && (
-                <div className="mt-2 group">
+                <div className="mt-2 group relative">
                     {(() => {
-                        // Consolidate Media
-                        const legacyVideo = (post.type === 'youtube' || post.type === 'video') ? { type: post.type, url: post.mediaUrl!, thumbnail: post.thumbnailUrl } : null;
-                        const attachmentVideos = post.attachments?.filter(a => a.type === 'video').map(a => ({ type: 'video' as const, url: a.url, thumbnail: undefined })) || [];
-
-                        const video = legacyVideo || attachmentVideos[0]; // Prioritize legacy main video or first attachment video
-
+                        // Use derived video from parent scope
                         if (video) {
                             if (video.type === 'youtube') {
                                 return (
-                                    <div className="relative aspect-video bg-black">
+                                    <div className="relative aspect-video bg-black rounded-lg overflow-hidden mx-4 group/video">
                                         <YouTubeFeedPlayer ref={videoPlayerRef} url={video.url} />
+                                        <div className="absolute bottom-4 right-4 z-10 opacity-0 group-hover/video:opacity-100 transition-all duration-300 transform translate-y-2 group-hover/video:translate-y-0">
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    openVideo({
+                                                        url: video.url,
+                                                        title: post.content ? post.content.substring(0, 50) + (post.content.length > 50 ? '...' : '') : 'Video',
+                                                        provider: 'youtube'
+                                                    });
+                                                }}
+                                                className="bg-black/60 hover:bg-black/80 backdrop-blur text-white px-4 py-2 rounded-full flex items-center gap-2 text-sm font-medium transition-all shadow-lg border border-white/10"
+                                            >
+                                                <Play className="w-4 h-4 fill-white" />
+                                                Watch & Follow
+                                            </button>
+                                        </div>
                                     </div>
                                 );
                             } else {
                                 return (
-                                    <div className="relative aspect-video bg-black">
+                                    <div className="relative aspect-video bg-black rounded-lg overflow-hidden mx-4 group/video">
                                         <NativeVideoPlayer ref={videoPlayerRef} url={video.url} poster={video.thumbnail} />
+                                        <div className="absolute bottom-4 right-4 z-10 opacity-0 group-hover/video:opacity-100 transition-all duration-300 transform translate-y-2 group-hover/video:translate-y-0">
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    openVideo({
+                                                        url: video.url,
+                                                        title: post.content ? post.content.substring(0, 50) + (post.content.length > 50 ? '...' : '') : 'Video',
+                                                        provider: 'native'
+                                                    });
+                                                }}
+                                                className="bg-black/60 hover:bg-black/80 backdrop-blur text-white px-4 py-2 rounded-full flex items-center gap-2 text-sm font-medium transition-all shadow-lg border border-white/10"
+                                            >
+                                                <Play className="w-4 h-4 fill-white" />
+                                                Watch & Follow
+                                            </button>
+                                        </div>
                                     </div>
                                 );
                             }
@@ -405,6 +438,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
 
                         if (displayImages.length === 0) return null;
 
+                        // Single Image - Simplified Render
                         if (displayImages.length === 1) {
                             return (
                                 <div
@@ -420,42 +454,93 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
                             );
                         }
 
-                        return (
-                            <div className={cn(
-                                "grid gap-0.5 overflow-hidden rounded-lg cursor-pointer aspect-video mx-4",
-                                displayImages.length === 2 ? "grid-cols-2" : "grid-cols-2"
-                            )}>
-                                {displayImages.slice(0, 4).map((src, index) => {
-                                    const isLast = index === 3;
-                                    const remaining = displayImages.length - 4;
+                        // Multi-Image Grid Layout
+                        const count = displayImages.length;
 
-                                    // Layout Logic
-                                    let className = "relative w-full h-full bg-gray-100 dark:bg-zinc-800";
-
-                                    // For 3 images: First image takes left half (row-span-2)
-                                    if (displayImages.length === 3 && index === 0) {
-                                        className += " row-span-2";
-                                    }
-
-                                    return (
+                        // Layout for 2 Images: 50/50 Split
+                        if (count === 2) {
+                            return (
+                                <div className="grid grid-cols-2 gap-0.5 aspect-video mx-4 rounded-lg overflow-hidden">
+                                    {displayImages.map((img, idx) => (
                                         <div
-                                            key={index}
-                                            className={className}
-                                            onClick={() => openLightbox(displayImages, 'image', index)}
+                                            key={idx}
+                                            className="relative w-full h-full cursor-pointer group/image"
+                                            onClick={() => openLightbox(displayImages, 'image', idx)}
                                         >
                                             <img
-                                                src={src}
-                                                alt={`Content ${index + 1}`}
-                                                className="w-full h-full object-cover hover:opacity-90 transition-opacity"
+                                                src={img}
+                                                alt={`Content ${idx + 1}`}
+                                                className="object-cover w-full h-full transition-opacity group-hover/image:opacity-95"
                                             />
-                                            {isLast && remaining > 0 && (
-                                                <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm">
-                                                    <span className="text-white font-bold text-2xl">+{remaining}</span>
-                                                </div>
-                                            )}
                                         </div>
-                                    );
-                                })}
+                                    ))}
+                                </div>
+                            );
+                        }
+
+                        // Layout for 3 Images: 1 Large Left (66%), 2 Stacked Right (33%)
+                        if (count === 3) {
+                            return (
+                                <div className="grid grid-cols-3 grid-rows-2 gap-0.5 aspect-video mx-4 rounded-lg overflow-hidden">
+                                    {/* Main Left Image */}
+                                    <div
+                                        className="col-span-2 row-span-2 relative cursor-pointer group/image"
+                                        onClick={() => openLightbox(displayImages, 'image', 0)}
+                                    >
+                                        <img
+                                            src={displayImages[0]}
+                                            alt="Content 1"
+                                            className="object-cover w-full h-full transition-opacity group-hover/image:opacity-95"
+                                        />
+                                    </div>
+                                    {/* Right Top */}
+                                    <div
+                                        className="col-span-1 row-span-1 relative cursor-pointer group/image"
+                                        onClick={() => openLightbox(displayImages, 'image', 1)}
+                                    >
+                                        <img
+                                            src={displayImages[1]}
+                                            alt="Content 2"
+                                            className="object-cover w-full h-full transition-opacity group-hover/image:opacity-95"
+                                        />
+                                    </div>
+                                    {/* Right Bottom */}
+                                    <div
+                                        className="col-span-1 row-span-1 relative cursor-pointer group/image"
+                                        onClick={() => openLightbox(displayImages, 'image', 2)}
+                                    >
+                                        <img
+                                            src={displayImages[2]}
+                                            alt="Content 3"
+                                            className="object-cover w-full h-full transition-opacity group-hover/image:opacity-95"
+                                        />
+                                    </div>
+                                </div>
+                            );
+                        }
+
+                        // Layout for 4+ Images: 2x2 Grid with +N Overlay on the 4th image
+                        return (
+                            <div className="grid grid-cols-2 grid-rows-2 gap-0.5 aspect-video mx-4 rounded-lg overflow-hidden">
+                                {displayImages.slice(0, 4).map((img, idx) => (
+                                    <div
+                                        key={idx}
+                                        className="relative w-full h-full cursor-pointer group/image"
+                                        onClick={() => openLightbox(displayImages, 'image', idx)}
+                                    >
+                                        <img
+                                            src={img}
+                                            alt={`Content ${idx + 1}`}
+                                            className="object-cover w-full h-full transition-opacity group-hover/image:opacity-95"
+                                        />
+                                        {/* Overlay for +N */}
+                                        {idx === 3 && count > 4 && (
+                                            <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm transition-colors group-hover/image:bg-black/50">
+                                                <span className="text-white text-3xl font-bold">+{count - 4}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
                             </div>
                         );
 
@@ -486,6 +571,23 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
                     </span>
                 </button>
 
+                {video && (
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            openVideo({
+                                url: video.url,
+                                title: post.content ? post.content.substring(0, 50) + (post.content.length > 50 ? '...' : '') : 'Video',
+                                provider: video.type === 'youtube' ? 'youtube' : 'native'
+                            });
+                        }}
+                        className="flex items-center space-x-2 text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                    >
+                        <Play className="w-5 h-5" />
+                        <span className="text-sm font-medium">Watch</span>
+                    </button>
+                )}
+
                 <button
                     onClick={handleAskAI}
                     className="flex items-center space-x-2 text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 transition-colors bg-purple-50 dark:bg-purple-900/20 px-3 py-1.5 rounded-full"
@@ -494,18 +596,20 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
                     <span className="text-sm font-medium">Ask AI</span>
                 </button>
 
-                <ShareMenu post={post} />
+
             </div>
 
             {/* Comments Section */}
-            {showComments && (
-                <div className="px-4 pb-4 animate-in slide-in-from-top-2 duration-200">
-                    <CommentsSection
-                        post={post}
-                        onCommentAdded={() => setCommentCount(prev => prev + 1)}
-                    />
-                </div>
-            )}
-        </motion.div>
+            {
+                showComments && (
+                    <div className="px-4 pb-4 animate-in slide-in-from-top-2 duration-200">
+                        <CommentsSection
+                            post={post}
+                            onCommentAdded={() => setCommentCount(prev => prev + 1)}
+                        />
+                    </div>
+                )
+            }
+        </motion.div >
     );
 };

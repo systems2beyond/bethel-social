@@ -115,7 +115,7 @@ async function processPostForEvent(postId: string, postData: any) {
                 }
             }
 
-            await db.collection('events').doc(postId).set({
+            await db.collection('suggested_events').doc(postId).set({
                 title: extraction.title,
                 description: extraction.description || postData.content,
                 date: timestamp,
@@ -123,7 +123,8 @@ async function processPostForEvent(postId: string, postData: any) {
                 imageUrl: postData.thumbnailUrl || postData.mediaUrl || null,
                 sourcePostId: postId,
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                extractedData: extraction
+                extractedData: extraction,
+                status: 'pending'
             });
         } else {
             logger.info(`No event detected in post ${postId}.`);

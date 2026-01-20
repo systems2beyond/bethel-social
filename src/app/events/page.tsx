@@ -55,7 +55,7 @@ export default function EventsPage() {
                         };
                     })
                     // Client-side filter: Only show future events
-                    .filter(event => {
+                    .filter((event: any) => {
                         if (!event.startDate) {
                             // DEEP DEBUG: Log keys to see what's actually there
                             logs.push(`Skipping ${event.id}: No startDate. Keys: ${Object.keys(event).join(', ')}`);

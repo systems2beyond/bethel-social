@@ -1,7 +1,27 @@
 import * as logger from 'firebase-functions/logger';
 import * as admin from 'firebase-admin';
 import axios from 'axios';
-// import * as crypto from 'crypto';
+import { uploadImageToStorage } from '../media/images';
+
+// Helper to ensure URL is a storage URL
+const ensureStorageUrl = async (url: string | undefined | null, postId: string, suffix: string): Promise<string | null> => {
+    if (!url) return null;
+
+    // If already a storage URL, return it
+    if (url.includes('storage.googleapis.com') || url.includes('firebasestorage.googleapis.com')) {
+        return url;
+    }
+
+    try {
+        const storageUrl = await uploadImageToStorage(url, `social/facebook/${postId}`, `image_${suffix}`);
+        logger.info(`Persisted Facebook image for ${postId}: ${storageUrl}`);
+        return storageUrl;
+    } catch (e) {
+        logger.error(`Failed to persist Facebook image for ${postId}:`, e);
+        // Fallback to original URL if upload fails, but log it
+        return url;
+    }
+};
 
 interface FacebookPost {
     id: string;
@@ -35,19 +55,30 @@ export const syncFacebookPosts = async (backfill = false) => {
     let activePageId = process.env.FB_PAGE_ID;
     let activeAccessToken = process.env.FB_ACCESS_TOKEN;
 
-    if (!activePageId || !activeAccessToken) {
-        try {
-            // Try fetching from Firestore (Dynamic Config)
-            const settingsDoc = await admin.firestore().doc('settings/integrations').get();
-            if (settingsDoc.exists) {
-                const data = settingsDoc.data();
-                if (data?.facebook?.pageId && data?.facebook?.accessToken) {
-                    activePageId = data.facebook.pageId;
-                    activeAccessToken = data.facebook.accessToken;
-                    logger.info('Using Facebook credentials from Firestore settings.');
-                }
+    try {
+        // Try fetching from Firestore (Dynamic Config) - PRIORITIZE THIS
+        const settingsDoc = await admin.firestore().doc('settings/integrations').get();
+        if (settingsDoc.exists) {
+            const data = settingsDoc.data();
+
+            // Detailed logging to help debug
+            logger.info('Firestore Settings Found:', {
+                hasFacebook: !!data?.facebook,
+                pageId: data?.facebook?.pageId ? 'Found' : 'Missing',
+                token: data?.facebook?.accessToken ? 'Found' : 'Missing'
+            });
+
+            if (data?.facebook?.pageId) {
+                activePageId = data.facebook.pageId;
+                logger.info('Using Facebook Page ID from Firestore (overriding/augmenting env).');
             }
-        } catch (e) { logger.error('Error reading settings', e); }
+            if (data?.facebook?.accessToken) {
+                activeAccessToken = data.facebook.accessToken;
+                logger.info('Using Facebook Access Token from Firestore (overriding/augmenting env).');
+            }
+        }
+    } catch (e) {
+        logger.error('Error reading settings/integrations', e);
     }
 
     if (!activePageId || !activeAccessToken) {
@@ -158,11 +189,26 @@ export const syncFacebookPosts = async (backfill = false) => {
                     images.push(post.full_picture);
                 }
 
+                // Persist Images to Storage
+                // 1. Persist Main Media URL (if it's an image)
+                let finalMediaUrl = mediaUrl;
+                if (mediaUrl && postType === 'facebook') { // Only persist if it's a direct image, not video stream URL
+                    finalMediaUrl = await ensureStorageUrl(mediaUrl, post.id, 'main') || mediaUrl;
+                }
+
+                // 2. Persist Gallery Images
+                const finalImages: string[] = [];
+                for (let i = 0; i < images.length; i++) {
+                    const imgUrl = images[i];
+                    const storageUrl = await ensureStorageUrl(imgUrl, post.id, `gallery_${i}`);
+                    if (storageUrl) finalImages.push(storageUrl);
+                }
+
                 batch.set(postRef, {
                     type: postType,
                     content: post.message || '',
-                    mediaUrl: mediaUrl || null,
-                    images: images,
+                    mediaUrl: finalMediaUrl || null,
+                    images: finalImages,
                     thumbnailUrl: thumbnailUrl,
                     sourceId: post.id,
                     youtubeVideoId: youtubeVideoId, // Save for reverse-lookup cleanup

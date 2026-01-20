@@ -55,6 +55,11 @@ export const debugPosts = onRequest(async (req, res) => {
             timestamp: d.data().timestamp
         }));
 
+        // CHECK SPECIFIC POST
+        const targetPostId = '120720411275822_1260518452765904';
+        const targetPostDoc = await admin.firestore().collection('posts').doc(targetPostId).get();
+        const targetPost = targetPostDoc.exists ? { id: targetPostDoc.id, ...targetPostDoc.data() } : 'NOT FOUND';
+
         // Simulation Logic
         let simLastDoc = null;
         const simulationLog = [];
@@ -90,6 +95,7 @@ export const debugPosts = onRequest(async (req, res) => {
             count,
             oldest: oldest ? { date: new Date(oldest.timestamp).toISOString(), ...oldest } : null,
             newest: newest ? { date: new Date(newest.timestamp).toISOString(), ...newest } : null,
+            targetPost, // Added for debugging
             debugInfo,
             gapPosts,
             simulationLog
@@ -142,5 +148,9 @@ export { generateTiptapToken } from './collaboration/token';
 export { createExpressAccount, getStripeLoginLink, getRecentPayouts } from './stripe/connect';
 export { stripeWebhookHandler as stripeWebhook } from './stripe/webhooks';
 export { createDonationIntent } from './stripe/donations';
+export { createEventPaymentIntent } from './stripe/events';
 
 export { saveEvent } from './admin/events';
+export * from './communications';
+export { onEventWritten as eventGroupAutomation, onRegistrationCreated as eventGroupJoin } from './triggers/events';
+export { onPostCreated as notifyOnPost, onSermonCreated as notifyOnSermon, onMessageCreated as notifyOnMessage } from './triggers/notifications';

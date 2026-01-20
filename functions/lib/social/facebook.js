@@ -40,28 +40,55 @@ exports.facebookWebhook = exports.syncFacebookLiveStatus = exports.syncFacebookP
 const logger = __importStar(require("firebase-functions/logger"));
 const admin = __importStar(require("firebase-admin"));
 const axios_1 = __importDefault(require("axios"));
+const images_1 = require("../media/images");
+// Helper to ensure URL is a storage URL
+const ensureStorageUrl = async (url, postId, suffix) => {
+    if (!url)
+        return null;
+    // If already a storage URL, return it
+    if (url.includes('storage.googleapis.com') || url.includes('firebasestorage.googleapis.com')) {
+        return url;
+    }
+    try {
+        const storageUrl = await (0, images_1.uploadImageToStorage)(url, `social/facebook/${postId}`, `image_${suffix}`);
+        logger.info(`Persisted Facebook image for ${postId}: ${storageUrl}`);
+        return storageUrl;
+    }
+    catch (e) {
+        logger.error(`Failed to persist Facebook image for ${postId}:`, e);
+        // Fallback to original URL if upload fails, but log it
+        return url;
+    }
+};
 const syncFacebookPosts = async (backfill = false) => {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
     logger.info(`Starting Facebook sync (Backfill: ${backfill})...`);
     // Determine credentials considering both Env and Firestore
     let activePageId = process.env.FB_PAGE_ID;
     let activeAccessToken = process.env.FB_ACCESS_TOKEN;
-    if (!activePageId || !activeAccessToken) {
-        try {
-            // Try fetching from Firestore (Dynamic Config)
-            const settingsDoc = await admin.firestore().doc('settings/integrations').get();
-            if (settingsDoc.exists) {
-                const data = settingsDoc.data();
-                if (((_a = data === null || data === void 0 ? void 0 : data.facebook) === null || _a === void 0 ? void 0 : _a.pageId) && ((_b = data === null || data === void 0 ? void 0 : data.facebook) === null || _b === void 0 ? void 0 : _b.accessToken)) {
-                    activePageId = data.facebook.pageId;
-                    activeAccessToken = data.facebook.accessToken;
-                    logger.info('Using Facebook credentials from Firestore settings.');
-                }
+    try {
+        // Try fetching from Firestore (Dynamic Config) - PRIORITIZE THIS
+        const settingsDoc = await admin.firestore().doc('settings/integrations').get();
+        if (settingsDoc.exists) {
+            const data = settingsDoc.data();
+            // Detailed logging to help debug
+            logger.info('Firestore Settings Found:', {
+                hasFacebook: !!(data === null || data === void 0 ? void 0 : data.facebook),
+                pageId: ((_a = data === null || data === void 0 ? void 0 : data.facebook) === null || _a === void 0 ? void 0 : _a.pageId) ? 'Found' : 'Missing',
+                token: ((_b = data === null || data === void 0 ? void 0 : data.facebook) === null || _b === void 0 ? void 0 : _b.accessToken) ? 'Found' : 'Missing'
+            });
+            if ((_c = data === null || data === void 0 ? void 0 : data.facebook) === null || _c === void 0 ? void 0 : _c.pageId) {
+                activePageId = data.facebook.pageId;
+                logger.info('Using Facebook Page ID from Firestore (overriding/augmenting env).');
+            }
+            if ((_d = data === null || data === void 0 ? void 0 : data.facebook) === null || _d === void 0 ? void 0 : _d.accessToken) {
+                activeAccessToken = data.facebook.accessToken;
+                logger.info('Using Facebook Access Token from Firestore (overriding/augmenting env).');
             }
         }
-        catch (e) {
-            logger.error('Error reading settings', e);
-        }
+    }
+    catch (e) {
+        logger.error('Error reading settings/integrations', e);
     }
     if (!activePageId || !activeAccessToken) {
         logger.error('Missing Facebook credentials (Env Vars or Firestore)');
@@ -95,7 +122,7 @@ const syncFacebookPosts = async (backfill = false) => {
                 url: url,
                 postCount: fbPosts.length,
                 hasPaging: !!response.data.paging,
-                hasNext: !!((_c = response.data.paging) === null || _c === void 0 ? void 0 : _c.next)
+                hasNext: !!((_e = response.data.paging) === null || _e === void 0 ? void 0 : _e.next)
             });
             if (fbPosts.length === 0) {
                 break;
@@ -114,20 +141,20 @@ const syncFacebookPosts = async (backfill = false) => {
                 let youtubeVideoId = null;
                 let images = [];
                 // Handle Attachments (Multi-image or Video)
-                if ((_d = post.attachments) === null || _d === void 0 ? void 0 : _d.data[0]) {
+                if ((_f = post.attachments) === null || _f === void 0 ? void 0 : _f.data[0]) {
                     const attachment = post.attachments.data[0];
                     // 1. Check for Subattachments (Multi-image)
-                    if ((_e = attachment.subattachments) === null || _e === void 0 ? void 0 : _e.data) {
+                    if ((_g = attachment.subattachments) === null || _g === void 0 ? void 0 : _g.data) {
                         images = attachment.subattachments.data
                             .map((sub) => { var _a, _b; return (_b = (_a = sub.media) === null || _a === void 0 ? void 0 : _a.image) === null || _b === void 0 ? void 0 : _b.src; })
                             .filter((src) => !!src);
                     }
                     // If no subattachments but we have a main media (single image), put it in images array too
-                    if (images.length === 0 && ((_g = (_f = attachment.media) === null || _f === void 0 ? void 0 : _f.image) === null || _g === void 0 ? void 0 : _g.src)) {
+                    if (images.length === 0 && ((_j = (_h = attachment.media) === null || _h === void 0 ? void 0 : _h.image) === null || _j === void 0 ? void 0 : _j.src)) {
                         images.push(attachment.media.image.src);
                     }
                     // 2. Check for Video
-                    if ((_h = attachment.media) === null || _h === void 0 ? void 0 : _h.source) {
+                    if ((_k = attachment.media) === null || _k === void 0 ? void 0 : _k.source) {
                         mediaUrl = attachment.media.source;
                         if (mediaUrl && (mediaUrl.includes('youtube.com') || mediaUrl.includes('youtu.be'))) {
                             postType = 'youtube';
@@ -153,11 +180,25 @@ const syncFacebookPosts = async (backfill = false) => {
                 if (images.length === 0 && post.full_picture && postType === 'facebook') {
                     images.push(post.full_picture);
                 }
+                // Persist Images to Storage
+                // 1. Persist Main Media URL (if it's an image)
+                let finalMediaUrl = mediaUrl;
+                if (mediaUrl && postType === 'facebook') { // Only persist if it's a direct image, not video stream URL
+                    finalMediaUrl = await ensureStorageUrl(mediaUrl, post.id, 'main') || mediaUrl;
+                }
+                // 2. Persist Gallery Images
+                const finalImages = [];
+                for (let i = 0; i < images.length; i++) {
+                    const imgUrl = images[i];
+                    const storageUrl = await ensureStorageUrl(imgUrl, post.id, `gallery_${i}`);
+                    if (storageUrl)
+                        finalImages.push(storageUrl);
+                }
                 batch.set(postRef, {
                     type: postType,
                     content: post.message || '',
-                    mediaUrl: mediaUrl || null,
-                    images: images,
+                    mediaUrl: finalMediaUrl || null,
+                    images: finalImages,
                     thumbnailUrl: thumbnailUrl,
                     sourceId: post.id,
                     youtubeVideoId: youtubeVideoId, // Save for reverse-lookup cleanup
@@ -200,7 +241,7 @@ const syncFacebookPosts = async (backfill = false) => {
         const db = admin.firestore();
         await db.collection('system').doc('facebook_sync_debug').set({
             error: error.message,
-            response: ((_j = error.response) === null || _j === void 0 ? void 0 : _j.data) || null,
+            response: ((_l = error.response) === null || _l === void 0 ? void 0 : _l.data) || null,
             timestamp: new Date().toISOString()
         }, { merge: true });
     }

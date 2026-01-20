@@ -9,12 +9,18 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { formatTextWithLinks } from '@/lib/utils';
 import { motion } from 'framer-motion';
+import { RegistrationModal } from '@/components/Events/RegistrationModal';
+import DonationWidget from '@/components/Giving/DonationForm';
+import { Dialog, DialogContent, DialogTrigger, DialogTitle } from '@/components/ui/dialog';
+import { Heart } from 'lucide-react';
 
 export default function EventDetailsPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
     const router = useRouter();
     const [event, setEvent] = useState<Event | null>(null);
     const [loading, setLoading] = useState(true);
+    const [isRegistrationOpen, setIsRegistrationOpen] = useState(false);
+    const [isDonationOpen, setIsDonationOpen] = useState(false);
 
     useEffect(() => {
         const loadEvent = async () => {
@@ -59,6 +65,12 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
 
     const { landingPage } = event;
     const isCustomPage = landingPage?.enabled && landingPage.blocks.length > 0;
+    const ticketPrice = event.registrationConfig?.ticketPrice;
+    const currency = event.registrationConfig?.currency || 'USD';
+    const formattedPrice = ticketPrice
+        ? new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(ticketPrice)
+        : 'Free';
+
 
     // Helper text renderer
     const renderContent = (content: string) => (
@@ -102,10 +114,14 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
                 const isYouTube = block.url.includes('youtube') || block.url.includes('youtu.be');
                 let embedUrl = block.url;
                 if (isYouTube) {
-                    if (block.url.includes('watch?v=')) {
+                    // Regex to extract video ID from various YouTube URL formats
+                    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+                    const match = block.url.match(regExp);
+                    if (match && match[2].length === 11) {
+                        embedUrl = `https://www.youtube.com/embed/${match[2]}`;
+                    } else if (block.url.includes('watch?v=')) {
+                        // Fallback to simple replace if regex fails but it looks like a standard watch URL
                         embedUrl = block.url.replace('watch?v=', 'embed/');
-                    } else if (block.url.includes('youtu.be/')) {
-                        embedUrl = block.url.replace('youtu.be/', 'youtube.com/embed/');
                     }
                 }
 
@@ -156,12 +172,12 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
                 return (
                     <div key={block.id} className="flex justify-center py-6 px-4">
                         <a
-                            href={block.url}
+                            href={block.url.startsWith('http') ? block.url : `https://${block.url}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className={`px-8 py-3 rounded-full font-medium transition-transform hover:scale-105 shadow-lg ${block.style === 'secondary'
-                                    ? 'bg-gray-100 text-gray-900 hover:bg-gray-200 dark:bg-zinc-800 dark:text-white dark:hover:bg-zinc-700'
-                                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                                ? 'bg-gray-100 text-gray-900 hover:bg-gray-200 dark:bg-zinc-800 dark:text-white dark:hover:bg-zinc-700'
+                                : 'bg-blue-600 text-white hover:bg-blue-700'
                                 }`}
                         >
                             {block.label}
@@ -175,16 +191,28 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
 
     // --- STANDARD LAYOUT ---
     const StandardLayout = () => {
-        const imageUrl = event.media?.[0]?.url || event.imageUrl; // Fallback
+        const imageUrl = event.media?.find(m => m.type === 'image' || m.type === 'video')?.url || event.imageUrl; // Priority to media
         const eventDate = event.startDate.toDate();
 
         return (
             <div className="max-w-4xl mx-auto pb-12">
                 {/* Hero / Cover */}
-                <div className="relative h-[40vh] min-h-[300px] w-full bg-gray-900">
+                <div className="relative h-[40vh] min-h-[300px] w-full bg-gray-900 rounded-b-3xl md:rounded-b-[3rem] overflow-hidden shadow-2xl">
+                    {/* Back Button - Moved to top for better UX */}
+                    <div className="absolute top-4 left-4 z-20">
+                        <Link
+                            href="/events"
+                            className="inline-flex items-center px-4 py-2 rounded-full bg-white/10 backdrop-blur-md text-white hover:bg-white/20 border border-white/10 transition-all font-medium text-sm"
+                        >
+                            <ArrowLeft className="w-4 h-4 mr-2" />
+                            <span className="hidden sm:inline">Back to Events</span>
+                            <span className="sm:hidden">Back</span>
+                        </Link>
+                    </div>
+
                     {imageUrl ? (
                         <Image
-                            src={imageUrl}
+                            src={imageUrl.includes('youtu') ? `https://img.youtube.com/vi/${imageUrl.split('v=')[1]?.split('&')[0]}/hqdefault.jpg` : imageUrl}
                             alt={event.title}
                             fill
                             className="object-cover opacity-60"
@@ -194,50 +222,75 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
                         <div className="absolute inset-0 bg-gradient-to-br from-blue-900 to-purple-900 opacity-80" />
                     )}
 
-                    <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-transparent to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/40 to-transparent" />
 
-                    <div className="absolute bottom-0 left-0 w-full p-8 md:p-12">
-                        <Link href="/events" className="inline-flex items-center text-white/80 hover:text-white mb-6 transition-colors">
-                            <ArrowLeft className="w-4 h-4 mr-2" /> Back to Events
-                        </Link>
-
-                        <div className="flex flex-wrap gap-4 mb-4">
+                    <div className="absolute bottom-0 left-0 w-full p-6 md:p-12 pb-12 md:pb-16">
+                        <div className="flex flex-wrap gap-3 mb-3 md:mb-4">
                             {event.category && (
-                                <span className="bg-blue-500/80 backdrop-blur-sm text-white px-3 py-1 rounded-full text-sm font-medium">
+                                <span className="bg-blue-600/90 backdrop-blur-sm text-white px-3 py-1 rounded-full text-xs md:text-sm font-semibold shadow-sm">
                                     {event.category}
                                 </span>
                             )}
-                            <span className="bg-white/20 backdrop-blur-sm text-white px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
-                                <Calendar className="w-4 h-4" />
-                                {eventDate.toLocaleDateString()}
+                            <span className="bg-white/20 backdrop-blur-sm text-white px-3 py-1 rounded-full text-xs md:text-sm font-medium flex items-center gap-1.5 border border-white/10">
+                                <Calendar className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                                {eventDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
                             </span>
                         </div>
 
-                        <h1 className="text-3xl md:text-5xl font-bold text-white mb-4 shadow-sm">
+                        <h1 className="text-3xl md:text-5xl lg:text-6xl font-extrabold text-white mb-3 md:mb-4 leading-tight shadow-sm tracking-tight">
                             {event.title}
                         </h1>
 
-                        <div className="flex flex-col md:flex-row md:items-center gap-4 text-white/90">
+                        <div className="flex flex-col md:flex-row md:items-center gap-3 text-white/90 text-sm md:text-base font-medium">
                             <div className="flex items-center gap-2">
-                                <MapPin className="w-5 h-5 text-red-400" />
-                                {event.location}
+                                <MapPin className="w-5 h-5 text-red-400 flex-shrink-0" />
+                                <span className="line-clamp-1">{event.location && event.location.trim().length > 0 ? event.location : 'Location TBD'}</span>
                             </div>
                             <div className="hidden md:block w-1.5 h-1.5 bg-white/40 rounded-full" />
-                            {/* You could add guest info here */}
+                            {/* Optional: Add time or other meta here */}
                         </div>
                     </div>
                 </div>
 
                 {/* Main Content */}
-                <div className="grid md:grid-cols-3 gap-8 p-6 md:p-12 -mt-8 relative z-10">
+                <div className="grid md:grid-cols-3 gap-8 px-4 md:px-12 mt-6 md:-mt-12 relative z-10">
                     {/* Left: Description */}
-                    <div className="md:col-span-2 space-y-8 bg-white dark:bg-zinc-800 p-8 rounded-2xl shadow-xl">
+                    <div className="md:col-span-2 space-y-8 bg-white dark:bg-zinc-800 p-5 md:p-8 rounded-2xl shadow-xl border border-gray-100 dark:border-zinc-700/50">
                         <div>
-                            <h3 className="text-xl font-bold mb-4">About this Event</h3>
-                            <div className="prose dark:prose-invert max-w-none text-gray-600 dark:text-gray-300">
+                            <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                                About this Event
+                            </h3>
+                            <div className="prose dark:prose-invert max-w-none text-gray-600 dark:text-gray-300 leading-relaxed text-sm md:text-base">
                                 {renderContent(event.description)}
                             </div>
                         </div>
+
+                        {/* Media Gallery */}
+                        {event.media && event.media.length > 0 && (
+                            <div>
+                                <h3 className="text-xl font-bold mb-4">Gallery & Media</h3>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    {event.media.map((item, i) => (
+                                        <div key={i} className="rounded-xl overflow-hidden shadow-sm bg-gray-100 dark:bg-zinc-900 aspect-video relative group">
+                                            {item.type === 'video' || item.url.includes('youtube') ? (
+                                                <iframe
+                                                    src={item.url.includes('embedding') ? item.url : (item.url.includes('youtu.be') ? item.url.replace('youtu.be/', 'youtube.com/embed/') : item.url.replace('watch?v=', 'embed/'))}
+                                                    className="w-full h-full"
+                                                    allowFullScreen
+                                                />
+                                            ) : (
+                                                <Image
+                                                    src={item.url}
+                                                    alt={`Media ${i + 1}`}
+                                                    fill
+                                                    className="object-cover group-hover:scale-105 transition-transform duration-500"
+                                                />
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
 
                         {/* Featured Guests */}
                         {event.featuredGuests && event.featuredGuests.length > 0 && (
@@ -245,14 +298,18 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
                                 <h3 className="text-xl font-bold mb-4">Featured Guests</h3>
                                 <div className="grid sm:grid-cols-2 gap-4">
                                     {event.featuredGuests.map((guest, i) => (
-                                        <div key={i} className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-zinc-700/50 rounded-lg">
-                                            {guest.imageUrl && (
-                                                <div className="relative w-12 h-12 rounded-full overflow-hidden">
+                                        <div key={i} className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-zinc-700/50 rounded-lg border border-gray-100 dark:border-zinc-700">
+                                            {guest.imageUrl ? (
+                                                <div className="relative w-14 h-14 rounded-full overflow-hidden shadow-md flex-shrink-0">
                                                     <Image src={guest.imageUrl} alt={guest.name} fill className="object-cover" />
+                                                </div>
+                                            ) : (
+                                                <div className="w-14 h-14 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-xl flex-shrink-0">
+                                                    {guest.name.charAt(0)}
                                                 </div>
                                             )}
                                             <div>
-                                                <p className="font-bold">{guest.name}</p>
+                                                <p className="font-bold text-lg leading-tight">{guest.name}</p>
                                                 <p className="text-sm text-gray-500 dark:text-gray-400">{guest.role}</p>
                                             </div>
                                         </div>
@@ -264,7 +321,7 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
 
                     {/* Right: Actions / Ticket Info */}
                     <div className="space-y-6">
-                        <div className="bg-white dark:bg-zinc-800 p-6 rounded-2xl shadow-lg border border-gray-100 dark:border-zinc-700 sticky top-24">
+                        <div className="bg-white dark:bg-zinc-800 p-5 md:p-6 rounded-2xl shadow-lg border border-gray-100 dark:border-zinc-700 sticky top-24">
                             <h3 className="font-bold text-lg mb-4">Event Details</h3>
                             <div className="space-y-4 mb-6">
                                 <div className="flex items-start gap-3">
@@ -278,18 +335,51 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
                                         </p>
                                     </div>
                                 </div>
-                                <div className="flex items-start gap-3">
-                                    <MapPin className="w-5 h-5 text-red-500 mt-0.5" />
-                                    <div>
-                                        <p className="font-medium">Location</p>
-                                        <p className="text-sm text-gray-500 dark:text-gray-400">{event.location}</p>
+                                {event.location && event.location.trim().length > 0 && (
+                                    <div className="flex items-start gap-3">
+                                        <MapPin className="w-5 h-5 text-red-500 mt-0.5" />
+                                        <div>
+                                            <p className="font-medium">Location</p>
+                                            <a
+                                                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location)}`}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="text-sm text-blue-500 hover:underline dark:text-blue-400"
+                                            >
+                                                {event.location}
+                                            </a>
+                                        </div>
                                     </div>
-                                </div>
+                                )}
                             </div>
 
-                            <button className="w-full py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/20">
-                                {event.ticketConfig?.tiers?.length ? 'Get Tickets' : 'Register Now'}
-                            </button>
+                            {event.registrationConfig?.enabled && (
+                                <button
+                                    onClick={() => setIsRegistrationOpen(true)}
+                                    className="w-full py-3 bg-gray-900 dark:bg-white text-white dark:text-black rounded-lg font-bold hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors shadow-sm"
+                                >
+                                    {event.ticketConfig?.tiers?.length ? 'Get Tickets' : (formattedPrice === 'Free' ? 'RSVP Now' : 'Register Now')}
+                                </button>
+                            )}
+
+                            {event.linkedCampaignId && (
+                                <button
+                                    onClick={() => setIsDonationOpen(true)}
+                                    className="w-full mt-3 py-3 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 transition-colors shadow-sm flex items-center justify-center gap-2"
+                                >
+                                    <Heart className="w-4 h-4 fill-current" />
+                                    Make a Donation
+                                </button>
+                            )}
+
+                            {event.linkedGroupId && (
+                                <Link
+                                    href={`/groups/${event.linkedGroupId}`}
+                                    className="block mt-3 w-full py-3 bg-white border-2 border-blue-600 text-blue-600 dark:bg-zinc-800 dark:text-blue-400 dark:border-blue-400 rounded-lg font-bold hover:bg-blue-50 dark:hover:bg-zinc-700 transition-colors text-center"
+                                >
+                                    View Community Group
+                                </Link>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -299,7 +389,23 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
 
     // If custom page is enabled, render blocks. Otherwise standard.
     if (!isCustomPage) {
-        return <StandardLayout />;
+        return (
+            <>
+                <StandardLayout />
+                <RegistrationModal
+                    isOpen={isRegistrationOpen}
+                    onClose={() => setIsRegistrationOpen(false)}
+                    event={event}
+                />
+
+                <Dialog open={isDonationOpen} onOpenChange={setIsDonationOpen}>
+                    <DialogContent className="max-w-md p-0 bg-transparent border-none shadow-none [&>button]:hidden">
+                        <DialogTitle className="sr-only">Make a Donation</DialogTitle>
+                        <DonationWidget initialCampaignId={event.linkedCampaignId || undefined} compact={true} onClose={() => setIsDonationOpen(false)} />
+                    </DialogContent>
+                </Dialog>
+            </>
+        );
     }
 
     return (
@@ -326,16 +432,39 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
                     <h1 className="text-4xl md:text-6xl font-black text-white mb-4 drop-shadow-lg max-w-4xl mx-auto">
                         {event.title}
                     </h1>
-                    <div className="flex justify-center flex-wrap gap-4 text-white/90 font-medium">
+                    <div className="flex justify-center flex-wrap gap-4 text-white/90 font-medium mb-6">
                         <span className="flex items-center gap-1 bg-black/30 px-3 py-1 rounded-full backdrop-blur-md">
                             <Calendar className="w-4 h-4" />
                             {event.startDate.toDate().toLocaleDateString()}
                         </span>
-                        <span className="flex items-center gap-1 bg-black/30 px-3 py-1 rounded-full backdrop-blur-md">
-                            <MapPin className="w-4 h-4" />
-                            {event.location}
-                        </span>
+                        {event.location && event.location.trim().length > 0 && (
+                            <span className="flex items-center gap-1 bg-black/30 px-3 py-1 rounded-full backdrop-blur-md">
+                                <MapPin className="w-4 h-4" />
+                                {event.location}
+                            </span>
+                        )}
                     </div>
+
+                    {event.registrationConfig?.enabled && (
+                        <div className="flex justify-center gap-4">
+                            <button
+                                onClick={() => setIsRegistrationOpen(true)}
+                                className="px-8 py-3 bg-white text-black text-lg rounded-full font-bold hover:bg-gray-200 transition-colors shadow-lg"
+                            >
+                                {event.ticketConfig?.tiers?.length ? 'Get Tickets' : (formattedPrice === 'Free' ? 'RSVP Now' : 'Register Now')}
+                            </button>
+
+                            {event.linkedCampaignId && (
+                                <button
+                                    onClick={() => setIsDonationOpen(true)}
+                                    className="px-8 py-3 bg-green-600 text-white text-lg rounded-full font-bold hover:bg-green-700 transition-colors shadow-lg flex items-center gap-2"
+                                >
+                                    <Heart className="w-5 h-5 fill-current" />
+                                    Donate
+                                </button>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -343,6 +472,19 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
             <div className="py-12 bg-white dark:bg-black">
                 {landingPage.blocks.map(renderBlock)}
             </div>
+
+            <RegistrationModal
+                isOpen={isRegistrationOpen}
+                onClose={() => setIsRegistrationOpen(false)}
+                event={event}
+            />
+
+            <Dialog open={isDonationOpen} onOpenChange={setIsDonationOpen}>
+                <DialogContent className="max-w-md p-0 bg-transparent border-none shadow-none [&>button]:hidden">
+                    <DialogTitle className="sr-only">Make a Donation</DialogTitle>
+                    <DonationWidget initialCampaignId={event.linkedCampaignId || undefined} compact={true} onClose={() => setIsDonationOpen(false)} />
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

@@ -50,6 +50,7 @@ export interface Group {
     lastActivityAt: any; // Firestore Timestamp
     createdBy: string;
     createdAt: any; // Firestore Timestamp
+    linkedEventId?: string; // LINKED EVENT
     settings?: {
         postingPermission: 'everyone' | 'admins_only';
         invitePermission: 'everyone' | 'admins_only';
@@ -86,6 +87,7 @@ export interface FeaturedGuest {
 export interface EventMedia {
     url: string;
     type: 'image' | 'video';
+    mediaType?: 'image' | 'video'; // Normalize naming
 }
 
 export interface Event {
@@ -116,6 +118,9 @@ export interface Event {
 
     // New Fields
     category?: 'General' | 'Meeting' | 'Bible Study' | 'Sunday School';
+    linkedGroupId?: string; // LINKED GROUP
+    linkedCampaignId?: string; // LINKED CAMPAIGN (For donations)
+    registrationConfig?: RegistrationConfig;
     landingPage?: LandingPageConfig;
 }
 
@@ -130,6 +135,19 @@ export type LandingPageBlock =
     | { id: string; type: 'video'; url: string; title?: string } // url can be youtube or direct
     | { id: string; type: 'file'; url: string; name: string; size?: number }
     | { id: string; type: 'button'; label: string; url: string; style: 'primary' | 'secondary' };
+
+export interface SuggestedEvent {
+    id: string; // usually postId
+    title: string;
+    description: string;
+    date: Timestamp;
+    location: string;
+    imageUrl?: string;
+    sourcePostId: string;
+    createdAt: Timestamp;
+    status: 'pending' | 'approved' | 'rejected';
+    extractedData: any;
+}
 
 
 export interface Comment {
@@ -191,4 +209,47 @@ export interface GroupEvent {
     imageUrl?: string;
     createdBy: string;
     createdAt: any; // Firestore Timestamp
+}
+
+export type RegistrationFieldType = 'text' | 'email' | 'phone' | 'number' | 'select' | 'checkbox';
+
+export interface RegistrationField {
+    id: string;
+    label: string;
+    type: RegistrationFieldType;
+    required: boolean;
+    options?: string[]; // For 'select' type
+    placeholder?: string;
+}
+
+export interface RegistrationConfig {
+    enabled: boolean;
+    capacity?: number;
+    closeDate?: Timestamp;
+    fields: RegistrationField[];
+    ticketPrice?: number; // Simple flat price for now
+    currency?: string; // e.g., 'USD'
+}
+
+export interface EventRegistration {
+    id: string;
+    eventId: string;
+    userId?: string; // Optional (guest checkout)
+    userEmail: string;
+    userName: string;
+    responses: Record<string, any>; // Keyed by field ID
+    status: 'confirmed' | 'cancelled' | 'waitlist' | 'paid';
+    ticketCount?: number;
+    totalAmount?: number;
+    tipAmount?: number;
+    paymentStatus?: 'paid' | 'pending' | 'failed';
+    paymentIntentId?: string;
+    createdAt: Timestamp;
+}
+
+export interface Campaign {
+    id: string;
+    name: string;
+    description?: string;
+    createdAt?: any;
 }

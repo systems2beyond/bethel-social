@@ -44,11 +44,15 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
         groups,
         toggleGroupCollapse,
         closeGroup,
+
         setActiveTab,
         addTab,
         closeTab,
         setCollaborationId,
-        openCollaboration
+        openCollaboration,
+        activeVideo,
+        openVideo,
+        closeVideo,
     } = useBible();
     const [editor, setEditor] = useState<any>(null);
     const [notes, setNotes] = useState('');
@@ -129,8 +133,7 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]); // Deprecated, but keeping for compatibility if needed? No, let's switch.
     const [detailedResults, setDetailedResults] = useState<UnifiedSearchResults & { web?: any[], topics?: any[], videos?: any[] }>({ bible: [], sermons: [], notes: [], web: [], topics: [], videos: [] });
-    // Video Focus State
-    const [selectedVideo, setSelectedVideo] = useState<{ videoId: string, title: string } | null>(null);
+    // Video Focus State - utilize context now
     const [quickNoteContent, setQuickNoteContent] = useState('');
     const [isBibleExpanded, setIsBibleExpanded] = useState(false);
     // UI State
@@ -227,7 +230,7 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
         if (!quickNoteContent.trim() || !user) return;
 
         // Use existing handleAddToNotes or manual save
-        handleAddToNotes(`<p><strong>Note from Video (${selectedVideo?.title}):</strong></p><p>${quickNoteContent}</p>`);
+        handleAddToNotes(`<p><strong>Note from Video (${activeVideo?.title}):</strong></p><p>${quickNoteContent}</p>`);
         setQuickNoteContent('');
         // toast.success("Note saved!"); 
     };
@@ -866,75 +869,52 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                         }
                     </div>
 
-                    {/* BOTTOM PANE: Explicit Switch for View Modes */}
+                    {/* BOTTOM PANE: Right Column (Video + Search/Notes/Fellowship) */}
                     <div
                         className={cn(
-                            "flex-1 flex flex-col min-h-0 bg-white dark:bg-zinc-900 overflow-hidden",
-                            // STRICT COLLAPSE LOGIC: If split ratio > 0.9, force height to 32px (Title Only)
+                            "flex-1 flex flex-col min-h-0 bg-white dark:bg-zinc-900 overflow-hidden relative",
                             splitRatio > 0.9 && "flex-none !h-[32px]"
                         )}
                     >
-                        {rightPaneView === 'search' ? (
-                            selectedVideo ? (
-                                /* --- VIDEO FOCUS VIEW --- */
-                                <div className="flex-1 flex flex-col min-h-0 bg-black relative">
-                                    {/* Header / Back */}
-                                    <div className="absolute top-0 left-0 right-0 z-20 p-4 bg-gradient-to-b from-black/80 to-transparent flex items-center justify-between">
-                                        <button
-                                            onClick={() => setSelectedVideo(null)}
-                                            className="flex items-center gap-2 text-white/80 hover:text-white bg-black/40 hover:bg-black/60 px-3 py-1.5 rounded-full backdrop-blur transition-all text-sm font-medium"
-                                        >
-                                            <ArrowRight className="w-4 h-4 rotate-180" />
-                                            Back to Results
-                                        </button>
-                                    </div>
-
-                                    {/* Video Player (Full Height) */}
-                                    <div className="flex-1 w-full bg-black flex items-center justify-center">
-                                        <iframe
-                                            width="100%"
-                                            height="100%"
-                                            src={`https://www.youtube.com/embed/${selectedVideo.videoId}?autoplay=1`}
-                                            title={selectedVideo.title}
-                                            frameBorder="0"
-                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                            allowFullScreen
-                                            className="w-full h-full"
-                                        />
-                                    </div>
-
-                                    {/* Quick Note Overlay (Bottom) */}
-                                    <div className="bg-gray-900/95 backdrop-blur border-t border-gray-800 p-4">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                                                <Edit3 className="w-3 h-3" />
-                                                Quick Notes
-                                            </h4>
-                                            {quickNoteContent.trim() && (
-                                                <span className="text-[10px] text-green-400">Drafting...</span>
-                                            )}
-                                        </div>
-                                        <div className="flex gap-2">
-                                            <textarea
-                                                value={quickNoteContent}
-                                                onChange={(e) => setQuickNoteContent(e.target.value)}
-                                                placeholder="Jot down thoughts... (Saved to your main notes)"
-                                                className="flex-1 bg-gray-800 text-gray-200 text-sm rounded-lg border-gray-700 focus:ring-purple-500 focus:border-purple-500 p-2 resize-none h-16"
-                                            />
-                                            <button
-                                                onClick={handleQuickNoteSave}
-                                                disabled={!quickNoteContent.trim()}
-                                                className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg px-4 flex flex-col items-center justify-center gap-1 transition-colors min-w-[60px]"
-                                            >
-                                                <Plus className="w-5 h-5" />
-                                                <span className="text-[10px] font-bold">ADD</span>
-                                            </button>
-                                        </div>
-                                    </div>
+                        {/* 1. PERSISTENT VIDEO PLAYER (Sticky Top) */}
+                        {activeVideo && (
+                            <div className="flex-none w-full bg-black relative shrink-0" style={{ height: '35%', minHeight: '200px' }}>
+                                {/* Close Button Overlay */}
+                                <div className="absolute top-2 right-2 z-20">
+                                    <button
+                                        onClick={() => closeVideo()}
+                                        className="bg-black/60 hover:bg-black/80 text-white/80 hover:text-white p-1.5 rounded-full backdrop-blur transition-all"
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </button>
                                 </div>
-                            ) : (
+
+                                <div className="w-full h-full flex items-center justify-center">
+                                    <iframe
+                                        width="100%"
+                                        height="100%"
+                                        src={
+                                            activeVideo.provider === 'youtube' || activeVideo.url.includes('youtube') || activeVideo.url.includes('youtu.be')
+                                                ? (activeVideo.url.includes('embed') ? activeVideo.url : `https://www.youtube.com/embed/${activeVideo.url.split('v=')[1]?.split('&')[0] || activeVideo.url.split('/').pop()}?autoplay=1`)
+                                                : activeVideo.url
+                                        }
+                                        title={activeVideo.title || 'Video'}
+                                        frameBorder="0"
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                        allowFullScreen
+                                        className="w-full h-full"
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 2. SCROLLABLE CONTENT AREA */}
+                        <div className="flex-1 overflow-y-auto custom-scrollbar relative bg-gray-50/50 dark:bg-zinc-900/50">
+
+                            {/* VIEW SWITCHER */}
+                            {rightPaneView === 'search' ? (
                                 /* --- SEARCH VIEW --- */
-                                <div ref={searchResultsContainerRef} className="flex-1 overflow-y-auto custom-scrollbar p-6 bg-gray-50/50 dark:bg-zinc-900/50">
+                                <div ref={searchResultsContainerRef} className="p-6">
                                     <div id="search-results-top" className="flex items-center justify-between mb-4 sticky top-0 bg-gray-50/95 dark:bg-zinc-900/95 backdrop-blur z-10 py-2 border-b border-transparent">
                                         <div className="flex items-center gap-2">
                                             <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Search Results</h3>
@@ -943,7 +923,6 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                             </span>
                                         </div>
                                         <div className="flex items-center gap-3">
-                                            {/* Toggle Full Screen for Results */}
                                             <button
                                                 onClick={toggleNotesMaximize}
                                                 className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -952,7 +931,7 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                                 {isNotesMaximized ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
                                             </button>
                                             <button onClick={() => setRightPaneView('notes')} className="text-xs text-blue-600 hover:underline font-medium">
-                                                Close Results
+                                                Close Search
                                             </button>
                                         </div>
                                     </div>
@@ -964,7 +943,7 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                         </div>
                                     ) : (detailedResults.bible.length > 0 || detailedResults.sermons.length > 0 || detailedResults.notes.length > 0 || (detailedResults.web && detailedResults.web.length > 0) || (detailedResults.topics && detailedResults.topics.length > 0)) ? (
                                         <div className="space-y-8 pb-12">
-                                            {/* SECTION 1: BIBLE (Use First) */}
+                                            {/* SECTION 1: BIBLE */}
                                             {detailedResults.bible.length > 0 && (
                                                 <div>
                                                     <div className="flex items-center justify-between mb-3 px-1">
@@ -1002,7 +981,6 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                                             </div>
                                                         ))}
                                                     </div>
-                                                    {/* Fade out indicator if collapsed and more exist */}
                                                     {!isBibleExpanded && detailedResults.bible.length > 3 && (
                                                         <div
                                                             onClick={() => setIsBibleExpanded(true)}
@@ -1015,6 +993,56 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                             )}
 
                                             {/* SECTION 2: WEB VISUALS */}
+                                            {/* SECTION 2: RELEVANT VIDEOS (High Priority) */}
+                                            {detailedResults.videos && detailedResults.videos.length > 0 && (
+                                                <div className="mb-8">
+                                                    <div className="flex items-center justify-between mb-3 px-1">
+                                                        <h4 className="text-xs font-bold text-red-500 uppercase tracking-widest flex items-center gap-2">
+                                                            <Youtube className="w-4 h-4" />
+                                                            Related Videos
+                                                        </h4>
+                                                    </div>
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                        {detailedResults.videos.slice(0, 2).map((video, i) => (
+                                                            <div
+                                                                key={i}
+                                                                onClick={() => openVideo({
+                                                                    url: video.link || video.url,
+                                                                    title: video.title,
+                                                                    provider: 'youtube'
+                                                                })}
+                                                                className="flex gap-3 p-2 rounded-xl bg-white dark:bg-zinc-800 border border-gray-100 dark:border-zinc-700 hover:border-red-200 dark:hover:border-red-900/50 cursor-pointer group transition-all"
+                                                            >
+                                                                <div className="relative w-24 h-16 shrink-0 rounded-lg overflow-hidden bg-gray-100">
+                                                                    {video.thumbnail ? (
+                                                                        <img
+                                                                            src={video.thumbnail}
+                                                                            alt={video.title}
+                                                                            className="w-full h-full object-cover"
+                                                                            referrerPolicy="no-referrer"
+                                                                        />
+                                                                    ) : (
+                                                                        <div className="w-full h-full flex items-center justify-center bg-gray-100 dark:bg-zinc-700">
+                                                                            <Youtube className="w-6 h-6 text-gray-300" />
+                                                                        </div>
+                                                                    )}
+                                                                    <div className="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-colors" />
+                                                                </div>
+                                                                <div className="flex-1 min-w-0 flex flex-col justify-center">
+                                                                    <h5 className="text-xs font-semibold text-gray-800 dark:text-gray-200 line-clamp-2 leading-tight group-hover:text-red-500 transition-colors">
+                                                                        {video.title}
+                                                                    </h5>
+                                                                    <div className="flex items-center gap-1 mt-1">
+                                                                        <span className="text-[10px] text-gray-400 bg-gray-50 dark:bg-zinc-700/50 px-1.5 py-0.5 rounded">Watch</span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* SECTION 3: WEB VISUALS */}
                                             {detailedResults.web && detailedResults.web.length > 0 && (
                                                 <div>
                                                     <div className="flex items-center justify-between mb-3 px-1">
@@ -1031,12 +1059,16 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                                                 onClick={() => {
                                                                     if (editor) {
                                                                         editor.chain().focus().setImage({ src: img.url }).run();
-                                                                        // toast.success("Image added to notes");
                                                                     }
                                                                 }}
                                                                 className="relative rounded-lg overflow-hidden cursor-pointer group shadow-sm hover:shadow-md transition-all border border-gray-100 dark:border-zinc-800 h-24 sm:h-20"
                                                             >
-                                                                <img src={img.url} alt={img.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                                                                <img
+                                                                    src={img.url}
+                                                                    alt={img.title}
+                                                                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                                                                    referrerPolicy="no-referrer"
+                                                                />
                                                                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                                                                     <span className="text-[9px] text-white font-medium truncate w-full leading-tight">{img.title}</span>
                                                                 </div>
@@ -1046,43 +1078,7 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                                 </div>
                                             )}
 
-                                            {/* SECTION 2.5: VIDEOS (New) */}
-                                            {detailedResults.videos && detailedResults.videos.length > 0 && (
-                                                <div>
-                                                    <div className="flex items-center justify-between mb-3 px-1">
-                                                        <h4 className="text-xs font-bold text-red-500 uppercase tracking-widest flex items-center gap-2">
-                                                            <Globe className="w-4 h-4" />
-                                                            Videos
-                                                        </h4>
-                                                    </div>
-                                                    <div className="grid grid-cols-1 gap-3">
-                                                        {detailedResults.videos.map((video, i) => (
-                                                            <div
-                                                                key={i}
-                                                                onClick={() => setSelectedVideo({ videoId: video.videoId, title: video.title })}
-                                                                className="flex gap-3 bg-white dark:bg-zinc-800 p-3 rounded-xl border border-gray-100 dark:border-zinc-700/50 shadow-sm hover:shadow-md cursor-pointer group transition-all"
-                                                            >
-                                                                <div className="relative w-32 h-20 rounded-lg overflow-hidden flex-shrink-0 bg-black">
-                                                                    <img src={video.thumbnail} alt={video.title} className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity" />
-                                                                    <div className="absolute inset-0 flex items-center justify-center">
-                                                                        <div className="w-8 h-8 rounded-full bg-black/50 flex items-center justify-center backdrop-blur-sm group-hover:bg-red-600 transition-colors">
-                                                                            <div className="w-0 h-0 border-t-[5px] border-t-transparent border-l-[8px] border-l-white border-b-[5px] border-b-transparent ml-1"></div>
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                                <div className="flex-1 min-w-0 flex flex-col justify-center">
-                                                                    <h5 className="font-bold text-gray-800 dark:text-gray-200 text-sm mb-1 leading-tight line-clamp-2 group-hover:text-red-500 transition-colors">
-                                                                        {video.title}
-                                                                    </h5>
-                                                                    <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1">{video.snippet}</p>
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {/* SECTION 3: WEB INSIGHTS & TOPICS */}
+                                            {/* SECTION 3: WEB INSIGHTS */}
                                             {detailedResults.topics && detailedResults.topics.length > 0 && (
                                                 <div>
                                                     <div className="flex items-center justify-between mb-3 px-1">
@@ -1116,7 +1112,7 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                                 </div>
                                             )}
 
-                                            {/* SECTION 4: NOTES (Personal) */}
+                                            {/* SECTION 4: NOTES */}
                                             {detailedResults.notes.length > 0 && (
                                                 <div>
                                                     <div className="flex items-center justify-between mb-3 px-1">
@@ -1156,6 +1152,11 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                                         {detailedResults.sermons.map((sermon, i) => (
                                                             <div
                                                                 key={i}
+                                                                onClick={() => openVideo({
+                                                                    url: sermon.metadata?.videoUrl || '',
+                                                                    title: sermon.title,
+                                                                    provider: 'youtube'
+                                                                })}
                                                                 className="p-4 bg-white dark:bg-zinc-800 rounded-xl border border-gray-100 dark:border-zinc-700/50 shadow-sm hover:shadow-md hover:border-purple-200 dark:hover:border-purple-700 transition-all cursor-pointer group"
                                                             >
                                                                 <h5 className="font-bold text-gray-800 dark:text-gray-200 text-sm mb-1 group-hover:text-purple-600 transition-colors">
@@ -1215,89 +1216,87 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                         </div>
                                     )}
                                 </div>
-                            )
-                        ) : rightPaneView === 'fellowship' ? (
-                            /* --- FELLOWSHIP VIEW --- */
-                            /* --- FELLOWSHIP VIEW --- */
-                            <FellowshipView
-                                content={collaborationInitialContent || ''}
-                                collaborationId={collaborationId || `fellowship-${tabs.find(t => t.id === activeTabId)?.reference.book}-${tabs.find(t => t.id === activeTabId)?.reference.chapter}`}
-                                userName={tiptapUser.name}
-                                userColor={tiptapUser.color}
-                                onAskAi={handleAskAi}
-                                scrollId={collaborationId || `fellowship-${tabs.find(t => t.id === activeTabId)?.reference.book}-${tabs.find(t => t.id === activeTabId)?.reference.chapter}`}
-                                fallbackId={`fellowship-${tabs.find(t => t.id === activeTabId)?.reference.book}-${tabs.find(t => t.id === activeTabId)?.reference.chapter}`}
-                                onJoinScroll={handleJoinFellowshipScroll}
-                                onEditorReady={setEditor}
-                                debugLabel="Fellowship"
-                            />
-                        ) : (
-                            /* --- PERSONAL NOTES VIEW --- */
-                            /* --- PERSONAL NOTES VIEW --- */
-                            <div className="h-full flex flex-col overflow-hidden">
-                                {/* Toolbar Header */}
-                                <div className="sticky top-0 z-10 bg-white dark:bg-zinc-900 border-b border-gray-100 dark:border-zinc-800 px-4 py-2 flex items-center justify-between shrink-0">
-                                    <div className="flex flex-col gap-0.5 flex-1 mr-4">
-                                        <div className="flex items-center gap-2">
-                                            <Edit3 className="w-4 h-4 text-blue-500 shrink-0" />
-                                            <input
-                                                type="text"
-                                                value={noteTitle}
-                                                onChange={(e) => handleTitleChange(e.target.value)}
-                                                className="bg-transparent border-none p-0 text-base sm:text-sm font-bold text-gray-800 dark:text-white focus:ring-0 w-full placeholder-gray-400"
-                                                placeholder="Note Title..."
-                                            />
+                            ) : rightPaneView === 'fellowship' ? (
+                                /* --- FELLOWSHIP VIEW --- */
+                                <FellowshipView
+                                    content={collaborationInitialContent || ''}
+                                    collaborationId={collaborationId || `fellowship-${tabs.find(t => t.id === activeTabId)?.reference.book}-${tabs.find(t => t.id === activeTabId)?.reference.chapter}`}
+                                    userName={tiptapUser.name}
+                                    userColor={tiptapUser.color}
+                                    onAskAi={handleAskAi}
+                                    scrollId={collaborationId || `fellowship-${tabs.find(t => t.id === activeTabId)?.reference.book}-${tabs.find(t => t.id === activeTabId)?.reference.chapter}`}
+                                    fallbackId={`fellowship-${tabs.find(t => t.id === activeTabId)?.reference.book}-${tabs.find(t => t.id === activeTabId)?.reference.chapter}`}
+                                    onJoinScroll={handleJoinFellowshipScroll}
+                                    onEditorReady={setEditor}
+                                    debugLabel="Fellowship"
+                                />
+                            ) : (
+                                /* --- PERSONAL NOTES VIEW --- */
+                                <div className="h-full flex flex-col overflow-hidden">
+                                    {/* Toolbar Header */}
+                                    <div className="sticky top-0 z-10 bg-white dark:bg-zinc-900 border-b border-gray-100 dark:border-zinc-800 px-4 py-2 flex items-center justify-between shrink-0">
+                                        <div className="flex flex-col gap-0.5 flex-1 mr-4">
+                                            <div className="flex items-center gap-2">
+                                                <Edit3 className="w-4 h-4 text-blue-500 shrink-0" />
+                                                <input
+                                                    type="text"
+                                                    value={noteTitle}
+                                                    onChange={(e) => handleTitleChange(e.target.value)}
+                                                    className="bg-transparent border-none p-0 text-base sm:text-sm font-bold text-gray-800 dark:text-white focus:ring-0 w-full placeholder-gray-400"
+                                                    placeholder="Note Title..."
+                                                />
+                                            </div>
+                                            {savingNotes && <span className="text-[10px] text-green-600 animate-pulse font-medium ml-6">Saving...</span>}
                                         </div>
-                                        {savingNotes && <span className="text-[10px] text-green-600 animate-pulse font-medium ml-6">Saving...</span>}
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={handleOpenShareModal}
+                                                className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-indigo-500"
+                                                title="Share Note"
+                                            >
+                                                <Share2 className="w-4 h-4" />
+                                            </button>
+                                            <div className="w-px h-4 bg-gray-200 dark:bg-zinc-800 mx-1" />
+                                            {/* Toggle Full Screen for Notes */}
+                                            <button
+                                                onClick={toggleNotesMaximize}
+                                                className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors text-gray-500 hover:text-gray-700"
+                                                title={isNotesMaximized ? "Restore View" : "Full Screen Notes"}
+                                            >
+                                                {isNotesMaximized ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                                            </button>
+                                        </div>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        <button
-                                            onClick={handleOpenShareModal}
-                                            className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-indigo-500"
-                                            title="Share Note"
-                                        >
-                                            <Share2 className="w-4 h-4" />
-                                        </button>
-                                        <div className="w-px h-4 bg-gray-200 dark:bg-zinc-800 mx-1" />
-                                        {/* Toggle Full Screen for Notes */}
-                                        <button
-                                            onClick={toggleNotesMaximize}
-                                            className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors text-gray-500 hover:text-gray-700"
-                                            title={isNotesMaximized ? "Restore View" : "Full Screen Notes"}
-                                        >
-                                            {isNotesMaximized ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-                                        </button>
+                                    <div
+                                        className="h-full overflow-y-auto px-4 pt-4 pb-48 custom-scrollbar cursor-text"
+                                        onClick={() => {
+                                            // Safely focus editor if available
+                                            if (editor && !editor.isDestroyed) {
+                                                editor.chain().focus().run();
+                                            }
+                                        }}
+                                    >
+                                        <TiptapEditor
+                                            content={notes}
+                                            onChange={handleNoteChange}
+                                            placeholder="Write your study notes here..."
+                                            className="min-h-full focus:outline-none max-w-none prose prose-sm dark:prose-invert text-gray-900 dark:text-gray-100"
+                                            onEditorReady={setEditor}
+                                            onAskAi={handleAskAi}
+                                            onLinkClick={handleLinkClick}
+                                            showToolbar={true}
+                                            collaborationId={undefined}
+                                            user={tiptapUser}
+                                            authReady={!!user}
+                                            debugLabel="PersonalNotes"
+                                        />
                                     </div>
                                 </div>
-                                <div
-                                    className="h-full overflow-y-auto px-4 pt-4 pb-48 custom-scrollbar cursor-text"
-                                    onClick={() => {
-                                        // Safely focus editor if available
-                                        if (editor && !editor.isDestroyed) {
-                                            editor.chain().focus().run();
-                                        }
-                                    }}
-                                >
-                                    <TiptapEditor
-                                        content={notes}
-                                        onChange={handleNoteChange}
-                                        placeholder="Write your study notes here..."
-                                        className="min-h-full focus:outline-none max-w-none prose prose-sm dark:prose-invert text-gray-900 dark:text-gray-100"
-                                        onEditorReady={setEditor}
-                                        onAskAi={handleAskAi}
-                                        onLinkClick={handleLinkClick}
-                                        showToolbar={true} // Use internal sticky toolbar
-                                        // Ensure collaborationId is undefined for personal notes
-                                        collaborationId={undefined}
-                                        user={tiptapUser}
-                                        authReady={!!user} // Pass auth state for local editor too (good practice)
-                                        debugLabel="PersonalNotes"
-                                    />
-                                </div>
-                            </div>
-                        )}
-                    </div >
-                </div >
+                            )}
+
+                        </div>
+                    </div>
+                </div>
 
                 <BibleAiChatModal
                     isOpen={isAiChatOpen}
@@ -1358,7 +1357,7 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                     }}
                 />
 
-            </motion.div >
-        </div >
+            </motion.div>
+        </div>
     );
 }

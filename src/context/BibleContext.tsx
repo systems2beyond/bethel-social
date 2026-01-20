@@ -13,6 +13,13 @@ export interface BibleReference {
     endVerse?: number;
 }
 
+export interface VideoData {
+    url: string;
+    title?: string;
+    provider?: 'youtube' | 'native';
+    poster?: string;
+}
+
 export interface TabGroup {
     id: string;
     name: string;
@@ -39,6 +46,10 @@ export interface BibleContextType {
     closeStudy: () => void;
     setReference: (ref: BibleReference) => void;
     setVersion: (version: string) => void;
+    // Video Context
+    activeVideo: VideoData | null;
+    openVideo: (video: VideoData) => void;
+    closeVideo: () => void;
     onInsertNote: ((text: string) => void) | null;
     registerInsertHandler: (handler: ((text: string) => void) | null) => void;
     // Tabs
@@ -109,6 +120,9 @@ export function BibleProvider({ children }: { children: ReactNode }) {
 
     const [collaborationInitialContent, setCollaborationInitialContent] = useState<string | null>(null);
     const [noteTitle, setNoteTitle] = useState('General Bible Study');
+
+    // Video State
+    const [activeVideo, setActiveVideo] = useState<VideoData | null>(null);
 
     const openBible = useCallback((ref?: BibleReference, newTab = false) => {
         if (newTab) {
@@ -265,7 +279,17 @@ export function BibleProvider({ children }: { children: ReactNode }) {
         setCollaborationId(null);
         setCollaborationInitialContent(null);
         setNoteTitle('General Bible Study');
+        setActiveVideo(null);
     }, [setCollaborationId]);
+
+    const openVideo = useCallback((video: VideoData) => {
+        setActiveVideo(video);
+        setIsStudyOpen(true);
+    }, []);
+
+    const closeVideo = useCallback(() => {
+        setActiveVideo(null);
+    }, []);
 
     const openNote = useCallback((noteId: string, title?: string) => {
         setActiveNoteId(noteId);
@@ -350,6 +374,9 @@ export function BibleProvider({ children }: { children: ReactNode }) {
         closeStudy,
         setReference,
         setVersion,
+        activeVideo,
+        openVideo,
+        closeVideo,
         onInsertNote,
         registerInsertHandler,
         tabs,
@@ -378,7 +405,7 @@ export function BibleProvider({ children }: { children: ReactNode }) {
         addTab, closeTab, setActiveTab, searchVersion, setSearchVersion, activeNoteId,
         collaborationId, setCollaborationId, collaborationInitialContent, setCollaborationInitialContent,
         noteTitle, openNote, openCollaboration, groups, createTabGroup, toggleGroupCollapse, closeGroup,
-        openMultipleTabs
+        openMultipleTabs, activeVideo, openVideo, closeVideo
     ]);
 
     return (

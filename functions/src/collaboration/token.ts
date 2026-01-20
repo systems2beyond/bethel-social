@@ -8,7 +8,7 @@ if (admin.apps.length === 0) {
     admin.initializeApp();
 }
 
-const TIPTAP_SECRET = "5ad2019ebad112d0b39283f414860b344c29d429c5decaf1c947c2351aa7f5dc";
+const APP_SECRET = "2e639665f80b85290236a2731174668615b13aa42dfd08c6fa11277a94943c2c";
 
 export const generateTiptapToken = functions.https.onCall(async (dataOrRequest: any, context: any) => {
     // ADAPTER: Detect if we are receiving a v2 CallableRequest (common in Gen 2 functions)
@@ -47,20 +47,23 @@ export const generateTiptapToken = functions.https.onCall(async (dataOrRequest: 
         throw new functions.https.HttpsError('unauthenticated', `The function must be called while authenticated. Debug: ${JSON.stringify(debugInfo)}`);
     }
 
+    // Fetch user details for the token
+    const user = await admin.auth().getUser(uid);
+
     try {
-        // 2. Sign the JWT for Tiptap
+        // 2. Sign the JWT for Hocuspocus
+        // We use the same structure but signed with OUR secret.
         const documentName = data.documentName || "*";
 
         const token = jwt.sign({
             allowedDocumentNames: [documentName],
-            iss: "8mze8q2m", // App ID
-        }, TIPTAP_SECRET, {
+            uid: uid,
+            name: user.displayName || 'User',
+            iss: "bethel-social", // New Issuer
+        }, APP_SECRET, {
             expiresIn: "1h", // Rotate tokens every hour
         });
 
-        // 3. Return the token. 
-        // Note: onCall AUTOMATICALLY wraps this in { "result": ... } or { "data": ... } 
-        // The client SDK unwraps it to result.data.
         return { token };
 
     } catch (error) {

@@ -5,9 +5,10 @@ import { useTheme } from 'next-themes';
 import { useAuth } from '@/context/AuthContext';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { Settings as SettingsIcon, BookOpen, User, Shield, LogOut } from 'lucide-react';
+import { Settings as SettingsIcon, BookOpen, User, Shield, LogOut, Bell } from 'lucide-react';
 import BibleSettings from '@/components/Settings/BibleSettings';
 import ProfileSettings from '@/components/Settings/ProfileSettings';
+import NotificationSettings from '@/components/Settings/NotificationSettings';
 
 export default function SettingsPage() {
     const { user, userData, loading, signOut } = useAuth();
@@ -81,6 +82,15 @@ export default function SettingsPage() {
                             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Profile</h2>
                         </div>
                         <ProfileSettings />
+                    </section>
+
+                    {/* Notification Settings */}
+                    <section>
+                        <div className="flex items-center gap-2 mb-4">
+                            <Bell className="w-5 h-5 text-gray-400" />
+                            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Email Notifications</h2>
+                        </div>
+                        <NotificationSettings />
                     </section>
 
                     {/* Bible Settings */}

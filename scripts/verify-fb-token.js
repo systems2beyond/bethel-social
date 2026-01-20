@@ -2,7 +2,12 @@ const axios = require('axios');
 
 async function testToken() {
     const PAGE_ID = '120720411275822';
-    const ACCESS_TOKEN = 'EAAYtDq4SmQcBQZAz3ZA4WhleosVPRJyiwvk639mMsJNjtMzBJXfAnLnxcyUpxIKXIyN63FjSKI6aKlXeeINBOkB5YuO5uCgGY5SNFJDgOEDWOYZC0uTyMSylqm2Kyr3ZBZBWn34mO4TvNJ54N5hZCc6pLC41j1QsOZBMXrUhvfIhObvPZCbB9LrxRmggzZCsaUOSGe4Va6NtlJD39XyATDUZAdenBqjbuPgRpVAccjivTBx9XZB3WfWtKSmXAZDZD';
+    const ACCESS_TOKEN = 'EAAYtDq4SmQcBQfsPaJLmh4SZAUuZAxBBpQ8lZCysZCnZAHrfutEJmlIWumTw0H9SZAWAWvbG8us8Bj7etMCJxb7pegcrbIvkWtBtItski1X0uQlEQ5xEskqTPBm1NtWuZBLQqNi5MItatERaUKR4mc9dH2Y6KWu91JWtp9Cuubev9t65bPCwsfNVwtSU6MMLDDSR3FoJZBxWr9ZAccJDh0ZBF9gzEZD';
+
+    console.log(`Token Length: ${ACCESS_TOKEN.length}`);
+    console.log(`First 10 chars: ${ACCESS_TOKEN.substring(0, 10)}`);
+    console.log(`Last 10 chars: ${ACCESS_TOKEN.substring(ACCESS_TOKEN.length - 10)}`);
+    console.log(`Char codes of first 5: ${ACCESS_TOKEN.split('').slice(0, 5).map(c => c.charCodeAt(0)).join(', ')}`);
 
     console.log(`Testing token for Page ID: ${PAGE_ID}`);
 
