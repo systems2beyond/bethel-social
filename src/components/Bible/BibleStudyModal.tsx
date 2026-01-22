@@ -20,6 +20,7 @@ import AiLessonCreator from './AiLessonCreator';
 import CreateMeetingModal from '../Meeting/CreateMeetingModal';
 import FellowshipView from './FellowshipView';
 import ShareScrollModal from './ShareScrollModal';
+import { LocalActivitySidebar } from './LocalActivitySidebar';
 
 interface BibleStudyModalProps {
     onClose: () => void;
@@ -143,6 +144,10 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
     const [isSearching, setIsSearching] = useState(false);
     const [isIndexing, setIsIndexing] = useState(false); // New state for loading index
     const [rightPaneView, setRightPaneView] = useState<'notes' | 'fellowship' | 'search'>('notes');
+
+    useEffect(() => {
+        console.log('[BibleStudyModal] rightPaneView changed:', rightPaneView);
+    }, [rightPaneView]);
 
     const showResults = rightPaneView === 'search'; // Derived for backward compat in render
 
@@ -1297,6 +1302,21 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                         </div>
                     </div>
                 </div>
+
+                {/* Local Activity Sidebar - Visible in Fellowship or Notes views */}
+                {(rightPaneView === 'fellowship' || rightPaneView === 'notes') && (
+                    <LocalActivitySidebar
+                        onJoinScroll={(id: string, title?: string) => {
+                            console.log('[BibleStudyModal] Joining local scroll:', id);
+                            setCollaborationId(id);
+                            // We don't have initial content for someone else's scroll, 
+                            // Tiptap/Yjs will fetch it
+                            setCollaborationInitialContent('');
+                            setRightPaneView('fellowship');
+                        }}
+                        currentScrollId={collaborationId || ''}
+                    />
+                )}
 
                 <BibleAiChatModal
                     isOpen={isAiChatOpen}

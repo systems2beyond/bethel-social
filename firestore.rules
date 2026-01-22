@@ -147,12 +147,24 @@ service cloud.firestore {
       }
     }
 
+
     // Invitations (Shared Scrolls)
     match /invitations/{invitationId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null && request.resource.data.fromUser.uid == request.auth.uid;
       allow update, delete: if request.auth != null && (resource.data.toUserId == request.auth.uid || resource.data.fromUser.uid == request.auth.uid);
     }
+
+    // Notifications
+    match /notifications/{notificationId} {
+        // Any authenticated user can create notifications (to send to others)
+        allow create: if request.auth != null;
+        // Only recipient can read their notifications
+        allow read: if request.auth != null && resource.data.toUserId == request.auth.uid;
+        // Only recipient can update (mark read) or delete their notifications
+        allow update, delete: if request.auth != null && resource.data.toUserId == request.auth.uid;
+    }
+
 
     // Donations
     match /tickets/{ticketId} {

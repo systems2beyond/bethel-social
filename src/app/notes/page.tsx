@@ -1,16 +1,17 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { db } from '@/lib/firebase';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { Plus, Trash2, Save, MessageSquare, Maximize2, Minimize2, ChevronLeft, Search, FileText } from 'lucide-react';
+import { Plus, Trash2, Save, MessageSquare, Maximize2, Minimize2, ChevronLeft, Search, FileText, Users } from 'lucide-react';
 import { useChat } from '@/context/ChatContext';
 import { useBible } from '@/context/BibleContext';
 import TiptapEditor, { TiptapEditorRef } from '@/components/Editor/TiptapEditor';
 import AiNotesModal from '@/components/Sermons/AiNotesModal';
 import { useMediaQuery } from '@/lib/hooks/useMediaQuery';
 import { cn } from '@/lib/utils';
+
 
 interface Note {
     id: string;
@@ -31,6 +32,8 @@ export default function NotesPage() {
     const [chats, setChats] = useState<Record<string, any[]>>({});
     const [isMaximized, setIsMaximized] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+
+
 
     // Responsive State
     const isMobile = useMediaQuery('(max-width: 768px)');
@@ -236,6 +239,9 @@ export default function NotesPage() {
         }
     };
 
+    // ============== COLLABORATION HANDLERS ==============
+
+
     const filteredNotes = notes.filter(note =>
         note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         note.content.toLowerCase().includes(searchQuery.toLowerCase())
@@ -381,6 +387,7 @@ export default function NotesPage() {
                                     <MessageSquare className="w-4 h-4" />
                                     <span className="hidden sm:inline">Ask AI</span>
                                 </button>
+
                             </div>
                         </div>
 
@@ -422,6 +429,7 @@ export default function NotesPage() {
                                     className="min-h-[calc(100vh-200px)]"
                                     onAskAi={handleOpenAiNotes}
                                     onLinkClick={handleLinkClick}
+
                                 />
                             </div>
                         </div>
@@ -438,6 +446,8 @@ export default function NotesPage() {
                     </div>
                 )}
             </div>
+
+
 
             <AiNotesModal
                 isOpen={isAiNotesModalOpen}

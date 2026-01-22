@@ -2,6 +2,7 @@
 
 import React, { useEffect, forwardRef, useImperativeHandle, useRef, useMemo } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
+console.log('[Tiptap] TiptapEditor.tsx - File evaluated');
 import { BubbleMenu, FloatingMenu } from '@tiptap/react/menus';
 import ExtensionBubbleMenu from '@tiptap/extension-bubble-menu';
 import ExtensionFloatingMenu from '@tiptap/extension-floating-menu';
@@ -12,10 +13,10 @@ import Highlight from '@tiptap/extension-highlight';
 import DragHandle from 'tiptap-extension-global-drag-handle';
 import Underline from '@tiptap/extension-underline';
 import Link from '@tiptap/extension-link';
-import { Bold, Italic, Underline as UnderlineIcon, List, ListOrdered, Heading1, Heading2, Quote, Highlighter, Sparkles, FileText, Sticker, Maximize2, Minimize2 } from 'lucide-react';
+import { Bold, Italic, Underline as UnderlineIcon, List, ListOrdered, Heading1, Heading2, Quote, Highlighter, Sparkles, FileText, Sticker, Maximize2, Minimize2, MessageSquare } from 'lucide-react';
 import { StickerPopover } from './StickerPopover';
 import Collaboration from '@tiptap/extension-collaboration';
-import CollaborationCursor from '@tiptap/extension-collaboration-cursor';
+import { CustomCollaborationCursor } from './CustomCollaborationCursor';
 import * as Y from 'yjs';
 import { HocuspocusProvider } from '@hocuspocus/provider';
 import { cn } from '@/lib/utils';
@@ -31,9 +32,16 @@ interface TiptapEditorProps {
     onLinkClick?: (href: string) => void;
     authReady?: boolean;
     collaborationId?: string;
-    user?: { name: string; color: string; };
-    onAwarenessUpdate?: (users: { name: string; color: string }[]) => void;
+    user?: { name: string; color: string; uid?: string };
+    onAwarenessUpdate?: (users: { name: string; color: string; uid?: string }[]) => void;
     debugLabel?: string;
+
+    // NEW: Optional collaboration features (all backward compatible)
+    enableComments?: boolean;
+    onSelectionChange?: (selection: { from: number; to: number; text: string } | null) => void;
+    onYDocReady?: (yDoc: Y.Doc) => void;
+    onAddComment?: (snapshot?: { from: number; to: number; text: string }) => void;
+    onStatusChange?: (status: 'connected' | 'connecting' | 'disconnected') => void;
 }
 
 // ... (skipping unchanged parts) ...
@@ -64,6 +72,7 @@ export const EditorToolbar = ({ editor, className = '', onTogglePaperStyle, isPa
     return (
         <div className={cn("flex items-center justify-center gap-1 border-b border-gray-100 dark:border-zinc-800 pb-2 mb-2 bg-white dark:bg-zinc-950 shadow-sm", className)}>
             <button
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => editor.chain().focus().toggleBold().run()}
                 className={`p-1.5 rounded hover:bg-gray-100 dark:hover:bg-zinc-800 ${editor.isActive('bold') ? 'bg-gray-100 dark:bg-zinc-800 text-blue-600' : 'text-gray-500'}`}
                 title="Bold"
@@ -71,6 +80,7 @@ export const EditorToolbar = ({ editor, className = '', onTogglePaperStyle, isPa
                 <Bold className="w-4 h-4" />
             </button>
             <button
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => editor.chain().focus().toggleItalic().run()}
                 className={`p-1.5 rounded hover:bg-gray-100 dark:hover:bg-zinc-800 ${editor.isActive('italic') ? 'bg-gray-100 dark:bg-zinc-800 text-blue-600' : 'text-gray-500'}`}
                 title="Italic"
@@ -78,6 +88,7 @@ export const EditorToolbar = ({ editor, className = '', onTogglePaperStyle, isPa
                 <Italic className="w-4 h-4" />
             </button>
             <button
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => editor.chain().focus().toggleUnderline().run()}
                 className={`p-1.5 rounded hover:bg-gray-100 dark:hover:bg-zinc-800 ${editor.isActive('underline') ? 'bg-gray-100 dark:bg-zinc-800 text-blue-600' : 'text-gray-500'}`}
                 title="Underline"
@@ -85,6 +96,7 @@ export const EditorToolbar = ({ editor, className = '', onTogglePaperStyle, isPa
                 <UnderlineIcon className="w-4 h-4" />
             </button>
             <button
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => editor.chain().focus().toggleHighlight().run()}
                 className={`p-1.5 rounded hover:bg-gray-100 dark:hover:bg-zinc-800 ${editor.isActive('highlight') ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400' : 'text-gray-500'}`}
                 title="Highlight"
@@ -93,6 +105,7 @@ export const EditorToolbar = ({ editor, className = '', onTogglePaperStyle, isPa
             </button>
             <div className="w-px h-4 bg-gray-200 dark:bg-zinc-700 mx-1" />
             <button
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
                 className={`p-1.5 rounded hover:bg-gray-100 dark:hover:bg-zinc-800 ${editor.isActive('heading', { level: 1 }) ? 'bg-gray-100 dark:bg-zinc-800 text-blue-600' : 'text-gray-500'}`}
                 title="Heading 1"
@@ -100,6 +113,7 @@ export const EditorToolbar = ({ editor, className = '', onTogglePaperStyle, isPa
                 <Heading1 className="w-4 h-4" />
             </button>
             <button
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
                 className={`p-1.5 rounded hover:bg-gray-100 dark:hover:bg-zinc-800 ${editor.isActive('heading', { level: 2 }) ? 'bg-gray-100 dark:bg-zinc-800 text-blue-600' : 'text-gray-500'}`}
                 title="Heading 2"
@@ -108,6 +122,7 @@ export const EditorToolbar = ({ editor, className = '', onTogglePaperStyle, isPa
             </button>
             <div className="w-px h-4 bg-gray-200 dark:bg-zinc-700 mx-1" />
             <button
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => editor.chain().focus().toggleBulletList().run()}
                 className={`p-1.5 rounded hover:bg-gray-100 dark:hover:bg-zinc-800 ${editor.isActive('bulletList') ? 'bg-gray-100 dark:bg-zinc-800 text-blue-600' : 'text-gray-500'}`}
                 title="Bullet List"
@@ -115,6 +130,7 @@ export const EditorToolbar = ({ editor, className = '', onTogglePaperStyle, isPa
                 <List className="w-4 h-4" />
             </button>
             <button
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => editor.chain().focus().toggleOrderedList().run()}
                 className={`p-1.5 rounded hover:bg-gray-100 dark:hover:bg-zinc-800 ${editor.isActive('orderedList') ? 'bg-gray-100 dark:bg-zinc-800 text-blue-600' : 'text-gray-500'}`}
                 title="Ordered List"
@@ -122,6 +138,7 @@ export const EditorToolbar = ({ editor, className = '', onTogglePaperStyle, isPa
                 <ListOrdered className="w-4 h-4" />
             </button>
             <button
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => editor.chain().focus().toggleBlockquote().run()}
                 className={`p-1.5 rounded hover:bg-gray-100 dark:hover:bg-zinc-800 ${editor.isActive('blockquote') ? 'bg-gray-100 dark:bg-zinc-800 text-blue-600' : 'text-gray-500'}`}
                 title="Blockquote"
@@ -200,7 +217,7 @@ const CustomLink = Link.extend({
     },
 });
 
-const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, onChange, placeholder, className = '', onAskAi, showToolbar = true, onEditorReady, onLinkClick, authReady = true, collaborationId, user, onAwarenessUpdate, debugLabel }, ref) => {
+const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, onChange, placeholder, className = '', onAskAi, showToolbar = true, onEditorReady, onLinkClick, authReady = true, collaborationId, user, onAwarenessUpdate, debugLabel, enableComments, onSelectionChange, onYDocReady, onAddComment, onStatusChange }, ref) => {
     const onAskAiRef = React.useRef(onAskAi);
     const onLinkClickRef = React.useRef(onLinkClick);
     const [isPaperStyle, setIsPaperStyle] = React.useState(false);
@@ -215,13 +232,42 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
         return collaborationId ? new Y.Doc() : null;
     }, [collaborationId]);
 
+    // STABILITY FIX: Memoize user object to prevent infinite re-connection loops if parent passes new object reference
+    const stableUser = React.useMemo(() => {
+        return user ? { name: user.name, color: user.color, uid: user.uid } : null;
+    }, [user?.name, user?.color, user?.uid]);
+
     const [provider, setProvider] = React.useState<any>(null);
+    // TIMING FIX: Track when provider is FULLY ready (connected + awareness initialized)
+    const [isProviderReady, setIsProviderReady] = React.useState(false);
+
+    // NEW: Notify parent when yDoc is ready for collaboration features (comments, suggestions)
+    useEffect(() => {
+        if (yDoc && onYDocReady && isProviderReady) {
+            onYDocReady(yDoc);
+        }
+    }, [yDoc, onYDocReady, isProviderReady]);
+
+    // DEBUG: Monitor extension loading conditions
+    useEffect(() => {
+        if (collaborationId) {
+            console.log(`[Tiptap${debugLabel ? `-${debugLabel}` : ''}] Extension Condition Check:`, {
+                collaborationId,
+                isProviderReady,
+                hasProvider: !!provider,
+                hasAwareness: !!provider?.awareness,
+                hasUser: !!stableUser,
+                userName: stableUser?.name,
+                fullCondition: !!(collaborationId && isProviderReady && provider?.awareness && stableUser)
+            });
+        }
+    }, [collaborationId, isProviderReady, provider, stableUser, debugLabel]);
 
     // Manage Provider lifecycle
     useEffect(() => {
         // Strict Auth Check: Must have doc, ID, AND user, AND authReady to generate token
-        if (!yDoc || !collaborationId || !user || !authReady) {
-            console.log(`[Tiptap${debugLabel ? `-${debugLabel}` : ''}] initProvider skipped:`, { hasYDoc: !!yDoc, hasId: !!collaborationId, id: collaborationId, hasUser: !!user, authReady });
+        if (!yDoc || !collaborationId || !stableUser || !authReady) {
+            console.log(`[Tiptap${debugLabel ? `-${debugLabel}` : ''}] initProvider skipped:`, { hasYDoc: !!yDoc, hasId: !!collaborationId, id: collaborationId, hasUser: !!stableUser, authReady });
             return;
         }
 
@@ -262,9 +308,12 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
 
                 if (!isMounted) return;
 
-                console.log('[Tiptap] Token generated successfully. Initializing HocuspocusProvider...');
+                console.log(`[Tiptap${debugLabel ? `-${debugLabel}` : ''}] initProvider: Attempting to connect to:`, {
+                    url: 'wss://bethel-collab-503876827928.us-central1.run.app',
+                    name: collaborationId,
+                    hasToken: !!token
+                });
 
-                // 2. Connect with Token using HocuspocusProvider
                 // 2. Connect with Token using HocuspocusProvider
                 // UPDATED: Using Self-Hosted Collaboration Server
                 const newProvider = new HocuspocusProvider({
@@ -272,9 +321,49 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
                     name: collaborationId,
                     token: token,
                     document: yDoc,
+                    onConnect: () => {
+                        const cid = newProvider.awareness?.clientID;
+                        console.log(`[Tiptap${debugLabel ? `-${debugLabel}` : ''}] Provider CONNECTED. ClientID: ${cid}`);
+                        setIsProviderReady(true);
+                        if (onStatusChange) onStatusChange('connected');
+                    },
+                    onDisconnect: (data) => {
+                        console.warn(`[Tiptap${debugLabel ? `-${debugLabel}` : ''}] Provider DISCONNECTED:`, data);
+                        setIsProviderReady(false);
+                        if (onStatusChange) onStatusChange('disconnected');
+                    },
+                    onStatus: ({ status }) => {
+                        console.log(`[Tiptap${debugLabel ? `-${debugLabel}` : ''}] Provider status changed:`, status);
+                    }
                 });
 
-                console.log('[Tiptap] HocuspocusProvider initialized. Setting up listeners...');
+                // CRITICAL FIX: CollaborationCursor accesses `provider.awareness.doc` internally.
+                // The Awareness class from y-protocols stores the Y.Doc reference.
+                // If HocuspocusProvider doesn't properly initialize this, we must patch it.
+                if (newProvider.awareness && !newProvider.awareness.doc) {
+                    console.log(`[Tiptap${debugLabel ? `-${debugLabel}` : ''}] Patching awareness.doc (was undefined)`);
+                    (newProvider.awareness as any).doc = yDoc;
+                }
+
+                // ALSO: Alias provider.doc for compatibility with older code paths
+                try {
+                    Object.defineProperty(newProvider, 'doc', {
+                        get: () => yDoc,
+                        configurable: true,
+                        enumerable: true
+                    });
+                } catch (e) {
+                    console.warn('[Tiptap] Failed to define .doc property on provider:', e);
+                    (newProvider as any).doc = yDoc;
+                }
+
+                console.log('[Tiptap] HocuspocusProvider initialized. Inspecting provider:', {
+                    hasDocument: !!newProvider.document,
+                    hasDocAlias: !!(newProvider as any).doc,
+                    hasAwarenessDoc: !!(newProvider.awareness?.doc),
+                    awareness: !!newProvider.awareness,
+                    providerKeys: Object.keys(newProvider)
+                });
 
                 // Add 5s timeout for connection fallback
                 // Hocuspocus uses 'sync' event, but we can also check internal state or assume not synced if timeout hits
@@ -316,14 +405,24 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
                     newProvider.sendStateless(JSON.stringify({ type: 'initial-sync-request' })); // Just a ping
                 });
 
+                // TIMING FIX: Mark provider ready ONLY after connection is established
+                // This ensures awareness.doc is fully initialized before CollaborationCursor uses it
+                newProvider.on('connect', () => {
+                    console.log(`[Tiptap${debugLabel ? `-${debugLabel}` : ''}] Provider CONNECTED. Setting isProviderReady=true`);
+                    if (isMounted) {
+                        setIsProviderReady(true);
+                    }
+                });
+
                 // Hocuspocus uses 'synced' for the event
                 newProvider.on('synced', handleSynced);
 
                 // Add user awareness
-                if (user && newProvider.awareness) {
+                if (stableUser && newProvider.awareness) {
                     newProvider.awareness.setLocalStateField('user', {
-                        name: user.name,
-                        color: user.color,
+                        name: stableUser.name,
+                        color: stableUser.color,
+                        uid: stableUser.uid
                     });
                 }
 
@@ -334,24 +433,24 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
                 const handleAwarenessUpdate = () => {
                     // Throttling updates to max once per 500ms or using rAF to prevent render thrashing
                     const now = Date.now();
-                    if (now - lastAwarenessUpdate > 1000) {
-                        lastAwarenessUpdate = now;
+                    const processUpdate = () => {
                         if (!newProvider.awareness) return;
                         const states = newProvider.awareness.getStates();
                         const users = Array.from(states.values()).map((s: any) => s.user).filter(Boolean);
+                        console.log(`[Tiptap${debugLabel ? `-${debugLabel}` : ''}] Awareness Update. Users count: ${users.length}`, users);
                         if (onAwarenessUpdate) {
                             onAwarenessUpdate(users);
                         }
+                    };
+
+                    if (now - lastAwarenessUpdate > 1000) {
+                        lastAwarenessUpdate = now;
+                        processUpdate();
                     } else {
                         // Schedule a trailing update
                         cancelAnimationFrame(animationFrameId);
                         animationFrameId = requestAnimationFrame(() => {
-                            if (!newProvider.awareness) return;
-                            const states = newProvider.awareness.getStates();
-                            const users = Array.from(states.values()).map((s: any) => s.user).filter(Boolean);
-                            if (onAwarenessUpdate) {
-                                onAwarenessUpdate(users);
-                            }
+                            processUpdate();
                         });
                     }
                 };
@@ -375,25 +474,39 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
             }
         };
 
+        const onVisibilityChange = () => {
+            if (document.visibilityState === 'visible' && !activeProvider && collaborationId && authReady) {
+                console.log('[Tiptap] Tab visible, reconnecting...');
+                initProvider();
+            }
+        };
+
+        document.addEventListener('visibilitychange', onVisibilityChange);
         initProvider();
 
         return () => {
             console.log('[Tiptap] Destroying provider');
             isMounted = false;
+            document.removeEventListener('visibilitychange', onVisibilityChange);
 
             if (connectionTimeout) clearTimeout(connectionTimeout);
 
             if (activeProvider) {
+                activeProvider.disconnect();
                 activeProvider.destroy();
             }
             setProvider(null);
+            setIsProviderReady(false); // Reset ready state on cleanup
         }
-    }, [yDoc, collaborationId, user, authReady]);
+    }, [yDoc, collaborationId, stableUser, authReady]);
 
 
 
-    const editor = useEditor({
-        extensions: [
+    // Extension Configuration with Debug Logging
+    const extensions = useMemo(() => {
+        console.log(`[Tiptap${debugLabel ? `-${debugLabel}` : ''}] useMemo: Evaluating extensions. CollabId: ${collaborationId}, Provider: ${!!provider}, User: ${!!stableUser}, yDoc: ${!!yDoc}`);
+
+        const exts = [
             StarterKit.configure({
                 history: collaborationId ? false : true, // Explicitly disable history for collab
                 codeBlock: false, // We might want our own code block later
@@ -409,27 +522,46 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
             CustomLink.configure({
                 openOnClick: false,
             }),
-            // Conditionally add collaboration extensions
-            ...(collaborationId && yDoc ? [
-                Collaboration.configure({
-                    document: yDoc,
-                }),
-            ] : []),
-            // Re-enabled cursor with safety check
-            // Re-enabled cursor with safety check
-            // ...(collaborationId && provider ? [
-            //     CollaborationCursor.configure({
-            //         provider: provider,
-            //         user: user || { name: 'Anonymous', color: '#f783ac' },
-            //     }),
-            // ] : []),
             ExtensionBubbleMenu.configure({
                 pluginKey: 'bubbleMenu',
             }),
             ExtensionFloatingMenu.configure({
                 pluginKey: 'floatingMenu',
             }),
-        ],
+        ];
+
+        // Collaboration Extensions
+        if (collaborationId && yDoc) {
+            console.log(`[Tiptap${debugLabel ? `-${debugLabel}` : ''}] Enabling Collaboration Extension.`);
+            exts.push(Collaboration.configure({
+                document: yDoc,
+            }));
+
+            // Cursor Logic with Granular Logging
+            if (provider && stableUser) {
+                console.log(`[Tiptap${debugLabel ? `-${debugLabel}` : ''}] Adding CustomCollaborationCursor! Provider: YES, User: YES`);
+                exts.push(CustomCollaborationCursor.configure({
+                    awareness: provider.awareness,
+                    user: stableUser,
+                }));
+            } else {
+                console.log(`[Tiptap${debugLabel ? `-${debugLabel}` : ''}] Skipping CustomCollaborationCursor. Provider: ${!!provider}, User: ${!!stableUser}`);
+            }
+        }
+
+        console.log(`[Tiptap${debugLabel ? `-${debugLabel}` : ''}] CustomCollaborationCursor check:`, {
+            exists: !!CustomCollaborationCursor,
+            type: typeof CustomCollaborationCursor,
+            name: (CustomCollaborationCursor as any)?.name,
+            options: (CustomCollaborationCursor as any)?.options
+        });
+
+        console.log(`[Tiptap${debugLabel ? `-${debugLabel}` : ''}] Final extensions list:`, exts.map(e => (e as any).name));
+        return exts;
+    }, [collaborationId, yDoc, provider, stableUser, placeholder, debugLabel]);
+
+    const editor = useEditor({
+        extensions,
         // CRITICAL FIX: Do NOT pass content if collaboration is active. 
         // Passing content + Collaboration extension causes Tiptap to crash with "TextSelection endpoint" error.
         // We must seed the content MANUALLY after the provider is synced.
@@ -476,8 +608,25 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
             if (onEditorReady) {
                 onEditorReady(editor);
             }
+        },
+        // NEW: Track selection changes for comments feature
+        onSelectionUpdate: ({ editor }) => {
+            if (enableComments && onSelectionChange) {
+                const { from, to } = editor.state.selection;
+                // Only update if selection is valid (not collapsed)
+                if (from !== to) {
+                    const text = editor.state.doc.textBetween(from, to, ' ');
+                    console.log(`[Tiptap-DEBUG] onSelectionUpdate: Valid Selection`, { from, to, text: text.substring(0, 30) });
+                    onSelectionChange({ from, to, text });
+                } else {
+                    // We don't necessarily want to clear it IMMEDIATELY because focus might be shifting
+                    // But we log it for debug
+                    console.log(`[Tiptap-DEBUG] onSelectionUpdate: Collapsed Selection (not clearing yet)`);
+                    // onSelectionChange(null); // Let the parent decide when to clear or keep it
+                }
+            }
         }
-    }, [collaborationId, yDoc, provider]); // Re-create editor if these change
+    }, [extensions, collaborationId, yDoc, provider, isProviderReady]); // Re-create editor if these change
 
     // Phase 3: Content Seeding Logic
     // If we are connecting to a new Yjs session (empty doc), we manually inject the initial content.
@@ -621,14 +770,15 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
 
             {editor && (
                 <BubbleMenu editor={editor} className="flex items-center gap-1 p-1 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-lg shadow-lg">
-                    <button onClick={() => editor.chain().focus().toggleBold().run()} className={`p-1.5 rounded hover:bg-gray-100 dark:hover:bg-zinc-800 ${editor.isActive('bold') ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'text-gray-600 dark:text-gray-300'}`}><Bold className="w-4 h-4" /></button>
-                    <button onClick={() => editor.chain().focus().toggleItalic().run()} className={`p-1.5 rounded hover:bg-gray-100 dark:hover:bg-zinc-800 ${editor.isActive('italic') ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'text-gray-600 dark:text-gray-300'}`}><Italic className="w-4 h-4" /></button>
-                    <button onClick={() => editor.chain().focus().toggleUnderline().run()} className={`p-1.5 rounded hover:bg-gray-100 dark:hover:bg-zinc-800 ${editor.isActive('underline') ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'text-gray-600 dark:text-gray-300'}`}><UnderlineIcon className="w-4 h-4" /></button>
-                    <button onClick={() => editor.chain().focus().toggleHighlight().run()} className={`p-1.5 rounded hover:bg-gray-100 dark:hover:bg-zinc-800 ${editor.isActive('highlight') ? 'text-yellow-600 bg-yellow-50 dark:bg-yellow-900/20' : 'text-gray-600 dark:text-gray-300'}`}><Highlighter className="w-4 h-4" /></button>
+                    <button onMouseDown={(e) => e.preventDefault()} onClick={() => editor.chain().focus().toggleBold().run()} className={`p-1.5 rounded hover:bg-gray-100 dark:hover:bg-zinc-800 ${editor.isActive('bold') ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'text-gray-600 dark:text-gray-300'}`}><Bold className="w-4 h-4" /></button>
+                    <button onMouseDown={(e) => e.preventDefault()} onClick={() => editor.chain().focus().toggleItalic().run()} className={`p-1.5 rounded hover:bg-gray-100 dark:hover:bg-zinc-800 ${editor.isActive('italic') ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'text-gray-600 dark:text-gray-300'}`}><Italic className="w-4 h-4" /></button>
+                    <button onMouseDown={(e) => e.preventDefault()} onClick={() => editor.chain().focus().toggleUnderline().run()} className={`p-1.5 rounded hover:bg-gray-100 dark:hover:bg-zinc-800 ${editor.isActive('underline') ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'text-gray-600 dark:text-gray-300'}`}><UnderlineIcon className="w-4 h-4" /></button>
+                    <button onMouseDown={(e) => e.preventDefault()} onClick={() => editor.chain().focus().toggleHighlight().run()} className={`p-1.5 rounded hover:bg-gray-100 dark:hover:bg-zinc-800 ${editor.isActive('highlight') ? 'text-yellow-600 bg-yellow-50 dark:bg-yellow-900/20' : 'text-gray-600 dark:text-gray-300'}`}><Highlighter className="w-4 h-4" /></button>
                     {onAskAi && (
                         <>
                             <div className="w-px h-4 bg-gray-200 dark:bg-zinc-700 mx-1" />
                             <button
+                                onMouseDown={(e) => e.preventDefault()}
                                 onClick={() => {
                                     const selection = editor.state.selection;
                                     const text = editor.state.doc.textBetween(selection.from, selection.to, ' ');
@@ -640,6 +790,7 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
                                 <Minimize2 className="w-4 h-4" />
                             </button>
                             <button
+                                onMouseDown={(e) => e.preventDefault()}
                                 onClick={() => {
                                     const selection = editor.state.selection;
                                     const text = editor.state.doc.textBetween(selection.from, selection.to, ' ');
@@ -651,6 +802,7 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
                                 <Maximize2 className="w-4 h-4" />
                             </button>
                             <button
+                                onMouseDown={(e) => e.preventDefault()}
                                 onClick={() => {
                                     const selection = editor.state.selection;
                                     const text = editor.state.doc.textBetween(selection.from, selection.to, ' ');
@@ -660,6 +812,37 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
                                 title="Ask AI about this"
                             >
                                 <Sparkles className="w-4 h-4" />
+                            </button>
+                        </>
+                    )}
+                    {onAddComment && (
+                        <>
+                            <div className="w-px h-4 bg-gray-200 dark:bg-zinc-700 mx-1" />
+                            <button
+                                onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                }}
+                                onClick={() => {
+                                    const { from, to } = editor.state.selection;
+                                    const text = editor.state.doc.textBetween(from, to, ' ');
+                                    console.log('[Tiptap-DEBUG] Comment button clicked. Selection snapshot:', { from, to, text });
+
+                                    // Focus back to ensure selection is visible (though preventDefault should have handled it)
+                                    editor.chain().focus().run();
+
+                                    // Pass current snapshot directly to circumvent state delays
+                                    if (from !== to) {
+                                        (onAddComment as any)({ from, to, text });
+                                    } else {
+                                        console.warn('[Tiptap-DEBUG] Comment button clicked but selection is collapsed.');
+                                        onAddComment(); // Fallback to original empty call
+                                    }
+                                }}
+                                className="p-1.5 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-600 dark:text-blue-400"
+                                title="Add Comment"
+                            >
+                                <MessageSquare className="w-4 h-4" />
                             </button>
                         </>
                     )}

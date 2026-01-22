@@ -3,10 +3,12 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Compass, Calendar, Users, MessageSquare, Bell, User, LogOut, Settings, PlayCircle, Sun, Moon, Book, BookOpen, Heart } from 'lucide-react';
+import { Home, Compass, Calendar, Users, MessageSquare, Bell, User, LogOut, Settings, PlayCircle, Sun, Moon, Book, BookOpen, Heart, HardDrive } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
 import { useBible } from '@/context/BibleContext';
+import { useAuth } from '@/context/AuthContext';
+import { useActivity } from '@/context/ActivityContext';
 
 // Mock data for recent chats
 const recentChats = [
@@ -66,6 +68,8 @@ export function Sidebar() {
     if (config?.features?.giving) {
         navItems.splice(2, 0, { icon: DollarSign, label: 'Giving', href: '/giving' });
     }
+
+
 
     return (
         <>
@@ -200,11 +204,11 @@ export function Sidebar() {
     );
 }
 
-import { useAuth } from '@/context/AuthContext';
-import { LogIn } from 'lucide-react';
+
 
 function UserSection() {
     const { user, userData, signInWithGoogle, signInWithYahoo, signInWithFacebook, signOut, loading } = useAuth();
+    const { setActivityPanelOpen, notifications, invitations } = useActivity();
     const router = useRouter();
 
     if (loading) return <div className="h-12 animate-pulse bg-gray-100 dark:bg-zinc-800 rounded-lg mx-4" />;
@@ -251,6 +255,9 @@ function UserSection() {
 
     const isAdmin = userData?.role === 'admin';
 
+    // Notification count from context
+    const notificationCount = notifications.filter(n => !n.viewed).length + invitations.filter(i => !i.viewed).length;
+
     return (
         <div className="flex items-center space-x-2 px-4 py-3">
             <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-xs overflow-hidden relative flex-shrink-0">
@@ -270,6 +277,19 @@ function UserSection() {
 
 
             <button
+                onClick={() => setActivityPanelOpen(true)}
+                className="relative p-1.5 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+                title="Activity"
+            >
+                <Bell className="w-4 h-4 text-gray-500 hover:text-indigo-600" />
+                {notificationCount > 0 && (
+                    <span className="absolute -top-1 -right-1 px-1 min-w-[16px] h-4 text-[10px] font-bold text-white bg-red-500 rounded-full flex items-center justify-center">
+                        {notificationCount > 99 ? '99+' : notificationCount}
+                    </span>
+                )}
+            </button>
+
+            <button
                 onClick={() => router.push('/settings')}
                 className="p-1.5 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
                 title="Settings"
@@ -282,7 +302,7 @@ function UserSection() {
     );
 }
 
-import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { collection, query, orderBy, limit, onSnapshot, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useChat } from '@/context/ChatContext';
 import { useRouter } from 'next/navigation';

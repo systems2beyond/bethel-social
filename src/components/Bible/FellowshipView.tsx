@@ -1,14 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Users, Wifi, Share2, Globe, Settings, Lock, Eye, Edit2, X, Check, Loader2 } from 'lucide-react';
 import TiptapEditor, { EditorToolbar } from '../Editor/TiptapEditor'; // Assuming default import
+import CollaborationPanel from '../Editor/CollaborationPanel';
+import { Comment, CommentReply, Suggestion, OnlineUser } from '@/types/collaboration';
+import * as Y from 'yjs';
 import { Editor } from '@tiptap/react';
 import { useAuth } from '@/context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import ShareScrollModal from './ShareScrollModal';
-import { collection, query, where, onSnapshot, orderBy, getDocs, writeBatch, doc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, orderBy, getDocs, writeBatch, doc, addDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { ChevronRight, MessageSquare, Bell } from 'lucide-react';
+import { useActivity } from '@/context/ActivityContext';
+import { useBible } from '@/context/BibleContext';
 
 interface FellowshipViewProps {
     content: string;
@@ -33,109 +39,274 @@ export function FellowshipView({ content, collaborationId, userName, userColor, 
     const [isPublic, setIsPublic] = useState(true);
     const [allowEditing, setAllowEditing] = useState(true);
 
+    // Collaboration State
+    const [isCollabSidebarOpen, setIsCollabSidebarOpen] = useState(false); // Controls the collaboration panel visibility
+    const [comments, setComments] = useState<Comment[]>([]);
+    const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+    // const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]); // Already defined below, merging
+    const [pendingSelection, setPendingSelection] = useState<{ from: number; to: number; text: string } | null>(null);
+    const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null);
+    const yDocRef = useRef<Y.Doc | null>(null);
+    const commentsMapRef = useRef<Y.Map<Comment> | null>(null);
+
     // Share Modal State
     const [showShareModal, setShowShareModal] = useState(false);
 
     const [editor, setEditor] = useState<Editor | null>(null);
-    // Invitations State
-    const [invitations, setInvitations] = useState<any[]>([]);
-    const [invitationSidebarOpen, setInvitationSidebarOpen] = useState(false);
+    const { setActivityPanelOpen, notifications, invitations } = useActivity();
+    const { openCollaboration } = useBible();
+
+    // Auto-open Activity panel if ?activity=open in URL
+    const searchParams = useSearchParams();
+    useEffect(() => {
+        if (searchParams.get('activity') === 'open') {
+            setActivityPanelOpen(true);
+        }
+    }, [searchParams, setActivityPanelOpen]);
 
     // Reliability State
-    const [connectionError, setConnectionError] = useState(false);
-    const [onlineUsers, setOnlineUsers] = useState<{ name: string, color: string }[]>([]);
+    const [connectionStatus, setConnectionStatus] = useState<'connected' | 'connecting' | 'disconnected'>('connecting');
+    const [onlineUsers, setOnlineUsers] = useState<{ name: string, color: string, uid?: string }[]>([]);
 
-    // Stabilize editor configuration internally
+    // Derived: Current Scroll Title (mock or from invite) - MOVED UP for access in callbacks
+    const activeInvite = invitations.find(i => i.resourceId === scrollId);
+    const activeScrollTitle = activeInvite?.title || "Fellowship Scroll";
     // This isolates Tiptap configuration from parent re-renders unless primitives change
     const editorProps = React.useMemo(() => ({
         content: content,
         onChange: (html: string) => { }, // Read-only from this level in theory, but Tiptap handles real-time
         collaborationId: collaborationId,
-        user: { name: userName, color: userColor },
+        user: { name: userName, color: userColor, uid: user?.uid },
         onAskAi: onAskAi
     }), [content, collaborationId, userName, userColor, onAskAi]);
 
-    // Listen for invitations
-    React.useEffect(() => {
-        if (!user?.uid) return;
 
-        const q = query(
-            collection(db, 'invitations'),
-            where('toUserId', '==', user.uid),
-            where('status', '==', 'pending'),
-            orderBy('createdAt', 'desc')
-        );
+    // ============== COLLABORATION HANDLERS ==============
+    const handleYDocReady = useCallback((yDoc: Y.Doc) => {
+        yDocRef.current = yDoc;
+        const commentsMap = yDoc.getMap<Comment>('comments');
+        commentsMapRef.current = commentsMap;
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const invites = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
-            setInvitations(invites);
-            setConnectionError(false); // Clear error on success
-        }, (error) => {
-            console.error("Firestore Listener Error:", error);
-            if (error.code === 'permission-denied' || error.message.includes('BLOCKED') || error.code === 'unavailable') {
-                setConnectionError(true);
+        // Sync comments from Y.Map to state
+        const updateComments = () => {
+            const c: Comment[] = [];
+            commentsMap.forEach((v, k) => c.push(v));
+            c.sort((a, b) => a.createdAt - b.createdAt);
+            setComments(c);
+        };
+
+        commentsMap.observe(updateComments);
+        updateComments();
+    }, []);
+
+    // Helper to notify participants
+    const notifyParticipants = useCallback(async (text: string, actionType: 'comment' | 'reply' = 'comment') => {
+        if (!user || !scrollId) return;
+
+        try {
+            // Find all invitations for this scroll to identify participants
+            const q = query(collection(db, 'invitations'), where('resourceId', '==', scrollId));
+            const snapshot = await getDocs(q);
+
+            const recipientIds = new Set<string>();
+
+            snapshot.docs.forEach(doc => {
+                const data = doc.data();
+                if (data.toUserId) recipientIds.add(data.toUserId);
+                if (data.fromUser?.uid) recipientIds.add(data.fromUser.uid);
+            });
+
+            // Remove self
+            recipientIds.delete(user.uid);
+
+            if (recipientIds.size === 0) return;
+
+            const batch = writeBatch(db);
+            recipientIds.forEach(uid => {
+                const docRef = doc(collection(db, 'notifications'));
+                batch.set(docRef, {
+                    toUserId: uid,
+                    fromUser: {
+                        uid: user.uid,
+                        displayName: userData?.displayName || user.displayName || userName || 'Anonymous',
+                        photoURL: user.photoURL,
+                    },
+                    type: 'comment',
+                    message: `${actionType === 'reply' ? 'Replied' : 'Commented'}: "${text.slice(0, 50)}${text.length > 50 ? '...' : ''}"`,
+                    resourceId: scrollId,
+                    resourceTitle: activeScrollTitle,
+                    read: false,
+                    createdAt: serverTimestamp()
+                });
+            });
+
+            await batch.commit();
+            console.log(`[FellowshipView] Notified ${recipientIds.size} users.`);
+        } catch (e) {
+            console.error("[FellowshipView] Failed to notify participants:", e);
+        }
+    }, [user, scrollId, activeScrollTitle, userData, userName]);
+
+
+    const handleAddComment = useCallback(async (text: string, quotedText: string, from: number, to: number) => {
+        console.log('[FellowshipView] handleAddComment called:', { text, quotedText, from, to });
+        if (!commentsMapRef.current || !user) {
+            console.error('[FellowshipView] Cannot add comment: map or user missing', { map: !!commentsMapRef.current, user: !!user });
+            return;
+        }
+        const newComment: Comment = {
+            id: `comment_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+            authorName: userData?.displayName || user.displayName || userName || 'Anonymous',
+            authorColor: userColor,
+            authorUid: user.uid,
+            text,
+            quotedText,
+            anchorFrom: from,
+            anchorTo: to,
+            createdAt: Date.now(),
+            resolved: false,
+            replies: [],
+            reactions: {},
+        };
+        console.log('[FellowshipView] Inserting comment into Yjs map:', newComment.id);
+        commentsMapRef.current.set(newComment.id, newComment);
+        setPendingSelection(null);
+
+        // Notify others
+        notifyParticipants(text, 'comment');
+
+        // NEW: Notify mentioned users specifically
+        const mentionMatches = text.match(/@([\w\s]+?)(?=\s|$|,|\.|!|\?)/g);
+        console.log('[FellowshipView] Mention matches found:', mentionMatches);
+        console.log('[FellowshipView] Online users for matching:', onlineUsers);
+
+        if (mentionMatches && mentionMatches.length > 0) {
+            for (const match of mentionMatches) {
+                const mentionedName = match.substring(1).trim(); // Remove @ and trim
+                console.log('[FellowshipView] Looking for user:', mentionedName);
+
+                // Try to find user in online users (case-insensitive partial match)
+                const onlineMatch = onlineUsers.find(u =>
+                    u.name.toLowerCase().includes(mentionedName.toLowerCase()) ||
+                    mentionedName.toLowerCase().includes(u.name.split(' ')[0].toLowerCase())
+                );
+
+                console.log('[FellowshipView] Online match result:', onlineMatch);
+
+                if (onlineMatch && onlineMatch.uid && onlineMatch.uid !== user.uid) {
+                    // Send specific mention notification using addDoc for reliability
+                    try {
+                        await addDoc(collection(db, 'notifications'), {
+                            toUserId: onlineMatch.uid,
+                            fromUser: {
+                                uid: user.uid,
+                                displayName: userData?.displayName || user.displayName || userName || 'Anonymous',
+                                photoURL: user.photoURL,
+                            },
+                            type: 'mention',
+                            message: `Mentioned you: "${text.slice(0, 50)}${text.length > 50 ? '...' : ''}"`,
+                            resourceId: scrollId,
+                            resourceTitle: activeScrollTitle,
+                            read: false,
+                            createdAt: serverTimestamp()
+                        });
+                        console.log('[FellowshipView] ✅ Mention notification sent to:', onlineMatch.name, onlineMatch.uid);
+                    } catch (e) {
+                        console.error('[FellowshipView] ❌ Failed to send mention notification:', e);
+                    }
+                } else {
+                    console.log('[FellowshipView] No valid match found for mention:', mentionedName);
+                }
             }
+        }
+    }, [user, userColor, notifyParticipants, userData, userName, onlineUsers, scrollId, activeScrollTitle]);
+
+    const handleAddReply = useCallback((commentId: string, text: string) => {
+        if (!commentsMapRef.current || !user) return;
+        const comment = commentsMapRef.current.get(commentId);
+        if (!comment) return;
+
+        const reply: CommentReply = {
+            id: `reply_${Date.now()}`,
+            authorName: userData?.displayName || user.displayName || userName || 'Anonymous',
+            authorColor: userColor,
+            authorUid: user.uid,
+            text,
+            createdAt: Date.now(),
+        };
+
+        commentsMapRef.current.set(commentId, {
+            ...comment,
+            replies: [...comment.replies, reply],
         });
 
-        return () => unsubscribe();
-    }, [user?.uid]);
+        // NEW: Notify participants about the reply
+        notifyParticipants(text, 'reply');
+    }, [user, userColor, notifyParticipants]);
 
-    // Cleanup: Ephemeral Invites -> Fallback Redirect
-    // DISABLED: This was causing premature redirection of invites when the host changed chapters or re-rendered.
-    // We will rely on manual session ending or a more robust presence system in the future.
-    /*
-    React.useEffect(() => {
-        return () => {
-            if (!userData?.uid || !scrollId.includes(userData.uid)) return;
+    const handleResolveComment = useCallback((commentId: string) => {
+        if (!commentsMapRef.current) return;
+        const comment = commentsMapRef.current.get(commentId);
+        if (comment) {
+            commentsMapRef.current.set(commentId, { ...comment, resolved: !comment.resolved });
+        }
+    }, []);
 
-            console.log('Host leaving session, redirecting invites to fallback...');
-            const cleanup = async () => {
-                try {
-                    const q = query(
-                        collection(db, 'invitations'),
-                        where('fromUserId', '==', userData.uid),
-                        where('resourceId', '==', scrollId),
-                        where('status', '==', 'pending')
-                    );
-                    const snapshot = await getDocs(q);
-                    if (!snapshot.empty) {
-                        const batch = writeBatch(db);
-                        snapshot.docs.forEach(d => {
-                            // Redirect to fallback ID (General Fellowship Room) instead of deleting
-                            batch.update(doc(db, 'invitations', d.id), {
-                                resourceId: fallbackId || scrollId, // Use fallback if available, else keep generic
-                                title: `${d.data().title} (Session Ended)`,
-                                isLive: false
-                            });
-                        });
-                        await batch.commit();
-                        console.log(`Redirected ${snapshot.size} invitations to fallback.`);
-                    }
-                } catch (err) {
-                    console.error("Cleanup/Redirect failed:", err);
-                }
-            };
-            cleanup();
-        };
-    }, [scrollId, userData?.uid, fallbackId]);
-    */
+    const handleDeleteComment = useCallback((commentId: string) => {
+        if (!commentsMapRef.current) return;
+        commentsMapRef.current.delete(commentId);
+    }, []);
+
+    const handleReaction = useCallback((commentId: string, emoji: string) => {
+        if (!commentsMapRef.current || !user) return;
+        const comment = commentsMapRef.current.get(commentId);
+        if (!comment) return;
+
+        const reactions = { ...comment.reactions };
+        const users = reactions[emoji] || [];
+        const idx = users.indexOf(user.uid);
+        if (idx >= 0) {
+            users.splice(idx, 1);
+        } else {
+            users.push(user.uid);
+        }
+        reactions[emoji] = users;
+
+        commentsMapRef.current.set(commentId, { ...comment, reactions });
+    }, [user]);
+
+    const handleScrollToComment = useCallback((from: number, to: number) => {
+        if (editor) {
+            // Tiptap way to scroll to position could be handled by setting selection and scrolling into view
+            editor.commands.setTextSelection({ from, to });
+            editor.commands.scrollIntoView();
+        }
+    }, [editor]);
+
+    const handleAcceptSuggestion = useCallback((suggestionId: string) => {
+        setSuggestions(s => s.filter(x => x.id !== suggestionId));
+    }, []);
+
+    const handleRejectSuggestion = useCallback((suggestionId: string) => {
+        setSuggestions(s => s.filter(x => x.id !== suggestionId));
+    }, []);
+
 
     // --- DEBUG LOGGING ---
-    console.log('[FellowshipView] Re-rendered. Props:', {
+    const renderLogs = {
         collaborationId: editorProps.collaborationId,
         scrollId: scrollId,
         fallbackId: fallbackId,
-        debugLabel: debugLabel
-    });
+        debugLabel: debugLabel,
+        hasUser: !!user,
+        loading: loading,
+        connectionStatus: connectionStatus
+    };
+    console.log('[FellowshipView] Re-rendered. Props:', renderLogs);
     console.log('[FellowshipView] Current Invitations:', invitations);
     // ---------------------
 
-    // Derived: Current Scroll Title (mock or from invite)
-    const activeInvite = invitations.find(i => i.resourceId === scrollId);
-    const activeScrollTitle = activeInvite?.title || "Fellowship Scroll";
+
 
     // Removed local share handler and state in favor of component content
 
@@ -187,8 +358,14 @@ export function FellowshipView({ content, collaborationId, userName, userColor, 
                         </h3>
                         <div className="flex items-center gap-2">
                             <p className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                                <Wifi className={cn("w-3 h-3", connectionError ? "text-amber-500" : "text-green-500")} />
-                                {connectionError ? "Connecting..." : "Live Connection"} • ID: {scrollId.slice(0, 8)}...
+                                <Wifi className={cn("w-3 h-3",
+                                    connectionStatus === 'connected' ? "text-green-500" :
+                                        connectionStatus === 'connecting' ? "text-amber-500 animate-pulse" :
+                                            "text-red-500"
+                                )} />
+                                {connectionStatus === 'connected' ? "Connected" :
+                                    connectionStatus === 'connecting' ? "Connecting..." :
+                                        "Disconnected"} • ID: {scrollId.slice(0, 12)}...
                             </p>
                             {/* Presence Avatars */}
                             <div className="flex -space-x-1.5 ml-2">
@@ -210,15 +387,26 @@ export function FellowshipView({ content, collaborationId, userName, userColor, 
                 </div>
 
                 <div className="flex items-center gap-2">
-                    {/* Red Warning Removed - UI Simplified */}
+                    {/* Collaboration Toggle */}
                     <button
-                        onClick={() => setInvitationSidebarOpen(!invitationSidebarOpen)}
-                        className={`relative p-2 rounded-full transition-colors ${invitationSidebarOpen ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600' : 'hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 hover:text-indigo-500'}`}
-                        title="Shared Scrolls"
+                        onClick={() => setIsCollabSidebarOpen(!isCollabSidebarOpen)}
+                        className={`p-2 rounded-full transition-colors ${isCollabSidebarOpen || comments.length > 0 ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600' : 'hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 hover:text-indigo-500'}`}
+                        title="Comments & Collaboration"
+                    >
+                        <MessageSquare className="w-4 h-4" />
+                    </button>
+
+                    <button
+                        onClick={() => setActivityPanelOpen(true)}
+                        className="relative p-2 rounded-full transition-colors hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 hover:text-indigo-500"
+                        title="Notifications"
                     >
                         <Bell className="w-4 h-4" />
-                        {invitations.length > 0 && (
-                            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                        {(notifications.some(n => !n.viewed) || invitations.some(i => !i.viewed)) && (
+                            <span className="absolute top-1 right-1 flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                            </span>
                         )}
                     </button>
                     <button
@@ -291,106 +479,6 @@ export function FellowshipView({ content, collaborationId, userName, userColor, 
                 )}
             </AnimatePresence>
 
-            {/* Invitation Sidebar */}
-            <AnimatePresence>
-                {invitationSidebarOpen && (
-                    <motion.div
-                        initial={{ width: 0, opacity: 0 }}
-                        animate={{ width: 260, opacity: 1 }}
-                        exit={{ width: 0, opacity: 0 }}
-                        className="border-r border-indigo-100 dark:border-indigo-900/30 bg-white dark:bg-[#0B1120] overflow-hidden flex flex-col"
-                    >
-                        <div className="p-3 border-b border-indigo-50 dark:border-indigo-900/20 bg-gray-50 dark:bg-[#0B1120] flex items-center justify-between">
-                            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                                <MessageSquare className="w-3 h-3" />
-                                Shared with You
-                            </h4>
-                            {invitations.length > 0 && (
-                                <button
-                                    onClick={async () => {
-                                        if (!confirm('Clear all pending invitations?')) return;
-                                        console.log('[FellowshipView] Clearing all invitations...');
-                                        try {
-                                            const batch = writeBatch(db);
-                                            invitations.forEach(inv => {
-                                                console.log('[FellowshipView] Deleting invite:', inv.id, inv.resourceId);
-                                                batch.delete(doc(db, 'invitations', inv.id));
-                                            });
-                                            await batch.commit();
-                                            console.log('[FellowshipView] Successfully cleared all invitations');
-                                            alert('All invitations cleared!');
-                                        } catch (e) {
-                                            console.error('[FellowshipView] Failed to clear invites', e);
-                                            alert('Failed to clear invites. Check console.');
-                                        }
-                                    }}
-                                    className="text-[9px] text-red-400 hover:text-red-500 hover:underline"
-                                >
-                                    Clear All
-                                </button>
-                            )}
-                        </div>
-                        <div className="flex-1 overflow-y-auto p-2 space-y-2">
-                            {invitations.length === 0 ? (
-                                <div className="text-center py-8 text-slate-400 text-xs">
-                                    No pending invites
-                                </div>
-                            ) : (
-                                invitations.map(invite => (
-                                    <div
-                                        key={invite.id}
-                                        onClick={() => {
-                                            // Ideally we pass a callback to parent to switch the scrollId
-                                            // But since we can't easily change props from here without lifting state up even more...
-                                            // We might need to dispatch a custom event or use a context.
-                                            // FOR NOW: Let's assume the parent can watch for URL changes or we just reload (hacky)
-                                            // OR: We create a simple internal redirect if we are inside a system that supports it.
-                                            // User requested: "preview... add to notes or collaborate"
-
-                                            // Handle Join
-                                            if (onJoinScroll) {
-                                                console.log('[FellowshipView] Clicked Invitation. Target ID:', invite.resourceId, 'Title:', invite.title);
-                                                onJoinScroll(invite.resourceId, invite.title);
-                                                setInvitationSidebarOpen(false);
-                                            } else {
-                                                console.error('[FellowshipView] onJoinScroll prop is missing!');
-                                            }
-                                        }}
-                                        className="p-3 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-lg hover:shadow-md hover:border-blue-300 dark:hover:border-indigo-700 transition-all cursor-pointer group"
-                                    >
-                                        <div className="flex items-center justify-between mb-2">
-                                            <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-full">
-                                                INVITATION
-                                            </span>
-                                            <span className="text-[9px] text-gray-400">
-                                                {invite.createdAt?.seconds ? new Date(invite.createdAt.seconds * 1000).toLocaleTimeString() : 'Just now'}
-                                            </span>
-                                        </div>
-                                        <h5 className="font-bold text-gray-800 dark:text-gray-200 text-sm mb-1 group-hover:text-indigo-600 transition-colors">
-                                            {invite.title}
-                                        </h5>
-                                        <div className="text-[8px] font-mono text-gray-300 dark:text-gray-600 truncate mb-2">
-                                            ID: {invite.resourceId}
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            {invite.fromUser?.photoURL ? (
-                                                <img src={invite.fromUser.photoURL} className="w-5 h-5 rounded-full ring-1 ring-white dark:ring-zinc-800" alt="Sender" />
-                                            ) : (
-                                                <div className="w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center text-[8px] font-bold text-indigo-600">
-                                                    {invite.fromUser?.displayName?.[0] || '?'}
-                                                </div>
-                                            )}
-                                            <span className="text-xs text-gray-500 dark:text-gray-400">
-                                                {invite.fromUser?.displayName} invited you
-                                            </span>
-                                        </div>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
 
             {/* Editor Container with Special Styling */}
             <div className="flex-1 overflow-hidden relative flex">
@@ -412,10 +500,65 @@ export function FellowshipView({ content, collaborationId, userName, userColor, 
                                 onAwarenessUpdate={setOnlineUsers}
                                 debugLabel={debugLabel}
                                 className="h-full overflow-y-auto px-6 py-6 custom-scrollbar prose-indigo max-w-none"
+                                // COLLABORATION PROPS
+                                enableComments={true} // Always enable comments in Fellowship
+                                onSelectionChange={selected => {
+                                    console.log('[FellowshipView] onSelectionChange:', selected);
+                                    setPendingSelection(selected);
+                                }}
+                                onYDocReady={handleYDocReady}
+                                onAddComment={(snapshot) => {
+                                    console.log('[FellowshipView] onAddComment triggered. Snapshot:', snapshot, 'Current pendingSelection:', pendingSelection);
+
+                                    // 1. If we got a snapshot, use it PREFERENTIALLY (it's the most accurate)
+                                    if (snapshot && typeof snapshot === 'object' && 'from' in snapshot) {
+                                        console.log('[FellowshipView] Using selection snapshot from editor');
+                                        setPendingSelection(snapshot);
+                                    }
+                                    // 2. Recovery Logic: If snapshot failed but editor has a selection, recover it
+                                    else if (!pendingSelection && editor) {
+                                        const { from, to } = editor.state.selection;
+                                        if (from !== to) {
+                                            const text = editor.state.doc.textBetween(from, to, ' ');
+                                            console.log('[FellowshipView] Recovering selection manually from editor state:', { from, to, text });
+                                            setPendingSelection({ from, to, text });
+                                        }
+                                    }
+
+                                    setIsCollabSidebarOpen(true);
+                                }}
+                                onStatusChange={setConnectionStatus}
                             />
                         </div>
                     </div>
                 </div>
+                {/* Collaboration Panel */}
+                {isCollabSidebarOpen && (
+                    <CollaborationPanel
+                        className="w-72 shadow-xl z-10"
+                        onClose={() => setIsCollabSidebarOpen(false)}
+                        comments={comments}
+                        suggestions={suggestions}
+                        onlineUsers={onlineUsers.map((u, i) => ({ ...u, clientId: i }))} // Map simple users to OnlineUser type
+                        currentUserId={user?.uid || ''}
+                        currentUserName={user?.displayName || 'Anonymous'}
+                        currentUserColor={userColor}
+                        onAddComment={(text) => pendingSelection && handleAddComment(text, pendingSelection.text, pendingSelection.from, pendingSelection.to)}
+                        onAddReply={handleAddReply}
+                        onResolveComment={handleResolveComment}
+                        onDeleteComment={handleDeleteComment}
+                        onReaction={handleReaction}
+                        onScrollToComment={handleScrollToComment}
+                        onAcceptSuggestion={handleAcceptSuggestion}
+                        onRejectSuggestion={handleRejectSuggestion}
+                        // Added missing props/handlers for selection state
+                        selectedCommentId={selectedCommentId}
+                        onSelectComment={setSelectedCommentId}
+                        // Added missing props for comments functionality
+                        pendingSelection={pendingSelection}
+                        onClearPendingSelection={() => setPendingSelection(null)}
+                    />
+                )}
             </div>
 
             {/* Fellowship Footer / Status */}
@@ -448,3 +591,16 @@ export function FellowshipView({ content, collaborationId, userName, userColor, 
 // This works perfectly now because we pass primitives (strings) as props.
 // As long as content, collaborationId, etc. are === equal, it won't re-render.
 export default React.memo(FellowshipView);
+
+export interface ScrollItem {
+    id: string;
+    title: string;
+    book: string;
+    chapter: string;
+    verse?: string; // Opt out if not specific
+    author: string;
+    participantCount: number;
+    lastActive: number;
+    type: 'public' | 'shared' | 'private';
+    contentPreview?: string;
+}

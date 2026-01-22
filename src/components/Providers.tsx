@@ -6,6 +6,7 @@ import { ChatProvider } from '@/context/ChatContext';
 import { FeedProvider } from '@/context/FeedContext';
 import { LightboxProvider } from '@/context/LightboxContext';
 import { AuthProvider } from '@/context/AuthContext';
+import { ActivityProvider } from '@/context/ActivityContext';
 
 export function Providers({ children }: { children: React.ReactNode }) {
     return (
@@ -22,13 +23,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
             storageKey="church-theme-preference-v10"
         >
             <AuthProvider>
-                <FeedProvider>
-                    <LightboxProvider>
-                        <ChatProvider>
-                            {children}
-                        </ChatProvider>
-                    </LightboxProvider>
-                </FeedProvider>
+                <ActivityProvider>
+                    <FeedProvider>
+                        <LightboxProvider>
+                            <ChatProvider>
+                                {children}
+                            </ChatProvider>
+                        </LightboxProvider>
+                    </FeedProvider>
+                </ActivityProvider>
             </AuthProvider>
         </ThemeProvider>
     );

@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc, setDoc, limit, getCountFromServer, getDocs } from 'firebase/firestore';
 import { db, functions } from '@/lib/firebase';
 import { httpsCallable } from 'firebase/functions';
-import { Loader2, Send, Users, Flag, Pin, LayoutDashboard, AlertCircle, CheckCircle, Trash2, ExternalLink, Settings, DollarSign, Plus, CreditCard, ArrowUpRight, Search, Calendar, ChevronDown, Download, Ticket } from 'lucide-react';
+import { Loader2, Send, Users, Flag, Pin, LayoutDashboard, AlertCircle, CheckCircle, Trash2, ExternalLink, Settings, DollarSign, Plus, CreditCard, ArrowUpRight, Search, Calendar, ChevronDown, Download, Ticket, PlayCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import Image from 'next/image';
@@ -15,6 +15,7 @@ import AdminDonationsTable from './giving/AdminDonationsTable';
 import CampaignManager from './giving/CampaignManager';
 import { Timestamp } from 'firebase/firestore';
 import AnnouncementWidget from '@/components/Admin/AnnouncementWidget';
+import SermonManager from '@/components/Admin/SermonManager';
 
 interface Donation {
     id: string;
@@ -54,7 +55,7 @@ interface PinnedPost {
 
 export default function AdminPage() {
     const { userData } = useAuth();
-    const [activeTab, setActiveTab] = useState<'overview' | 'reports' | 'pinned' | 'groups' | 'giving' | 'config'>('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'reports' | 'pinned' | 'groups' | 'giving' | 'config' | 'sermons'>('overview');
 
     // Overview State
     // Overview State
@@ -281,6 +282,13 @@ export default function AdminPage() {
                     >
                         <DollarSign className="w-4 h-4" />
                         <span>Giving & Transactions</span>
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('sermons')}
+                        className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'sermons' ? 'bg-indigo-50 text-indigo-700 shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                        <PlayCircle className="w-4 h-4" />
+                        <span>Sermons</span>
                     </button>
                 </div>
 
@@ -573,6 +581,10 @@ export default function AdminPage() {
 
                     {activeTab === 'giving' && (
                         <GivingTab />
+                    )}
+
+                    {activeTab === 'sermons' && (
+                        <SermonManager />
                     )}
                 </div>
             </div>

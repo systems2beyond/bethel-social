@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Users, BookOpen, MessageSquare, Plus, Calendar, Trash2 } from 'lucide-react';
+import { Users, BookOpen, MessageSquare, Plus, Calendar, Trash2, Bell, Share2, X, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useBible } from '@/context/BibleContext';
 import MeetingList from '@/components/Fellowship/MeetingList';
@@ -10,15 +11,21 @@ import { collection, query, where, orderBy, onSnapshot, getDoc, doc, deleteDoc }
 import { db } from '@/lib/firebase';
 import { formatDistanceToNow } from 'date-fns';
 import { ViewResourceModal } from '@/components/Meeting/ViewResourceModal';
+import { cn } from '@/lib/utils';
+import { useActivity } from '@/context/ActivityContext';
+import { EmptyState } from '@/components/Fellowship/EmptyState';
 
 export default function FellowshipPage() {
     const { user } = useAuth();
-    const { openCollaboration } = useBible();
+    const {
+        invitations,
+        setSelectedResource,
+        selectedResource
+    } = useActivity();
+
     const [activeTab, setActiveTab] = useState<'gatherings' | 'studies' | 'community'>('gatherings');
-    const [invitations, setInvitations] = useState<any[]>([]);
     const [sentInvitations, setSentInvitations] = useState<any[]>([]);
     const [usersMap, setUsersMap] = useState<Record<string, any>>({}); // Cache for user details
-    const [selectedResource, setSelectedResource] = useState<any | null>(null);
 
     const handleDeleteInvitation = async (inviteId: string) => {
         if (confirm('Are you sure you want to delete this shared scroll?')) {
@@ -34,21 +41,7 @@ export default function FellowshipPage() {
     React.useEffect(() => {
         if (!user) return;
 
-        // 1. Received Invitations (Index: toUserId + createdAt)
-        const qReceived = query(
-            collection(db, 'invitations'),
-            where('toUserId', '==', user.uid),
-            orderBy('createdAt', 'desc')
-        );
-
-        const unsubReceived = onSnapshot(qReceived, (snapshot) => {
-            console.log("Fellowship Page: Received snapshot update", snapshot.size, "docs");
-            setInvitations(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        }, (error) => {
-            console.error("Fellowship Page: Error fetching received invitations", error);
-        });
-
-        // 2. Sent Invitations (Index: fromUser.uid + createdAt)
+        // Sent Invitations (Index: fromUser.uid + createdAt)
         const qSent = query(
             collection(db, 'invitations'),
             where('fromUser.uid', '==', user.uid),
@@ -56,16 +49,12 @@ export default function FellowshipPage() {
         );
 
         const unsubSent = onSnapshot(qSent, (snapshot) => {
-            console.log("Fellowship Page: Sent snapshot update", snapshot.size, "docs");
             setSentInvitations(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         }, (error) => {
             console.error("Fellowship Page: Error fetching sent invitations", error);
         });
 
-        return () => {
-            unsubReceived();
-            unsubSent();
-        };
+        return () => unsubSent();
     }, [user]);
 
     // Fetch user details for Sent Invitations
@@ -104,6 +93,7 @@ export default function FellowshipPage() {
 
     return (
         <div className="relative min-h-[calc(100vh-theme(spacing.16))] bg-gray-50 dark:bg-black/95 md:pt-0 overflow-hidden">
+
             {/* Subtle Texture Only */}
             <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none brightness-100 dark:brightness-50" />
 
@@ -377,25 +367,6 @@ export default function FellowshipPage() {
                     />
                 )}
             </main>
-        </div>
-    );
-}
-
-function EmptyState({ icon, title, description, color }: { icon: React.ReactNode, title: string, description: string, color: string }) {
-    return (
-        <div className="flex flex-col items-center justify-center py-24 px-4 text-center rounded-3xl bg-white/40 dark:bg-zinc-900/40 backdrop-blur-md border border-white/20 dark:border-white/5">
-            <div className={`
-                p-6 rounded-3xl mb-6 ring-1 ring-inset ring-white/10 shadow-2xl
-                bg-gradient-to-br from-${color}-500/20 to-${color}-600/5
-            `}>
-                {icon}
-            </div>
-            <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
-                {title}
-            </h3>
-            <p className="text-lg text-gray-500 dark:text-gray-400 max-w-md leading-relaxed">
-                {description}
-            </p>
         </div>
     );
 }

@@ -630,7 +630,15 @@ export default function SermonModal({ sermon, initialMode, onClose }: SermonModa
                 </AnimatePresence >
 
                 {
-                    videoId ? (
+                    sermon.source === 'upload' || sermon.driveFileId ? (
+                        <div className="w-full h-full relative group z-10">
+                            <iframe
+                                src={`https://drive.google.com/file/d/${sermon.driveFileId}/preview`}
+                                className="w-full h-full border-0"
+                                allow="autoplay"
+                            />
+                        </div>
+                    ) : videoId ? (
                         <div className="w-full h-full relative group z-10" >
                             <YouTube
                                 videoId={videoId}

@@ -10,12 +10,17 @@ import { format } from 'date-fns';
 
 import { AnimatePresence } from 'framer-motion';
 import SermonModal from '@/components/Sermons/SermonModal';
+import { useAuth } from '@/context/AuthContext';
+import { Plus } from 'lucide-react';
+import CreateSermonModal from '@/components/Sermons/CreateSermonModal';
 
 export default function SermonsPage() {
+    const { userData } = useAuth();
     const [sermons, setSermons] = useState<Sermon[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedSermon, setSelectedSermon] = useState<Sermon | null>(null);
     const [modalMode, setModalMode] = useState<'watch' | 'ai'>('watch');
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
     useEffect(() => {
         const fetchSermons = async () => {
@@ -52,7 +57,18 @@ export default function SermonsPage() {
 
     return (
         <div className="max-w-7xl mx-auto px-4 py-8">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">Sermons</h1>
+            <div className="flex items-center justify-between mb-8">
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Sermons</h1>
+                {userData?.role === 'admin' && (
+                    <button
+                        onClick={() => setIsCreateModalOpen(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-lg hover:shadow-xl"
+                    >
+                        <Plus className="w-5 h-5" />
+                        <span>New Sermon</span>
+                    </button>
+                )}
+            </div>
 
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {sermons.map((sermon) => {
@@ -160,6 +176,17 @@ export default function SermonsPage() {
                         sermon={selectedSermon}
                         initialMode={modalMode}
                         onClose={() => setSelectedSermon(null)}
+                    />
+                )}
+                {isCreateModalOpen && (
+                    <CreateSermonModal
+                        onClose={() => setIsCreateModalOpen(false)}
+                        onSuccess={() => {
+                            setIsCreateModalOpen(false);
+                            // Optionally refetch sermons here or rely on real-time listeners if any (current impl is fetch-once)
+                            // For MVP, just reload window or add a refetch trigger
+                            window.location.reload();
+                        }}
                     />
                 )}
             </AnimatePresence>

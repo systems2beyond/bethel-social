@@ -175,6 +175,8 @@ export interface Sermon {
     outline?: string[];
     transcript?: string;
     createdAt?: any;
+    source?: 'youtube' | 'upload';
+    driveFileId?: string;
 }
 
 export interface Meeting {
