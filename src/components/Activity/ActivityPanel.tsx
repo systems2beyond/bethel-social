@@ -68,7 +68,7 @@ export function ActivityPanel() {
         if (type === 'invite') {
             setSelectedResource({
                 title: item.noteTitle || item.title || 'Shared Scroll',
-                content: item.content || item.noteContent || '',
+                content: item.previewContent || item.content || item.noteContent || '',
                 collaborationId: item.noteId || item.resourceId
             });
             setResourceModalOpen(true);
