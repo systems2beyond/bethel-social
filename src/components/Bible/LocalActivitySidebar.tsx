@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Users, Wifi, ChevronRight, ChevronDown, MessageSquare, Plus, ArrowRight, ExternalLink, ScrollText, Bell, Inbox, Sparkles, Clock } from 'lucide-react';
-import { collection, query, where, onSnapshot, limit } from 'firebase/firestore';
+import { Users, Wifi, ChevronRight, ChevronDown, MessageSquare, Plus, ArrowRight, ExternalLink, ScrollText, Bell, Inbox, Sparkles, Clock, Search, BookOpen, Pin, Trash2, Video, Globe, PlayCircle } from 'lucide-react';
+import { collection, query, where, onSnapshot, limit, doc, setDoc, updateDoc, arrayUnion, arrayRemove, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
 import { useActivity } from '@/context/ActivityContext';
@@ -26,6 +26,18 @@ interface ActiveScroll {
     isPublic?: boolean;
 }
 
+interface PinnedVerse {
+    reference: string;
+    text: string;
+    id: string;
+}
+
+interface QuickSearchResults {
+    passage?: { reference: string; text: string; book_id: string; chapter: number; verse: number };
+    video?: { title: string; thumbnail: string; duration: string };
+    web?: { title: string; snippet: string; url: string }[];
+}
+
 type TabType = 'activity' | 'live';
 
 const MAX_ITEMS_SHOWN = 5;
@@ -40,6 +52,77 @@ export function LocalActivitySidebar({ onJoinScroll, currentScrollId, className 
     const [isExpanded, setIsExpanded] = useState(false);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<TabType>('activity');
+
+    // Bible Hub State
+    const [searchQuery, setSearchQuery] = useState('');
+    const [quickResults, setQuickResults] = useState<QuickSearchResults | null>(null);
+    const [isSearching, setIsSearching] = useState(false);
+    const [pinnedVerses, setPinnedVerses] = useState<PinnedVerse[]>([]);
+
+    // Search Handler
+    const handleQuickSearch = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!searchQuery.trim()) return;
+        setIsSearching(true);
+        try {
+            // 1. Bible (Limit 1) - Using bible-api.com
+            const res = await fetch(`https://bible-api.com/${encodeURIComponent(searchQuery)}`);
+            const data = await res.json();
+            const passage = data.verses?.[0] ? {
+                reference: data.reference || `${data.verses[0].book_name} ${data.verses[0].chapter}:${data.verses[0].verse}`,
+                text: data.text || data.verses[0].text,
+                book_id: data.verses[0].book_id,
+                chapter: data.verses[0].chapter,
+                verse: data.verses[0].verse
+            } : undefined;
+
+            // 2. Mock Video
+            const video = {
+                title: `Sermon: Understanding ${searchQuery}`,
+                thumbnail: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=500&q=80',
+                duration: '12:45'
+            };
+
+            // 3. Mock Web
+            const web = [
+                { title: `Commentary on ${searchQuery}`, snippet: 'Theological insights and historical context...', url: '#' },
+                { title: `Study Notes: ${searchQuery}`, snippet: 'Deep dive into the original Greek/Hebrew meanings...', url: '#' }
+            ];
+
+            setQuickResults({ passage, video, web });
+        } catch (e) {
+            console.error('Search failed', e);
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    // Pinned Verses Sync
+    useEffect(() => {
+        if (!user) return;
+        const unsub = onSnapshot(doc(db, 'users', user.uid, 'settings', 'pinned-verses'), (snap) => {
+            if (snap.exists()) {
+                setPinnedVerses(snap.data().verses || []);
+            }
+        });
+        return () => unsub();
+    }, [user]);
+
+    const togglePin = async (verse: PinnedVerse) => {
+        if (!user) return;
+        const ref = doc(db, 'users', user.uid, 'settings', 'pinned-verses');
+        const isPinned = pinnedVerses.some(p => p.id === verse.id);
+
+        try {
+            if (isPinned) {
+                await updateDoc(ref, { verses: arrayRemove(verse) });
+            } else {
+                await setDoc(ref, { verses: arrayUnion(verse) }, { merge: true });
+            }
+        } catch (e) {
+            console.error('Pin failed', e);
+        }
+    };
 
     // State for ViewResourceModal
     const [resourceModalOpen, setResourceModalOpen] = useState(false);
@@ -183,7 +266,7 @@ export function LocalActivitySidebar({ onJoinScroll, currentScrollId, className 
                     )}
                 </div>
                 <div className="[writing-mode:vertical-lr] rotate-180 text-[10px] font-bold tracking-widest uppercase">
-                    Connect
+                    Bible Hub
                 </div>
                 <ChevronRight className={cn("w-4 h-4 mt-1 transition-transform", isExpanded && "rotate-180")} />
             </motion.button>
@@ -198,11 +281,11 @@ export function LocalActivitySidebar({ onJoinScroll, currentScrollId, className 
                         className="w-80 h-[550px] bg-white dark:bg-[#0f172a] border border-indigo-100 dark:border-indigo-900/40 rounded-l-2xl shadow-2xl overflow-hidden flex flex-col"
                     >
                         {/* Header & Tabs */}
-                        <div className="bg-gradient-to-br from-indigo-600 to-purple-700 text-white">
+                        <div className="bg-gradient-to-br from-indigo-600 to-purple-700 text-white shrink-0">
                             <div className="p-4 pb-2 flex items-center justify-between">
                                 <h3 className="font-bold flex items-center gap-2 text-sm">
-                                    <Sparkles className="w-4 h-4 text-indigo-200" />
-                                    Fellowship Center
+                                    <BookOpen className="w-4 h-4 text-indigo-200" />
+                                    Bible Hub
                                 </h3>
                                 <button
                                     onClick={() => setIsExpanded(false)}
@@ -212,8 +295,22 @@ export function LocalActivitySidebar({ onJoinScroll, currentScrollId, className 
                                 </button>
                             </div>
 
+                            {/* Quick Search */}
+                            <div className="px-3 pb-3">
+                                <form onSubmit={handleQuickSearch} className="relative">
+                                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-indigo-200" />
+                                    <input
+                                        type="text"
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        placeholder="Search scripture..."
+                                        className="w-full pl-8 pr-3 py-1.5 bg-white/10 border border-indigo-400/30 rounded-lg text-xs text-white placeholder-indigo-200 focus:outline-none focus:bg-white/20 transition-all"
+                                    />
+                                </form>
+                            </div>
+
                             {/* Tab Bar */}
-                            <div className="flex px-2 pb-0 justify-around border-b border-white/10">
+                            <div className="flex px-2 pb-0 justify-around border-t border-white/10 pt-1">
                                 <TabButton
                                     id="activity"
                                     active={activeTab === 'activity'}
@@ -235,6 +332,87 @@ export function LocalActivitySidebar({ onJoinScroll, currentScrollId, className 
 
                         {/* Content Area */}
                         <div className="flex-1 overflow-y-auto custom-scrollbar">
+                            {/* Quick Results & Pins Section */}
+                            {activeTab === 'activity' && (
+                                <div className="p-3 border-b border-slate-100 dark:border-slate-800 space-y-3">
+                                    {/* Search Results */}
+                                    {quickResults && (
+                                        <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Top Result</span>
+                                                <button onClick={() => setQuickResults(null)} className="text-[10px] text-indigo-500 hover:text-indigo-600">Clear</button>
+                                            </div>
+                                            {/* Passage */}
+                                            {quickResults.passage && (
+                                                <div className="p-2.5 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-100 dark:border-indigo-500/20 relative group">
+                                                    <div className="flex items-center justify-between mb-1">
+                                                        <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300">{quickResults.passage.reference}</span>
+                                                        <button
+                                                            onClick={() => togglePin({ reference: quickResults.passage!.reference, text: quickResults.passage!.text, id: quickResults.passage!.reference })}
+                                                            className={cn("p-1 rounded-full bg-white dark:bg-zinc-800 shadow-sm transition-all",
+                                                                pinnedVerses.some(p => p.id === quickResults.passage!.reference) ? "text-indigo-500" : "text-slate-400 hover:text-indigo-500")}
+                                                        >
+                                                            <Pin className="w-3 h-3 fill-current" />
+                                                        </button>
+                                                    </div>
+                                                    <p className="text-[10px] text-slate-600 dark:text-slate-400 leading-snug line-clamp-3 italic">
+                                                        "{quickResults.passage.text}"
+                                                    </p>
+                                                </div>
+                                            )}
+                                            {/* Video & Web Mocks */}
+                                            <div className="grid grid-cols-2 gap-2">
+                                                {quickResults.video && (
+                                                    <div className="p-2 bg-slate-50 dark:bg-white/5 rounded-lg border border-slate-100 dark:border-white/10">
+                                                        <div className="aspect-video bg-slate-200 dark:bg-slate-700 rounded mb-1.5 relative overflow-hidden group">
+                                                            <img src={quickResults.video.thumbnail} alt="" className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
+                                                            <div className="absolute inset-0 flex items-center justify-center">
+                                                                <PlayCircle className="w-5 h-5 text-white/90 drop-shadow-md" />
+                                                            </div>
+                                                        </div>
+                                                        <p className="text-[9px] font-medium truncate">{quickResults.video.title}</p>
+                                                    </div>
+                                                )}
+                                                <div className="space-y-1.5">
+                                                    {quickResults.web?.map((w, i) => (
+                                                        <div key={i} className="p-1.5 bg-slate-50 dark:bg-white/5 rounded border border-slate-100 dark:border-white/10 flex items-center gap-1.5">
+                                                            <Globe className="w-3 h-3 text-slate-400 shrink-0" />
+                                                            <span className="text-[9px] font-medium truncate text-slate-600 dark:text-slate-300">{w.title}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Pinned Verses */}
+                                    {!quickResults && pinnedVerses.length > 0 && (
+                                        <div className="space-y-2">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <Pin className="w-3 h-3 text-indigo-500" />
+                                                <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Pinned Verses</span>
+                                            </div>
+                                            <div className="space-y-1.5 max-h-[120px] overflow-y-auto custom-scrollbar pr-1">
+                                                {pinnedVerses.map(pin => (
+                                                    <div key={pin.id} className="group flex items-start justify-between p-2 bg-slate-50 dark:bg-white/5 rounded-lg border border-slate-100 dark:border-white/10 hover:border-indigo-200 transition-all">
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 mb-0.5">{pin.reference}</p>
+                                                            <p className="text-[9px] text-slate-500 truncate italic">"{pin.text}"</p>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => togglePin(pin)}
+                                                            className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-500 transition-all"
+                                                        >
+                                                            <Trash2 className="w-3 h-3" />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                             <AnimatePresence mode="wait">
                                 {activeTab === 'activity' && (
                                     <motion.div
