@@ -66,9 +66,10 @@ export function ActivityPanel() {
 
         // For shared scrolls (invites)
         if (type === 'invite') {
+            console.log('Clicked Invite Item:', item); // Debug log
             setSelectedResource({
                 title: item.noteTitle || item.title || 'Shared Scroll',
-                content: item.previewContent || item.content || item.noteContent || '',
+                content: item.previewContent || item.content || item.noteContent || item.description || '<p>No preview content available (Check Console)</p>',
                 collaborationId: item.noteId || item.resourceId
             });
             setResourceModalOpen(true);
