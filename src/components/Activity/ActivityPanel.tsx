@@ -8,6 +8,7 @@ import { useBible } from '@/context/BibleContext';
 import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
+import { ViewResourceModal } from '@/components/Meeting/ViewResourceModal';
 
 const MAX_ITEMS_SHOWN = 5;
 const MAX_RECENT_ITEMS = 8;
@@ -21,6 +22,14 @@ export function ActivityPanel() {
     // Both sections collapsed by default
     const [invitesExpanded, setInvitesExpanded] = useState(false);
     const [notifsExpanded, setNotifsExpanded] = useState(false);
+
+    // ViewResourceModal state
+    const [resourceModalOpen, setResourceModalOpen] = useState(false);
+    const [selectedResource, setSelectedResource] = useState<{
+        title: string;
+        content: string;
+        collaborationId: string;
+    } | null>(null);
 
     // Create combined recent items, sorted by date
     const recentItems = useMemo(() => {
@@ -39,8 +48,6 @@ export function ActivityPanel() {
         return allItems.slice(0, MAX_RECENT_ITEMS);
     }, [invitations, notifications]);
 
-    if (!isActivityPanelOpen) return null;
-
     const unviewedInvites = invitations.filter(i => !i.viewed);
     const unviewedNotifs = notifications.filter(n => !n.viewed);
 
@@ -56,16 +63,37 @@ export function ActivityPanel() {
 
     const handleItemClick = (item: any, type: 'invite' | 'notification') => {
         markAsViewed(item.id, type);
+
+        // For shared scrolls (invites)
         if (type === 'invite') {
-            openCollaboration(item.noteId, item.noteTitle);
-        } else if (item.resourceId) {
+            setSelectedResource({
+                title: item.noteTitle || item.title || 'Shared Scroll',
+                content: item.content || item.noteContent || '',
+                collaborationId: item.noteId || item.resourceId
+            });
+            setResourceModalOpen(true);
+            setActivityPanelOpen(false);
+            return;
+        }
+
+        // For notifications
+        if (item.resourceId) {
             if (item.type === 'note_shared' || item.type === 'note') {
                 openNote(item.resourceId, item.resourceTitle || item.title);
+                setActivityPanelOpen(false);
             } else {
-                openCollaboration(item.resourceId, item.resourceTitle || item.title, item.content || "");
+                // For other resources (collaborations/scrolls)
+                setSelectedResource({
+                    title: item.resourceTitle || item.title || 'Shared Resource',
+                    content: item.content || '',
+                    collaborationId: item.resourceId
+                });
+                setResourceModalOpen(true);
+                setActivityPanelOpen(false);
             }
+        } else {
+            setActivityPanelOpen(false);
         }
-        setActivityPanelOpen(false);
     };
 
     // Get limited items for display
@@ -73,146 +101,163 @@ export function ActivityPanel() {
     const limitedNotifications = notifications.slice(0, MAX_ITEMS_SHOWN);
 
     return (
-        <AnimatePresence mode="wait">
-            <div className="fixed inset-0 z-[10000] flex justify-end">
-                {/* Overlay */}
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    onClick={() => setActivityPanelOpen(false)}
-                    className="absolute inset-0 bg-black/20 backdrop-blur-sm"
-                />
-
-                {/* Main Panel */}
-                <motion.div
-                    initial={{ x: '100%' }}
-                    animate={{ x: 0 }}
-                    exit={{ x: '100%' }}
-                    transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                    className="relative w-full max-w-sm h-full bg-white dark:bg-zinc-950 border-l border-zinc-200 dark:border-zinc-800 shadow-2xl flex flex-col"
-                >
-                    {/* Header */}
-                    <div className="p-6 border-b border-zinc-100 dark:border-zinc-900 flex items-center justify-between bg-zinc-50/50 dark:bg-zinc-900/30">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl">
-                                <Bell className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                            </div>
-                            <div>
-                                <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Activity</h2>
-                                <p className="text-xs text-zinc-500">{unviewedInvites.length + unviewedNotifs.length} unread updates</p>
-                            </div>
-                        </div>
-                        <button
+        <>
+            <AnimatePresence mode="wait">
+                {isActivityPanelOpen && (
+                    <div className="fixed inset-0 z-[10000] flex justify-end">
+                        {/* Overlay */}
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
                             onClick={() => setActivityPanelOpen(false)}
-                            className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-colors text-zinc-500"
-                        >
-                            <X className="w-5 h-5" />
-                        </button>
-                    </div>
+                            className="absolute inset-0 bg-black/20 backdrop-blur-sm"
+                        />
 
-                    <div className="flex-1 overflow-y-auto custom-scrollbar">
-                        {/* Collapsible Shared Scrolls Section */}
-                        <CollapsibleSection
-                            title="Shared Scrolls"
-                            count={invitations.length}
-                            unviewedCount={unviewedInvites.length}
-                            isExpanded={invitesExpanded}
-                            onToggle={() => setInvitesExpanded(!invitesExpanded)}
-                            onClearAll={() => handleClearAll('invite')}
-                            colorClass="indigo"
+                        {/* Main Panel */}
+                        <motion.div
+                            initial={{ x: '100%' }}
+                            animate={{ x: 0 }}
+                            exit={{ x: '100%' }}
+                            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                            className="relative w-full max-w-sm h-full bg-white dark:bg-zinc-950 border-l border-zinc-200 dark:border-zinc-800 shadow-2xl flex flex-col"
                         >
-                            {limitedInvitations.length === 0 ? (
-                                <p className="text-xs text-center py-6 text-zinc-500 italic">No shared scrolls yet</p>
-                            ) : (
-                                <>
-                                    <div className="space-y-1">
-                                        {limitedInvitations.map((invite) => (
-                                            <ActivityItemComponent
-                                                key={invite.id}
-                                                item={invite}
-                                                usersMap={usersMap}
-                                                type="invite"
-                                                onClick={() => handleItemClick(invite, 'invite')}
-                                            />
-                                        ))}
+                            {/* Header */}
+                            <div className="p-6 border-b border-zinc-100 dark:border-zinc-900 flex items-center justify-between bg-zinc-50/50 dark:bg-zinc-900/30">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl">
+                                        <Bell className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                                     </div>
-                                    {invitations.length > MAX_ITEMS_SHOWN && (
-                                        <ViewMoreButton onClick={handleViewMore} count={invitations.length - MAX_ITEMS_SHOWN} />
+                                    <div>
+                                        <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Activity</h2>
+                                        <p className="text-xs text-zinc-500">{unviewedInvites.length + unviewedNotifs.length} unread updates</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setActivityPanelOpen(false)}
+                                    className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-colors text-zinc-500"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+
+                            <div className="flex-1 overflow-y-auto custom-scrollbar">
+                                {/* Collapsible Shared Scrolls Section */}
+                                <CollapsibleSection
+                                    title="Shared Scrolls"
+                                    count={invitations.length}
+                                    unviewedCount={unviewedInvites.length}
+                                    isExpanded={invitesExpanded}
+                                    onToggle={() => setInvitesExpanded(!invitesExpanded)}
+                                    onClearAll={() => handleClearAll('invite')}
+                                    colorClass="indigo"
+                                >
+                                    {limitedInvitations.length === 0 ? (
+                                        <p className="text-xs text-center py-6 text-zinc-500 italic">No shared scrolls yet</p>
+                                    ) : (
+                                        <>
+                                            <div className="space-y-1">
+                                                {limitedInvitations.map((invite) => (
+                                                    <ActivityItemComponent
+                                                        key={invite.id}
+                                                        item={invite}
+                                                        usersMap={usersMap}
+                                                        type="invite"
+                                                        onClick={() => handleItemClick(invite, 'invite')}
+                                                    />
+                                                ))}
+                                            </div>
+                                            {invitations.length > MAX_ITEMS_SHOWN && (
+                                                <ViewMoreButton onClick={handleViewMore} count={invitations.length - MAX_ITEMS_SHOWN} />
+                                            )}
+                                        </>
                                     )}
-                                </>
-                            )}
-                        </CollapsibleSection>
+                                </CollapsibleSection>
 
-                        {/* Collapsible Notifications Section */}
-                        <CollapsibleSection
-                            title="Notifications"
-                            count={notifications.length}
-                            unviewedCount={unviewedNotifs.length}
-                            isExpanded={notifsExpanded}
-                            onToggle={() => setNotifsExpanded(!notifsExpanded)}
-                            onClearAll={() => handleClearAll('notification')}
-                            colorClass="zinc"
-                        >
-                            {limitedNotifications.length === 0 ? (
-                                <p className="text-xs text-center py-6 text-zinc-500 italic">Everything caught up</p>
-                            ) : (
-                                <>
-                                    <div className="space-y-1">
-                                        {limitedNotifications.map((notif) => (
-                                            <ActivityItemComponent
-                                                key={notif.id}
-                                                item={notif}
-                                                usersMap={usersMap}
-                                                type="notification"
-                                                onClick={() => handleItemClick(notif, 'notification')}
-                                            />
-                                        ))}
-                                    </div>
-                                    {notifications.length > MAX_ITEMS_SHOWN && (
-                                        <ViewMoreButton onClick={handleViewMore} count={notifications.length - MAX_ITEMS_SHOWN} />
+                                {/* Collapsible Notifications Section */}
+                                <CollapsibleSection
+                                    title="Notifications"
+                                    count={notifications.length}
+                                    unviewedCount={unviewedNotifs.length}
+                                    isExpanded={notifsExpanded}
+                                    onToggle={() => setNotifsExpanded(!notifsExpanded)}
+                                    onClearAll={() => handleClearAll('notification')}
+                                    colorClass="zinc"
+                                >
+                                    {limitedNotifications.length === 0 ? (
+                                        <p className="text-xs text-center py-6 text-zinc-500 italic">Everything caught up</p>
+                                    ) : (
+                                        <>
+                                            <div className="space-y-1">
+                                                {limitedNotifications.map((notif) => (
+                                                    <ActivityItemComponent
+                                                        key={notif.id}
+                                                        item={notif}
+                                                        usersMap={usersMap}
+                                                        type="notification"
+                                                        onClick={() => handleItemClick(notif, 'notification')}
+                                                    />
+                                                ))}
+                                            </div>
+                                            {notifications.length > MAX_ITEMS_SHOWN && (
+                                                <ViewMoreButton onClick={handleViewMore} count={notifications.length - MAX_ITEMS_SHOWN} />
+                                            )}
+                                        </>
                                     )}
-                                </>
-                            )}
-                        </CollapsibleSection>
+                                </CollapsibleSection>
 
-                        {/* Recent Activity Section - Always Visible */}
-                        <div className="border-t border-zinc-100 dark:border-zinc-900 mt-2">
-                            <div className="p-4 pb-2">
-                                <div className="flex items-center gap-2 mb-3">
-                                    <div className="p-1.5 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-lg">
-                                        <Sparkles className="w-3.5 h-3.5 text-white" />
+                                {/* Recent Activity Section - Always Visible */}
+                                <div className="border-t border-zinc-100 dark:border-zinc-900 mt-2">
+                                    <div className="p-4 pb-2">
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <div className="p-1.5 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-lg">
+                                                <Sparkles className="w-3.5 h-3.5 text-white" />
+                                            </div>
+                                            <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-200 uppercase tracking-wider">
+                                                Recent Activity
+                                            </h3>
+                                        </div>
                                     </div>
-                                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-200 uppercase tracking-wider">
-                                        Recent Activity
-                                    </h3>
+
+                                    <div className="px-2 pb-4 space-y-1.5">
+                                        {recentItems.length === 0 ? (
+                                            <div className="flex flex-col items-center justify-center py-8 text-center">
+                                                <div className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-full mb-3">
+                                                    <Clock className="w-6 h-6 text-zinc-400" />
+                                                </div>
+                                                <p className="text-xs text-zinc-500 italic">No recent activity</p>
+                                            </div>
+                                        ) : (
+                                            recentItems.map((item) => (
+                                                <RecentActivityItem
+                                                    key={item.id}
+                                                    item={item}
+                                                    usersMap={usersMap}
+                                                    onClick={() => handleItemClick(item, item.itemType)}
+                                                />
+                                            ))
+                                        )}
+                                    </div>
                                 </div>
                             </div>
-
-                            <div className="px-2 pb-4 space-y-1.5">
-                                {recentItems.length === 0 ? (
-                                    <div className="flex flex-col items-center justify-center py-8 text-center">
-                                        <div className="p-3 bg-zinc-100 dark:bg-zinc-800 rounded-full mb-3">
-                                            <Clock className="w-6 h-6 text-zinc-400" />
-                                        </div>
-                                        <p className="text-xs text-zinc-500 italic">No recent activity</p>
-                                    </div>
-                                ) : (
-                                    recentItems.map((item) => (
-                                        <RecentActivityItem
-                                            key={item.id}
-                                            item={item}
-                                            usersMap={usersMap}
-                                            onClick={() => handleItemClick(item, item.itemType)}
-                                        />
-                                    ))
-                                )}
-                            </div>
-                        </div>
+                        </motion.div>
                     </div>
-                </motion.div>
-            </div>
-        </AnimatePresence>
+                )}
+            </AnimatePresence>
+
+            {/* ViewResourceModal for shared scrolls */}
+            <ViewResourceModal
+                isOpen={resourceModalOpen}
+                onClose={() => {
+                    setResourceModalOpen(false);
+                    setSelectedResource(null);
+                }}
+                title={selectedResource?.title || ''}
+                content={selectedResource?.content || ''}
+                type="scroll"
+                collaborationId={selectedResource?.collaborationId}
+            />
+        </>
     );
 }
 
