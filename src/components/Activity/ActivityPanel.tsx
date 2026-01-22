@@ -8,7 +8,10 @@ import { useBible } from '@/context/BibleContext';
 import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
+
 import { ViewResourceModal } from '@/components/Meeting/ViewResourceModal';
+import { collection, query, where, getDocs, limit } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 const MAX_ITEMS_SHOWN = 5;
 const MAX_RECENT_ITEMS = 8;
@@ -61,12 +64,11 @@ export function ActivityPanel() {
         setActivityPanelOpen(false);
     };
 
-    const handleItemClick = (item: any, type: 'invite' | 'notification') => {
+    const handleItemClick = async (item: any, type: 'invite' | 'notification') => {
         markAsViewed(item.id, type);
 
         // For shared scrolls (invites)
         if (type === 'invite') {
-            console.log('Clicked Invite Item:', item); // Debug log
             setSelectedResource({
                 title: item.noteTitle || item.title || 'Shared Scroll',
                 content: item.previewContent || item.content || item.noteContent || item.description || '<p>No preview content available (Check Console)</p>',
@@ -84,13 +86,54 @@ export function ActivityPanel() {
                 setActivityPanelOpen(false);
             } else {
                 // For other resources (collaborations/scrolls)
+
+                // 1. Initial State with Loading
                 setSelectedResource({
                     title: item.resourceTitle || item.title || 'Shared Resource',
-                    content: item.content || '',
+                    content: '<div class="flex items-center justify-center p-8"><span class="animate-pulse text-indigo-500 font-medium">Loading content...</span></div>',
                     collaborationId: item.resourceId
                 });
                 setResourceModalOpen(true);
                 setActivityPanelOpen(false);
+
+                // 2. Resolve Content
+                let finalContent = item.previewContent || item.content || '';
+
+                // A. Try Local Lookup in invitations (Active Context)
+                if (!finalContent) {
+                    const localMatch = invitations.find(inv => inv.resourceId === item.resourceId);
+                    if (localMatch) {
+                        console.log('[ActivityPanel] Found local content match in invitations');
+                        finalContent = localMatch.previewContent || localMatch.content || localMatch.noteContent || '';
+                    }
+                }
+
+                // B. Async Fetch if still missing
+                if (!finalContent) {
+                    try {
+                        console.log('[ActivityPanel] Fetching content for resource:', item.resourceId);
+                        const q = query(collection(db, 'invitations'), where('resourceId', '==', item.resourceId), limit(1));
+                        const snap = await getDocs(q);
+                        if (!snap.empty) {
+                            const data = snap.docs[0].data();
+                            finalContent = data.previewContent || data.content || data.noteContent || '';
+                            console.log('[ActivityPanel] Fetched content successfully');
+                        } else {
+                            console.log('[ActivityPanel] No invitation found for resource.');
+                            // Try to provide a helpful fallback
+                            finalContent = '<p class="text-gray-500 italic text-center p-4">Content could not be loaded. You may need to open the Fellowship page directly.</p>';
+                        }
+                    } catch (e) {
+                        console.error("[ActivityPanel] Failed to fetch content for notification", e);
+                        finalContent = '<p class="text-red-400 italic text-center p-4">Error loading content.</p>';
+                    }
+                }
+
+                // 3. Update Modal with resolved content
+                setSelectedResource(prev => prev ? ({
+                    ...prev,
+                    content: finalContent || item.description || '<p>No content available.</p>'
+                }) : null);
             }
         } else {
             setActivityPanelOpen(false);
