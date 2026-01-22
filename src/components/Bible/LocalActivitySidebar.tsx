@@ -116,6 +116,7 @@ export function LocalActivitySidebar({ onJoinScroll, currentScrollId, className 
     };
 
     const handleItemClick = (item: any, type: 'invite' | 'notification') => {
+        console.log('handleItemClick called:', { item, type });
         markAsViewed(item.id, type);
 
         // For invites (shared scrolls), show the ViewResourceModal with options

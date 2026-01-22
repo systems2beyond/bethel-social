@@ -27,11 +27,18 @@ export function ViewResourceModal({ isOpen, onClose, title, content, type = 'scr
     const { user } = useAuth();
     const { openNote, openCollaboration, openBible, createTabGroup, openMultipleTabs } = useBible();
     const [mounted, setMounted] = useState(false);
+    const [showCopied, setShowCopied] = useState(false);
 
     useEffect(() => {
         setMounted(true);
         return () => setMounted(false);
     }, []);
+
+    useEffect(() => {
+        if (isOpen) {
+            console.log('ViewResourceModal opened:', { title, type, meetingId, explicitCollaborationId });
+        }
+    }, [isOpen, title, type, meetingId, explicitCollaborationId]);
 
     if (!isOpen) return null;
 
