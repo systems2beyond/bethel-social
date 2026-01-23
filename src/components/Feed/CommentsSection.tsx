@@ -40,8 +40,8 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post, onCommen
     const activeThread = focusedCommentId ? comments.find(c => c.id === focusedCommentId) : null;
 
     const filteredUsers = MOCK_USERS.filter(u =>
-        u.name.toLowerCase().includes(mentionQuery.toLowerCase()) ||
-        u.handle.toLowerCase().includes(mentionQuery.toLowerCase())
+        (u.name?.toLowerCase() || '').includes(mentionQuery.toLowerCase()) ||
+        (u.handle?.toLowerCase() || '').includes(mentionQuery.toLowerCase())
     );
 
     const [collapsedThreads, setCollapsedThreads] = useState<Set<string>>(new Set());

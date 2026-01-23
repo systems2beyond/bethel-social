@@ -51,7 +51,7 @@ export default function ResourcePicker({ onSelect, onCancel }: ResourcePickerPro
     }, [user]);
 
     const filtered = resources.filter(r =>
-        r.title.toLowerCase().includes(searchTerm.toLowerCase())
+        (r.title || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     return (

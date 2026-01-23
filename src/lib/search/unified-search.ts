@@ -61,9 +61,9 @@ export class UnifiedSearchService {
 
         return sermons
             .filter(s =>
-                s.title.toLowerCase().includes(lowerTerm) ||
+                (s.title?.toLowerCase() || '').includes(lowerTerm) ||
                 (s.summary && s.summary.toLowerCase().includes(lowerTerm)) ||
-                (s.outline && s.outline.some(o => o.toLowerCase().includes(lowerTerm)))
+                (s.outline && Array.isArray(s.outline) && s.outline.some(o => (o || '').toLowerCase().includes(lowerTerm)))
             )
             .slice(0, 3) // Top 3
             .map(s => ({
@@ -102,8 +102,8 @@ export class UnifiedSearchService {
                     };
                 })
                 .filter(n =>
-                    n.title.toLowerCase().includes(term.toLowerCase()) ||
-                    n.content.toLowerCase().includes(term.toLowerCase())
+                    (n.title?.toLowerCase() || '').includes(term.toLowerCase()) ||
+                    (n.content?.toLowerCase() || '').includes(term.toLowerCase())
                 )
                 .slice(0, 3)
                 .map(({ content, ...rest }) => rest); // Remove full content from result

@@ -194,7 +194,13 @@ export const SocialFeed: React.FC = () => {
                 <div className="mb-6">
                     <MeetingInviteCard
                         meeting={nextMeeting}
-                        onJoin={() => window.open(nextMeeting.meetLink, '_blank')}
+                        onJoin={() => {
+                            if (nextMeeting.meetLink) {
+                                window.open(nextMeeting.meetLink, '_blank');
+                            } else {
+                                alert("Meeting link is not available yet.");
+                            }
+                        }}
                         onViewDetails={() => setSelectedMeeting(nextMeeting)}
                     />
                 </div>
@@ -205,7 +211,13 @@ export const SocialFeed: React.FC = () => {
                 <MeetingLobby
                     meeting={selectedMeeting}
                     onClose={() => setSelectedMeeting(null)}
-                    onJoin={() => window.open(selectedMeeting.meetLink, '_blank')}
+                    onJoin={() => {
+                        if (selectedMeeting.meetLink) {
+                            window.open(selectedMeeting.meetLink, '_blank');
+                        } else {
+                            alert("Meeting link is not available yet. Please check back later.");
+                        }
+                    }}
                 />
             )}
 

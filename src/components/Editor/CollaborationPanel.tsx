@@ -103,7 +103,7 @@ export default function CollaborationPanel({
     };
 
     const filteredMentionUsers = onlineUsers.filter(u =>
-        u.name.toLowerCase().includes(mentionFilter) && u.name !== currentUserName
+        (u.name?.toLowerCase() || '').includes(mentionFilter) && u.name !== currentUserName
     );
 
     const handleSubmitComment = () => {

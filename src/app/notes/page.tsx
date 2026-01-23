@@ -45,7 +45,7 @@ export default function NotesPage() {
 
     const handleLinkClick = (href: string) => {
         if (href.startsWith('verse://')) {
-            const ref = decodeURIComponent(href.replace('verse://', ''));
+            const ref = decodeURIComponent((href || '').replace('verse://', ''));
             const match = ref.match(/((?:[123]\s)?[A-Z][a-z]+\.?)\s(\d+):(\d+)(?:-(\d+))?/);
             if (match) {
                 const book = match[1].trim();
@@ -243,8 +243,8 @@ export default function NotesPage() {
 
 
     const filteredNotes = notes.filter(note =>
-        note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        note.content.toLowerCase().includes(searchQuery.toLowerCase())
+        (note.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (note.content || '').toLowerCase().includes(searchQuery.toLowerCase())
     );
 
     if (loading) return <div className="p-8 flex justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>;
@@ -318,8 +318,8 @@ export default function NotesPage() {
                                 )}>
                                     {note.title || 'Untitled Note'}
                                 </h3>
-                                <p className="text-xs text-gray-500 dark:text-gray-400 truncate line-clamp-2 h-8">
-                                    {note.content.replace(/<[^>]*>/g, '') || 'No content'}
+                                <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 h-8">
+                                    {(note.content || '').replace(/<[^>]*>/g, '') || 'No content'}
                                 </p>
                                 <div className="flex items-center justify-between mt-2">
                                     <span className="text-[10px] text-gray-400 font-medium">

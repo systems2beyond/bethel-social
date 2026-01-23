@@ -45,7 +45,7 @@ export default function AdminDonationsTable({ donations, loading = false }: Admi
             failed: 'bg-red-100 text-red-800',
             refunded: 'bg-gray-100 text-gray-800',
         };
-        const normalizedStatus = (status.toLowerCase() in styles) ? status.toLowerCase() : 'pending';
+        const normalizedStatus = ((status || '').toLowerCase() in styles) ? (status || '').toLowerCase() : 'pending';
         const activeStyle = styles[normalizedStatus as keyof typeof styles];
 
         return (

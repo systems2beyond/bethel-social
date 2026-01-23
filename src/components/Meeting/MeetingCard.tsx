@@ -2,16 +2,7 @@ import React from 'react';
 import { Calendar, Clock, Video, Users, MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export interface Meeting {
-    id: string;
-    topic: string;
-    description?: string;
-    startTime: number; // Unix timestamp
-    durationMinutes: number;
-    type: 'bible-study' | 'fellowship' | 'prayer' | 'general';
-    hostId?: string;
-    attendeeIds?: string[];
-}
+import { Meeting } from '@/types';
 
 interface MeetingCardProps {
     meeting: Meeting;
@@ -20,6 +11,10 @@ interface MeetingCardProps {
 
 export function MeetingCard({ meeting, onJoin }: MeetingCardProps) {
     const startDate = new Date(meeting.startTime);
+
+    const status = meeting.status || 'scheduled';
+    const isLive = status === 'active';
+    const isCompleted = status === 'completed';
 
     // Type-specific styling
     const getTypeStyles = (type: string) => {
@@ -44,10 +39,16 @@ export function MeetingCard({ meeting, onJoin }: MeetingCardProps) {
                             <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide border", getTypeStyles(meeting.type))}>
                                 {meeting.type.replace('-', ' ')}
                             </span>
-                            {meeting.attendeeIds && meeting.attendeeIds.length > 0 && (
+                            {isLive && (
+                                <span className="flex items-center gap-1.5 px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs font-bold rounded-full animate-pulse">
+                                    <span className="w-2 h-2 bg-red-500 rounded-full" />
+                                    LIVE
+                                </span>
+                            )}
+                            {meeting.participants && meeting.participants.length > 0 && (
                                 <span className="flex items-center gap-1 text-[10px] text-gray-500 font-medium">
                                     <Users className="w-3 h-3" />
-                                    {meeting.attendeeIds.length}
+                                    {meeting.participants.length}
                                 </span>
                             )}
                         </div>
@@ -80,10 +81,18 @@ export function MeetingCard({ meeting, onJoin }: MeetingCardProps) {
                 <div className="flex items-center gap-3">
                     <button
                         onClick={() => onJoin?.(meeting.id)}
-                        className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-medium py-2.5 px-4 rounded-lg transition-all shadow-sm shadow-blue-500/20 group-hover:shadow-blue-500/30"
+                        disabled={isCompleted}
+                        className={cn(
+                            "flex-1 flex items-center justify-center gap-2 font-medium py-2.5 px-4 rounded-lg transition-all shadow-sm",
+                            isLive
+                                ? "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-blue-500/20 group-hover:shadow-blue-500/30"
+                                : isCompleted
+                                    ? "bg-gray-100 dark:bg-zinc-800 text-gray-400 dark:text-gray-500 cursor-not-allowed"
+                                    : "bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-zinc-700"
+                        )}
                     >
                         <Video className="w-4 h-4" />
-                        Join Meeting
+                        {isLive ? 'Join Meeting' : isCompleted ? 'Ended' : 'View Details'}
                     </button>
                     {/* Add to Calendar button could go here */}
                 </div>

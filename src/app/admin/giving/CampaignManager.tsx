@@ -74,8 +74,8 @@ export default function CampaignManager() {
     };
 
     const filteredCampaigns = campaigns.filter(c =>
-        c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.description?.toLowerCase().includes(searchQuery.toLowerCase())
+        (c.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (c.description || '').toLowerCase().includes(searchQuery.toLowerCase())
     );
 
     if (loading) return (

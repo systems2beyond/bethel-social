@@ -57,7 +57,8 @@ export default function MeetingScheduler({ onClose, onScheduled }: MeetingSchedu
                 meetLink, // From Google API
                 participants: [user.uid],
                 files: [],
-                createdAt: Date.now() // client-side approx
+                createdAt: Date.now(), // client-side approx
+                status: 'scheduled'
             };
 
             const docRef = await addDoc(collection(db, 'meetings'), {
@@ -116,8 +117,8 @@ export default function MeetingScheduler({ onClose, onScheduled }: MeetingSchedu
                                     type="button"
                                     onClick={() => setType(t)}
                                     className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-colors ${type === t
-                                            ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 ring-1 ring-blue-200 dark:ring-blue-800'
-                                            : 'bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-zinc-700'
+                                        ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 ring-1 ring-blue-200 dark:ring-blue-800'
+                                        : 'bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-zinc-700'
                                         }`}
                                 >
                                     {t.replace('-', ' ')}

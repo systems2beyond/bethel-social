@@ -109,7 +109,7 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
             let aiResponse = result.data.response;
 
             // Strip SUGGEST_SUMMARY tag if present (though less likely to be used here, good to be safe)
-            aiResponse = aiResponse.replace(/<SUGGEST_SUMMARY>/g, '').trim();
+            aiResponse = (aiResponse || '').replace(/<SUGGEST_SUMMARY>/g, '').trim();
 
             // Check for "context missing" error from the AI itself (if it returns it as text)
             if (aiResponse.includes("The provided context does not contain the answer") || aiResponse.includes("I am not able to answer this question")) {
@@ -162,7 +162,7 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
                 intent: 'summarize_notes'
             }) as any;
 
-            const summary = result.data.response;
+            const summary = result.data.response || '';
             onMessagesChange([...newMessages, { role: 'model', content: summary }]);
         } catch (error) {
             console.error('Error summarizing:', error);
@@ -237,7 +237,7 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
 
                     {messages.map((msg, idx) => {
                         // Hide system messages used for synthesis trigger
-                        if (msg.role === 'user' && (msg.content.startsWith('System:') || msg.content.startsWith('Context:'))) return null;
+                        if (msg.role === 'user' && (msg.content?.startsWith('System:') || msg.content?.startsWith('Context:'))) return null;
 
                         return (
                             <div key={idx} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} space-y-2`}>

@@ -36,8 +36,8 @@ export const MeetingChat: React.FC<MeetingChatProps> = ({ meetingId }) => {
     const activeThread = focusedCommentId ? comments.find(c => c.id === focusedCommentId) : null;
 
     const filteredUsers = MOCK_USERS.filter(u =>
-        u.name.toLowerCase().includes(mentionQuery.toLowerCase()) ||
-        u.handle.toLowerCase().includes(mentionQuery.toLowerCase())
+        (u.name?.toLowerCase() || '').includes(mentionQuery.toLowerCase()) ||
+        (u.handle?.toLowerCase() || '').includes(mentionQuery.toLowerCase())
     );
 
     useEffect(() => {

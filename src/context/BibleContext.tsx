@@ -76,6 +76,9 @@ export interface BibleContextType {
     noteTitle: string;
     openNote: (noteId: string, title?: string) => void;
     openCollaboration: (collabId: string, title?: string, initialContent?: string) => void;
+    // Deep Linking
+    initialSearchQuery: string | null;
+    openStudyWithSearch: (query: string) => void;
 }
 
 const BibleContext = createContext<BibleContextType | undefined>(undefined);
@@ -307,6 +310,13 @@ export function BibleProvider({ children }: { children: ReactNode }) {
         setIsStudyOpen(true);
     }, [setCollaborationId]);
 
+    const [initialSearchQuery, setInitialSearchQuery] = useState<string | null>(null);
+
+    const openStudyWithSearch = useCallback((query: string) => {
+        setInitialSearchQuery(query);
+        setIsStudyOpen(true);
+    }, []);
+
     const registerInsertHandler = useCallback((handler: ((text: string) => void) | null) => {
         setOnInsertNote(() => handler);
     }, []);
@@ -398,14 +408,16 @@ export function BibleProvider({ children }: { children: ReactNode }) {
         createTabGroup,
         toggleGroupCollapse,
         closeGroup,
-        openMultipleTabs
+        openMultipleTabs,
+        initialSearchQuery,
+        openStudyWithSearch
     }), [
         isOpen, isStudyOpen, reference, version, openBible, closeBible, openStudy, closeStudy,
         setReference, setVersion, onInsertNote, registerInsertHandler, tabs, activeTabId,
         addTab, closeTab, setActiveTab, searchVersion, setSearchVersion, activeNoteId,
         collaborationId, setCollaborationId, collaborationInitialContent, setCollaborationInitialContent,
         noteTitle, openNote, openCollaboration, groups, createTabGroup, toggleGroupCollapse, closeGroup,
-        openMultipleTabs, activeVideo, openVideo, closeVideo
+        openMultipleTabs, activeVideo, openVideo, closeVideo, initialSearchQuery, openStudyWithSearch
     ]);
 
     return (

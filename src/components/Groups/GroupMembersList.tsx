@@ -64,7 +64,7 @@ export function GroupMembersList({ groupId, currentUserRole }: GroupMembersListP
     };
 
     const filteredMembers = members.filter(m =>
-        m.user?.displayName?.toLowerCase().includes(searchQuery.toLowerCase())
+        (m.user?.displayName || '').toLowerCase().includes(searchQuery.toLowerCase())
     );
 
     const isAdmin = currentUserRole === 'admin';

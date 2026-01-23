@@ -214,7 +214,7 @@ export default function CursorTestPage() {
 
     // Filter online users for mention dropdown
     const filteredMentionUsers = onlineUsers.filter(u =>
-        u.name.toLowerCase().includes(mentionFilter) && u.name !== userName
+        (u.name || '').toLowerCase().includes(mentionFilter) && u.name !== userName
     );
 
     const handleAddReply = (commentId: string) => {
@@ -614,8 +614,8 @@ export default function CursorTestPage() {
                         <button
                             onClick={() => setSuggestingMode(!suggestingMode)}
                             className={`ml-auto px-3 py-1 rounded-lg text-sm font-medium transition flex items-center gap-2 ${suggestingMode
-                                    ? 'bg-orange-500/20 text-orange-400 border border-orange-500'
-                                    : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                                ? 'bg-orange-500/20 text-orange-400 border border-orange-500'
+                                : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
                                 }`}
                         >
                             ✏️ {suggestingMode ? 'Suggesting' : 'Editing'}

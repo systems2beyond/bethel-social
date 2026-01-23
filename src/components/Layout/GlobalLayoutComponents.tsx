@@ -4,6 +4,7 @@ import React from 'react';
 import { ActivityPanel } from '@/components/Activity/ActivityPanel';
 import { ViewResourceModal } from '@/components/Meeting/ViewResourceModal';
 import { useActivity } from '@/context/ActivityContext';
+import { LocalActivitySidebar } from '@/components/Bible/LocalActivitySidebar';
 
 export function GlobalLayoutComponents() {
     const { selectedResource, setSelectedResource } = useActivity();
@@ -11,6 +12,7 @@ export function GlobalLayoutComponents() {
     return (
         <>
             <ActivityPanel />
+            <LocalActivitySidebar />
 
             {/* Global Resource Modal */}
             {selectedResource && (

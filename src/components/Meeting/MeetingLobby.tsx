@@ -1,10 +1,13 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Meeting } from '@/types';
 import { MeetingChat } from './MeetingChat';
-import { Users, FileText, Video, ArrowRight, Share2, File } from 'lucide-react';
+import { Users, FileText, Video, ArrowRight, Share2, Play, Loader2, Clock } from 'lucide-react';
 import { format } from 'date-fns';
+import { useAuth } from '@/context/AuthContext';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '@/lib/firebase';
 
 interface MeetingLobbyProps {
     meeting: Meeting;
@@ -13,7 +16,43 @@ interface MeetingLobbyProps {
 }
 
 export default function MeetingLobby({ meeting, onClose, onJoin }: MeetingLobbyProps) {
-    const isLive = Date.now() >= meeting.startTime && Date.now() <= meeting.startTime + (meeting.durationMinutes * 60 * 1000);
+    const { user } = useAuth();
+    const [starting, setStarting] = useState(false);
+
+    // Status Logic
+    // If status is specific, use it. Fallback to time-based for legacy.
+    const status = meeting.status || 'scheduled';
+    const isLive = status === 'active';
+    const isCompleted = status === 'completed';
+    const isHost = user?.uid === meeting.hostId;
+
+    const handleStartMeeting = async () => {
+        if (!isHost) return;
+        setStarting(true);
+        try {
+            const updateStatus = httpsCallable(functions, 'updateMeetingStatus');
+            await updateStatus({
+                meetingId: meeting.id,
+                status: 'active'
+            });
+            // The parent listener should update the meeting prop, triggering UI refresh.
+            // But we can also force a join or waiting state if needed. 
+            // Ideally, we wait for visual confirmation or just join immediately after success?
+            // Let's rely on prop update or manual join for now.
+            // Actually, for better UX, let's call onJoin() immediately if successful?
+            // "Start & Join" essentially.
+
+            // To ensure database update propagates, we might want to wait a split second or rely on caller?
+            // For now, let's just let the UI update to "Join" state or auto-join?
+            // Let's keep it simple: Host starts, button becomes Join.
+
+        } catch (err) {
+            console.error("Failed to start meeting:", err);
+            alert("Failed to start meeting. Please try again.");
+        } finally {
+            setStarting(false);
+        }
+    };
 
     // Placeholder for file sharing
     const files = [
@@ -29,9 +68,17 @@ export default function MeetingLobby({ meeting, onClose, onJoin }: MeetingLobbyP
                 <div className="md:w-2/5 p-6 bg-gray-50 dark:bg-zinc-950 flex flex-col border-r border-gray-200 dark:border-zinc-800">
                     {/* Header */}
                     <div className="mb-8">
-                        <span className="inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 mb-4">
-                            {meeting.type}
-                        </span>
+                        <div className="flex items-center gap-2 mb-4">
+                            <span className="inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+                                {meeting.type}
+                            </span>
+                            {isLive && (
+                                <span className="flex items-center gap-1.5 px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs font-bold rounded-full animate-pulse">
+                                    <span className="w-2 h-2 bg-red-500 rounded-full" />
+                                    LIVE
+                                </span>
+                            )}
+                        </div>
                         <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2 leading-tight">
                             {meeting.topic}
                         </h2>
@@ -76,13 +123,50 @@ export default function MeetingLobby({ meeting, onClose, onJoin }: MeetingLobbyP
 
                     {/* Actions */}
                     <div className="mt-auto space-y-3">
-                        <button
-                            onClick={onJoin}
-                            className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm shadow-lg shadow-blue-500/30 transition-all flex items-center justify-center gap-2"
-                        >
-                            <Video className="w-4 h-4" />
-                            {isLive ? 'Join Meeting Now' : 'Join Meeting'}
-                        </button>
+                        {isLive ? (
+                            <button
+                                onClick={onJoin}
+                                className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm shadow-lg shadow-blue-500/30 transition-all flex items-center justify-center gap-2"
+                            >
+                                <Video className="w-4 h-4" />
+                                Join Meeting Now
+                            </button>
+                        ) : isCompleted ? (
+                            <button
+                                disabled
+                                className="w-full py-3.5 bg-gray-100 dark:bg-zinc-800 text-gray-400 dark:text-gray-500 rounded-xl font-bold text-sm cursor-not-allowed flex items-center justify-center gap-2"
+                            >
+                                <Clock className="w-4 h-4" />
+                                Meeting Ended
+                            </button>
+                        ) : isHost ? (
+                            <button
+                                onClick={handleStartMeeting}
+                                disabled={starting}
+                                className="w-full py-3.5 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold text-sm shadow-lg shadow-green-500/30 transition-all flex items-center justify-center gap-2"
+                            >
+                                {starting ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        Starting...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Play className="w-4 h-4" />
+                                        Start Meeting
+                                    </>
+                                )}
+                            </button>
+                        ) : (
+                            <button
+                                disabled
+                                className="w-full py-3.5 bg-gray-100 dark:bg-zinc-800 text-gray-500 dark:text-gray-400 rounded-xl font-bold text-sm cursor-not-allowed flex items-center justify-center gap-2"
+                            >
+                                <Clock className="w-4 h-4" />
+                                Waiting for Host to Start...
+                            </button>
+                        )}
+
                         <button
                             onClick={onClose}
                             className="w-full py-3 bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 text-gray-700 dark:text-gray-300 rounded-xl font-medium text-sm hover:bg-gray-50 dark:hover:bg-zinc-700 transition-colors"

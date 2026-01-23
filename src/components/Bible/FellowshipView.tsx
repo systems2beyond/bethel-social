@@ -187,8 +187,8 @@ export function FellowshipView({ content, collaborationId, userName, userColor, 
 
                 // Try to find user in online users (case-insensitive partial match)
                 const onlineMatch = onlineUsers.find(u =>
-                    u.name.toLowerCase().includes(mentionedName.toLowerCase()) ||
-                    mentionedName.toLowerCase().includes(u.name.split(' ')[0].toLowerCase())
+                    (u.name && u.name.toLowerCase().includes(mentionedName.toLowerCase())) ||
+                    (mentionedName && u.name && mentionedName.toLowerCase().includes(u.name.split(' ')[0].toLowerCase()))
                 );
 
                 console.log('[FellowshipView] Online match result:', onlineMatch);

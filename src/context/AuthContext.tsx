@@ -134,6 +134,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const signInWithGoogle = async () => {
         const provider = new GoogleAuthProvider();
         provider.addScope('https://www.googleapis.com/auth/gmail.send');
+        provider.addScope('https://www.googleapis.com/auth/calendar.events');
 
         // Force consent to ensure we get a fresh credential with the new scope
         provider.setCustomParameters({

@@ -168,7 +168,11 @@ export default function EventsPage() {
                                 key={item.id}
                                 meeting={item}
                                 onJoin={(id) => {
-                                    window.open(`/meet/${id}`, '_blank');
+                                    if (item.meetLink) {
+                                        window.open(item.meetLink, '_blank');
+                                    } else {
+                                        alert("Meeting link is not available yet. Please check back later.");
+                                    }
                                 }}
                             />
                         )

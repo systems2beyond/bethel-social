@@ -198,6 +198,7 @@ export interface Meeting {
         verse?: number;
     };
     createdAt: number;
+    status: 'scheduled' | 'active' | 'completed';
 }
 
 export interface GroupEvent {

@@ -20,7 +20,7 @@ import AiLessonCreator from './AiLessonCreator';
 import CreateMeetingModal from '../Meeting/CreateMeetingModal';
 import FellowshipView from './FellowshipView';
 import ShareScrollModal from './ShareScrollModal';
-import { LocalActivitySidebar } from './LocalActivitySidebar';
+
 
 interface BibleStudyModalProps {
     onClose: () => void;
@@ -181,6 +181,20 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
         }, 200); // Fast debounce for type-ahead
         return () => clearTimeout(timer);
     }, [searchQuery, user?.uid, searchVersion]);
+
+
+    // Deep Link Handler (New)
+    const { initialSearchQuery } = useBible();
+    useEffect(() => {
+        if (initialSearchQuery && initialSearchQuery !== searchQuery) {
+            console.log('BibleStudyModal: Deep link search triggered', initialSearchQuery);
+            setSearchQuery(initialSearchQuery);
+            setRightPaneView('search');
+            setSplitRatio(0.2); // Expand result pane
+            performSearch(initialSearchQuery);
+        }
+    }, [initialSearchQuery]);
+
 
     // Main Search (Detailed Results)
     const performSearch = async (query: string) => {
@@ -1303,20 +1317,7 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                     </div>
                 </div>
 
-                {/* Local Activity Sidebar - Visible in Fellowship or Notes views */}
-                {(rightPaneView === 'fellowship' || rightPaneView === 'notes') && (
-                    <LocalActivitySidebar
-                        onJoinScroll={(id: string, title?: string) => {
-                            console.log('[BibleStudyModal] Joining local scroll:', id);
-                            setCollaborationId(id);
-                            // We don't have initial content for someone else's scroll, 
-                            // Tiptap/Yjs will fetch it
-                            setCollaborationInitialContent('');
-                            setRightPaneView('fellowship');
-                        }}
-                        currentScrollId={collaborationId || ''}
-                    />
-                )}
+
 
                 <BibleAiChatModal
                     isOpen={isAiChatOpen}

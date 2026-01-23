@@ -3,9 +3,10 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { Loader2, PlayCircle, Edit2, Trash2 } from 'lucide-react';
+import { Loader2, PlayCircle, Edit2, Trash2, Plus } from 'lucide-react';
 import DriveFolderSettings from './DriveFolderSettings';
 import Link from 'next/link';
+import CreateSermonModal from '@/components/Sermons/CreateSermonModal';
 
 interface Sermon {
     id: string;
@@ -19,6 +20,8 @@ interface Sermon {
 export default function SermonManager() {
     const [sermons, setSermons] = useState<Sermon[]>([]);
     const [loading, setLoading] = useState(true);
+
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
     useEffect(() => {
         const q = query(collection(db, 'sermons'), orderBy('date', 'desc'));
@@ -49,10 +52,13 @@ export default function SermonManager() {
                             <PlayCircle className="w-5 h-5 mr-2 text-gray-500" />
                             Manage Sermons
                         </h2>
-                        {/* Maybe add "Create New" link here mapping to /sermons? or keep it on public page? */}
-                        <Link href="/sermons" className="text-sm text-blue-600 hover:underline">
-                            Go to Sermons Page
-                        </Link>
+                        <button
+                            onClick={() => setIsCreateModalOpen(true)}
+                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-lg hover:shadow-xl"
+                        >
+                            <span className="text-xl leading-none mb-0.5">+</span>
+                            <span>New Sermon</span>
+                        </button>
                     </div>
 
                     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -72,13 +78,15 @@ export default function SermonManager() {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
-                                        {sermons.map((sermon) => (
+                                        {sermons.map((sermon: any) => (
                                             <tr key={sermon.id} className="hover:bg-gray-50 transition-colors">
                                                 <td className="px-6 py-4">
                                                     <span className="font-medium text-gray-900">{sermon.title}</span>
                                                 </td>
                                                 <td className="px-6 py-4 text-sm text-gray-500">
-                                                    {sermon.date}
+                                                    {sermon.date?.seconds
+                                                        ? new Date(sermon.date.seconds * 1000).toLocaleDateString()
+                                                        : new Date(sermon.date).toLocaleDateString()}
                                                 </td>
                                                 <td className="px-6 py-4 text-sm text-gray-500 capitalize">
                                                     {sermon.source || 'youtube'}
@@ -115,6 +123,13 @@ export default function SermonManager() {
                     <DriveFolderSettings />
                 </div>
             </div>
+
+            {isCreateModalOpen && (
+                <CreateSermonModal
+                    onClose={() => setIsCreateModalOpen(false)}
+                    onSuccess={() => setIsCreateModalOpen(false)}
+                />
+            )}
         </div>
     );
 }

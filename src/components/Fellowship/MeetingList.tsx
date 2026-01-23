@@ -8,7 +8,7 @@ import { Loader2, Calendar, Video, Check, X, Clock, BookOpen, Sparkles, ChevronD
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
 import { toast } from 'sonner';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface Meeting {
     id: string;
@@ -204,7 +204,6 @@ function MeetingCard({ meeting, currentUserId }: { meeting: Meeting, currentUser
 
     return (
         <motion.div
-            layout
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className={`
@@ -281,14 +280,18 @@ function MeetingCard({ meeting, currentUserId }: { meeting: Meeting, currentUser
                             </>
                         )}
 
-                        {/* Join Button */}
                         {canJoin && meeting.meetLink && !isPast && (
-                            <button className={`
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    window.open(meeting.meetLink, '_blank');
+                                }}
+                                className={`
                                 px-4 py-1.5 rounded-lg text-xs font-bold transition-all
                                 ${isActive
-                                    ? 'bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-500/20'
-                                    : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700'
-                                }
+                                        ? 'bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-500/20'
+                                        : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700'
+                                    }
                             `}>
                                 {isActive ? 'JOIN LIVE' : 'JOIN'}
                             </button>
@@ -305,138 +308,147 @@ function MeetingCard({ meeting, currentUserId }: { meeting: Meeting, currentUser
                     </button>
                 )}
             </div>
-
             {/* Expanded Details */}
-            {expanded && (
-                <div className="px-4 pb-4 border-t border-zinc-800/50 pt-4 flex flex-col md:flex-row gap-6 animate-in slide-in-from-top-2">
-                    {/* Left: Controls & Context */}
-                    <div className="flex-1 space-y-6">
-                        {meeting.description && (
-                            <div className="text-sm text-zinc-400 bg-zinc-800/30 p-3 rounded-lg border border-zinc-800">
-                                {meeting.description}
-                            </div>
-                        )}
+            <AnimatePresence>
+                {expanded && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.3, ease: "easeInOut" }}
+                        className="overflow-hidden"
+                    >
+                        <div className="px-4 pb-4 border-t border-zinc-800/50 pt-4 flex flex-col md:flex-row gap-6">
+                            {/* Left: Controls & Context */}
+                            <div className="flex-1 space-y-6">
+                                {meeting.description && (
+                                    <div className="text-sm text-zinc-400 bg-zinc-800/30 p-3 rounded-lg border border-zinc-800">
+                                        {meeting.description}
+                                    </div>
+                                )}
 
-                        {/* Invite Actions (Expanded) */}
-                        {!isHost && response === 'pending' && !isPast && (
-                            <div className="flex items-center gap-2 p-3 bg-amber-500/5 border border-amber-500/20 rounded-xl">
-                                <span className="text-xs text-amber-500 font-medium flex-1">You are invited to this meeting.</span>
-                                <button
-                                    onClick={() => handleRespond('declined')}
-                                    className="text-xs text-zinc-400 hover:text-white px-3 py-1.5"
-                                >
-                                    Decline
-                                </button>
-                                <button
-                                    onClick={() => handleRespond('accepted')}
-                                    className="text-xs bg-amber-600 hover:bg-amber-500 text-white px-4 py-1.5 rounded-lg font-bold"
-                                >
-                                    Accept
-                                </button>
-                            </div>
-                        )}
-
-                        {/* Host Controls */}
-                        {isHost && (
-                            <div className="space-y-2">
-                                <h4 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">Host Controls</h4>
-                                <div className="flex gap-2">
-                                    {!isActive && !isCompleted && (
+                                {/* Invite Actions (Expanded) */}
+                                {!isHost && response === 'pending' && !isPast && (
+                                    <div className="flex items-center gap-2 p-3 bg-amber-500/5 border border-amber-500/20 rounded-xl">
+                                        <span className="text-xs text-amber-500 font-medium flex-1">You are invited to this meeting.</span>
                                         <button
-                                            onClick={() => handleUpdateStatus('active')}
-                                            className="flex-1 bg-green-600 hover:bg-green-500 text-white py-2 rounded-lg text-xs font-bold transition-colors shadow-lg shadow-green-500/20"
+                                            onClick={() => handleRespond('declined')}
+                                            className="text-xs text-zinc-400 hover:text-white px-3 py-1.5"
                                         >
-                                            START MEETING
+                                            Decline
                                         </button>
-                                    )}
-                                    {isActive && (
                                         <button
-                                            onClick={() => handleUpdateStatus('completed')}
-                                            className="flex-1 bg-red-600 hover:bg-red-500 text-white py-2 rounded-lg text-xs font-bold transition-colors shadow-lg shadow-red-500/20"
+                                            onClick={() => handleRespond('accepted')}
+                                            className="text-xs bg-amber-600 hover:bg-amber-500 text-white px-4 py-1.5 rounded-lg font-bold"
                                         >
-                                            END MEETING
+                                            Accept
+                                        </button>
+                                    </div>
+                                )}
+
+                                {/* Host Controls */}
+                                {isHost && (
+                                    <div className="space-y-2">
+                                        <h4 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">Host Controls</h4>
+                                        <div className="flex gap-2">
+                                            {!isActive && !isCompleted && (
+                                                <button
+                                                    onClick={() => handleUpdateStatus('active')}
+                                                    className="flex-1 bg-green-600 hover:bg-green-500 text-white py-2 rounded-lg text-xs font-bold transition-colors shadow-lg shadow-green-500/20"
+                                                >
+                                                    START MEETING
+                                                </button>
+                                            )}
+                                            {isActive && (
+                                                <button
+                                                    onClick={() => handleUpdateStatus('completed')}
+                                                    className="flex-1 bg-red-600 hover:bg-red-500 text-white py-2 rounded-lg text-xs font-bold transition-colors shadow-lg shadow-red-500/20"
+                                                >
+                                                    END MEETING
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Meeting Actions */}
+                                <div className="space-y-3">
+                                    {canJoin && meeting.meetLink && (
+                                        <a
+                                            href={meeting.meetLink}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className={`
+                                        block w-full text-center py-3 rounded-xl font-bold transition-all
+                                        ${isActive
+                                                    ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20 hover:scale-[1.02]'
+                                                    : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700'
+                                                }
+                                    `}
+                                        >
+                                            {isActive ? 'Join Live Meeting' : 'Join Google Meet'}
+                                        </a>
+                                    )}
+
+                                    {/* Resources Section */}
+                                    <div className="space-y-2 pt-2">
+                                        <h4 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest flex items-center justify-between">
+                                            Resources
+                                            {/* Placeholder for "Add" button */}
+                                            {/* <button className="text-[10px] bg-zinc-800 px-2 py-0.5 rounded text-zinc-400 hover:text-white">+ Add</button> */}
+                                        </h4>
+
+                                        {meeting.linkedResourceId ? (
+                                            <>
+                                                <button
+                                                    onClick={() => setViewingResource(true)}
+                                                    className="w-full flex items-center gap-3 p-3 bg-zinc-800/50 hover:bg-zinc-800 text-zinc-200 rounded-xl font-medium border border-zinc-700/50 transition-colors text-left group/resource"
+                                                >
+                                                    <div className="p-2 bg-blue-500/10 text-blue-400 rounded-lg group-hover/resource:bg-blue-500/20">
+                                                        <BookOpen className="w-4 h-4" />
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <div className="text-sm font-medium">{meeting.linkedResourceTitle || 'Attached Scroll'}</div>
+                                                        <div className="text-xs text-zinc-500">Click to open</div>
+                                                    </div>
+                                                </button>
+
+                                                <ViewResourceModal
+                                                    isOpen={viewingResource}
+                                                    onClose={() => setViewingResource(false)}
+                                                    title={meeting.linkedResourceTitle || 'Attached Scroll'}
+                                                    content={meeting.linkedResourceContent || ''}
+                                                    meetingId={meeting.id}
+                                                />
+                                            </>
+                                        ) : (
+                                            <div className="text-xs text-zinc-500 italic p-2 text-center border border-dashed border-zinc-800 rounded-xl">
+                                                No resources attached
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Recap for Ended Meetings */}
+                                    {isCompleted && (
+                                        <button
+                                            onClick={handleGenerateRecap}
+                                            className="w-full flex items-center justify-center gap-2 py-3 bg-purple-600/10 hover:bg-purple-600/20 text-purple-400 border border-purple-500/20 rounded-xl font-medium transition-colors"
+                                        >
+                                            <Sparkles className="w-4 h-4" />
+                                            Generate AI Recap to Notes
                                         </button>
                                     )}
                                 </div>
                             </div>
-                        )}
 
-                        {/* Meeting Actions */}
-                        <div className="space-y-3">
-                            {canJoin && meeting.meetLink && (
-                                <a
-                                    href={meeting.meetLink}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className={`
-                                        block w-full text-center py-3 rounded-xl font-bold transition-all
-                                        ${isActive
-                                            ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20 hover:scale-[1.02]'
-                                            : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700'
-                                        }
-                                    `}
-                                >
-                                    {isActive ? 'Join Live Meeting' : 'Join Google Meet'}
-                                </a>
-                            )}
-
-                            {/* Resources Section */}
-                            <div className="space-y-2 pt-2">
-                                <h4 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest flex items-center justify-between">
-                                    Resources
-                                    {/* Placeholder for "Add" button */}
-                                    {/* <button className="text-[10px] bg-zinc-800 px-2 py-0.5 rounded text-zinc-400 hover:text-white">+ Add</button> */}
-                                </h4>
-
-                                {meeting.linkedResourceId ? (
-                                    <>
-                                        <button
-                                            onClick={() => setViewingResource(true)}
-                                            className="w-full flex items-center gap-3 p-3 bg-zinc-800/50 hover:bg-zinc-800 text-zinc-200 rounded-xl font-medium border border-zinc-700/50 transition-colors text-left group/resource"
-                                        >
-                                            <div className="p-2 bg-blue-500/10 text-blue-400 rounded-lg group-hover/resource:bg-blue-500/20">
-                                                <BookOpen className="w-4 h-4" />
-                                            </div>
-                                            <div className="flex-1">
-                                                <div className="text-sm font-medium">{meeting.linkedResourceTitle || 'Attached Scroll'}</div>
-                                                <div className="text-xs text-zinc-500">Click to open</div>
-                                            </div>
-                                        </button>
-
-                                        <ViewResourceModal
-                                            isOpen={viewingResource}
-                                            onClose={() => setViewingResource(false)}
-                                            title={meeting.linkedResourceTitle || 'Attached Scroll'}
-                                            content={meeting.linkedResourceContent || ''}
-                                            meetingId={meeting.id}
-                                        />
-                                    </>
-                                ) : (
-                                    <div className="text-xs text-zinc-500 italic p-2 text-center border border-dashed border-zinc-800 rounded-xl">
-                                        No resources attached
-                                    </div>
-                                )}
+                            {/* Right: Chat */}
+                            <div className="w-full md:w-96 h-[600px] border-l border-zinc-800 pl-0 md:pl-6 flex flex-col">
+                                <MeetingChat meetingId={meeting.id} />
                             </div>
-
-                            {/* Recap for Ended Meetings */}
-                            {isCompleted && (
-                                <button
-                                    onClick={handleGenerateRecap}
-                                    className="w-full flex items-center justify-center gap-2 py-3 bg-purple-600/10 hover:bg-purple-600/20 text-purple-400 border border-purple-500/20 rounded-xl font-medium transition-colors"
-                                >
-                                    <Sparkles className="w-4 h-4" />
-                                    Generate AI Recap to Notes
-                                </button>
-                            )}
                         </div>
-                    </div>
-
-                    {/* Right: Chat */}
-                    <div className="w-full md:w-96 h-[600px] border-l border-zinc-800 pl-0 md:pl-6 flex flex-col">
-                        <MeetingChat meetingId={meeting.id} />
-                    </div>
-                </div>
-            )}
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </motion.div>
     );
 }

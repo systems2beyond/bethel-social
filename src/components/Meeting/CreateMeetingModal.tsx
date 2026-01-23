@@ -26,6 +26,7 @@ export default function CreateMeetingModal({ isOpen, onClose, initialTopic = '',
     const { openCollaboration } = useBible();
     const [topic, setTopic] = useState(initialTopic);
     const [startTime, setStartTime] = useState('');
+    const [description, setDescription] = useState(initialDescription); // Added state
     const [selectedUsers, setSelectedUsers] = useState<PublicUser[]>([]); // Refactored to hold User Objects
     const [attendeesText, setAttendeesText] = useState(''); // Fallback for external emails
     const [loading, setLoading] = useState(false);
@@ -37,6 +38,7 @@ export default function CreateMeetingModal({ isOpen, onClose, initialTopic = '',
     useEffect(() => {
         if (isOpen) {
             setTopic(initialTopic);
+            setDescription(initialDescription || ''); // Reset description
             setAttendeesText('');
             setSelectedUsers([]);
             // Format initialDate to datetime-local friendly string (YYYY-MM-DDThh:mm)
@@ -80,20 +82,74 @@ export default function CreateMeetingModal({ isOpen, onClose, initialTopic = '',
         // Extract UIDs for Push Notifications
         const attendeeUids = selectedUsers.map(u => u.uid);
 
+        let generatedMeetLink = '';
+        let externalEventId = '';
+
+        // --- CLIENT-SIDE GOOGLE MEET GENERATION ---
+        // We create the event on the User's calendar to generate a valid Meet link.
+        if (googleAccessToken) {
+            try {
+                const eventBody = {
+                    summary: topic || 'New Meeting',
+                    description: description || '', // Use state
+                    start: { dateTime: new Date(startTime).toISOString() },
+                    end: { dateTime: new Date(new Date(startTime).getTime() + 60 * 60 * 1000).toISOString() }, // 1h default
+                    conferenceData: {
+                        createRequest: {
+                            requestId: Math.random().toString(36).substring(7),
+                            conferenceSolutionKey: { type: 'hangoutsMeet' }
+                        }
+                    }
+                    // NOTE: We do not add attendees here to avoid Google sending automatic invites.
+                    // We handle invites via our custom Gmail API call below.
+                };
+
+                const gcalResp = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${googleAccessToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(eventBody)
+                });
+
+                if (gcalResp.ok) {
+                    const gcalData = await gcalResp.json();
+                    generatedMeetLink = gcalData.hangoutLink || '';
+                    externalEventId = gcalData.id || '';
+                    console.log('Client-side GCal Success. Link:', generatedMeetLink);
+                } else {
+                    const errText = await gcalResp.text();
+                    console.error('Client-side GCal Failed:', errText);
+
+                    if (gcalResp.status === 403 || gcalResp.status === 401) {
+                        alert("We need permission to create Google Calendar events. Please click 'Authorize' to grant access.");
+                        clearGmailToken();
+                        setLoading(false);
+                        return;
+                    }
+                }
+            } catch (gcalErr) {
+                console.error('Client-side GCal Exception:', gcalErr);
+            }
+        }
+
         try {
             const createMeetingFn = httpsCallable(functions, 'createMeeting');
             const result: any = await createMeetingFn({
                 topic,
                 startTime: new Date(startTime).toISOString(),
-                attendees, // List of emails for Google Calendar Invite
+                attendees, // List of emails for record keeping
                 attendeeUids, // List of UIDs for Push Notifications
-                description: initialDescription, // Pass notes context
+                description: description, // Use state
                 linkedResourceId: linkedResource?.id,
-                linkedResourceType: linkedResource?.type
+                linkedResourceType: linkedResource?.type,
+                meetLink: generatedMeetLink, // Pass the client-generated link
+                externalEventId // Pass the GCal ID
             });
 
             const { meetLink, meetingId } = result.data;
-            setSuccessLink(meetLink);
+            setSuccessLink(meetLink || 'manual');
 
             // AUTO-JOIN COLLABORATION SESSION
             // This ensures the host is immediately in the correct context to share the meeting ID
@@ -116,7 +172,7 @@ export default function CreateMeetingModal({ isOpen, onClose, initialTopic = '',
                     console.log("Attempting to send invites via Gmail API...");
 
                     const subject = `Invitation: ${topic}`;
-                    const body = `You are invited to a meeting.\n\nTopic: ${topic}\nTime: ${new Date(startTime).toLocaleString()}\nLink: ${meetLink}\n\nNotes/Description:\n${initialDescription || 'No additional notes.'}`;
+                    const body = `You are invited to a meeting.\n\nTopic: ${topic}\nTime: ${new Date(startTime).toLocaleString()}\nLink: ${meetLink}\n\nNotes/Description:\n${description || 'No additional notes.'}`;
 
                     // Construct MIME message
                     const emailLines = [];
@@ -144,13 +200,14 @@ export default function CreateMeetingModal({ isOpen, onClose, initialTopic = '',
                         console.error("Gmail API Error:", errSort);
 
                         // Handle Token Expiry
+                        // Handle Token Expiry
                         if (resp.status === 401) {
                             alert("Your Gmail session has expired. Please click 'Authorize Gmail' again to send usage invites.");
                             clearGmailToken(); // Reset token to show Authorize button
-                            return;
+                            // Don't return, allow the modal to show success state (link created)
+                        } else {
+                            alert(`Failed to send email invite: ${errSort.error?.message || 'Unknown error'}`);
                         }
-
-                        alert(`Failed to send email invite: ${errSort.error?.message || 'Unknown error'}`);
                     } else {
                         console.log("Invites sent successfully via Gmail API!");
                         alert(`Done! Invitations sent to ${attendees.length} people via your Gmail.`);
@@ -221,18 +278,35 @@ export default function CreateMeetingModal({ isOpen, onClose, initialTopic = '',
                                         <Check className="w-8 h-8 text-green-600 dark:text-green-400" />
                                     </div>
                                     <h4 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Meeting Created!</h4>
-                                    <p className="text-gray-500 dark:text-gray-400 mb-6 text-sm">
-                                        Your Google Meet link is ready.
-                                    </p>
-
-                                    <a
-                                        href={successLink}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="block w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors mb-3"
-                                    >
-                                        Join Meeting Now
-                                    </a>
+                                    {successLink === 'manual' ? (
+                                        <>
+                                            <p className="text-gray-500 dark:text-gray-400 mb-6 text-sm">
+                                                Meeting created, but we couldn't generate a link automatically. Please create one manually.
+                                            </p>
+                                            <a
+                                                href="https://meet.google.com/new"
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="block w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors mb-3"
+                                            >
+                                                Create Manual Google Meet
+                                            </a>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <p className="text-gray-500 dark:text-gray-400 mb-6 text-sm">
+                                                Your meeting is scheduled. Go to the lobby to start it when you're ready.
+                                            </p>
+                                            <a
+                                                href={successLink}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="block w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors mb-3"
+                                            >
+                                                Go to Meeting Lobby
+                                            </a>
+                                        </>
+                                    )}
                                     <button
                                         onClick={onClose}
                                         className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
@@ -266,6 +340,19 @@ export default function CreateMeetingModal({ isOpen, onClose, initialTopic = '',
                                             value={startTime}
                                             onChange={(e) => setStartTime(e.target.value)}
                                             className="w-full px-4 py-2.5 bg-gray-50 dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-700 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all dark:[color-scheme:dark]"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                                            <Type className="w-3.5 h-3.5" /> Description / Notes
+                                        </label>
+                                        <textarea
+                                            value={description}
+                                            onChange={(e) => setDescription(e.target.value)}
+                                            rows={3}
+                                            className="w-full px-4 py-2.5 bg-gray-50 dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-700 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all resize-none text-sm"
+                                            placeholder="Add an agenda or personal note for the invitees..."
                                         />
                                     </div>
 

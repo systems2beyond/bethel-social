@@ -8,10 +8,16 @@ if (!admin.apps.length) {
 }
 const db = admin.firestore();
 
-// Initialize Google Auth
-const auth = new google.auth.GoogleAuth({
-    scopes: ['https://www.googleapis.com/auth/calendar', 'https://www.googleapis.com/auth/meetings.space.created']
-});
+// Lazy Initialize Google Auth
+let auth: any = null;
+const getAuth = () => {
+    if (!auth) {
+        auth = new google.auth.GoogleAuth({
+            scopes: ['https://www.googleapis.com/auth/calendar', 'https://www.googleapis.com/auth/meetings.space.created']
+        });
+    }
+    return auth;
+};
 
 export const createMeeting = onCall({ timeoutSeconds: 60 }, async (request) => {
     if (!request.auth) {
@@ -19,60 +25,65 @@ export const createMeeting = onCall({ timeoutSeconds: 60 }, async (request) => {
     }
 
     try {
-        const { topic, startTime, requestId, attendees, description, attendeeUids } = request.data;
+        const { topic, startTime, requestId, attendees, description, attendeeUids, meetLink: clientMeetLink, externalEventId: clientEventId } = request.data;
         const startDateTime = new Date(startTime).toISOString();
         const endDateTime = new Date(new Date(startTime).getTime() + 60 * 60 * 1000).toISOString(); // Default 1h
 
-        let meetLink = '';
-        let eventId = '';
+        let meetLink = clientMeetLink || '';
+        let eventId = clientEventId || '';
 
-        try {
-            const client = await auth.getClient();
-            const calendar = google.calendar({ version: 'v3', auth: client as any });
+        // Only attempt backend generation if client didn't provide a link
+        if (!meetLink) {
+            try {
+                const client = await getAuth().getClient();
+                const calendar = google.calendar({ version: 'v3', auth: client as any });
 
-            // Basic HTML strip for description context (Note: Google Calendar description supports limited HTML, but safer to be clean or raw)
-            // For now, we'll prefix it.
-            let finalDescription = '';
-            if (description) {
-                // Simple regex strip (not perfect but decent for context)
-                const stripped = description.replace(/<[^>]+>/g, '\n').replace(/\n+/g, '\n').trim();
-                finalDescription = `\n\n--- Meeting Context (Notes) ---\n${stripped}`;
-            }
-
-            const eventBody: any = {
-                summary: topic || 'New Meeting',
-                description: finalDescription,
-                start: { dateTime: startDateTime },
-                end: { dateTime: endDateTime },
-                conferenceData: {
-                    createRequest: {
-                        requestId: requestId || Math.random().toString(36),
-                        conferenceSolutionKey: { type: 'hangoutsMeet' }
-                    }
+                // Basic HTML strip for description context (Note: Google Calendar description supports limited HTML, but safer to be clean or raw)
+                // For now, we'll prefix it.
+                let finalDescription = '';
+                if (description) {
+                    // Simple regex strip (not perfect but decent for context)
+                    const stripped = description.replace(/<[^>]+>/g, '\n').replace(/\n+/g, '\n').trim();
+                    finalDescription = `\n\n--- Meeting Context (Notes) ---\n${stripped}`;
                 }
-            };
 
-            // Add attendees if present
-            if (attendees && Array.isArray(attendees) && attendees.length > 0) {
-                eventBody.attendees = attendees.map((email: string) => ({ email: email.trim() }));
+                const eventBody: any = {
+                    summary: topic || 'New Meeting',
+                    description: finalDescription,
+                    start: { dateTime: startDateTime },
+                    end: { dateTime: endDateTime },
+                    conferenceData: {
+                        createRequest: {
+                            requestId: requestId || Math.random().toString(36),
+                            conferenceSolutionKey: { type: 'hangoutsMeet' }
+                        }
+                    }
+                };
+
+                // NOTE: We DO NOT add attendees here because Service Accounts cannot invite users
+                // without Domain-Wide Delegation. We generate the link here, and the frontend
+                // sends the actual email invites via Gmail API.
+                // if (attendees && Array.isArray(attendees) && attendees.length > 0) {
+                //     eventBody.attendees = attendees.map((email: string) => ({ email: email.trim() }));
+                // }
+
+                const res = await calendar.events.insert({
+                    calendarId: 'primary',
+                    requestBody: eventBody,
+                    conferenceDataVersion: 1,
+                    sendUpdates: 'all' // CRITICAL: This triggers Google to send email invitations
+                });
+
+                meetLink = res.data.hangoutLink || '';
+                eventId = res.data.id || '';
+                console.log('Google Calendar Event Created:', eventId, meetLink);
+
+            } catch (calError: any) {
+                console.warn('Google Calendar API failed (Service Account Limit likely):', calError.message);
+                // Fallback: Return empty string. Frontend should handle manual link addition.
+                meetLink = '';
+                eventId = '';
             }
-
-            const res = await calendar.events.insert({
-                calendarId: 'primary',
-                requestBody: eventBody,
-                conferenceDataVersion: 1,
-                sendUpdates: 'all' // CRITICAL: This triggers Google to send email invitations
-            });
-
-            meetLink = res.data.hangoutLink || '';
-            eventId = res.data.id || '';
-            console.log('Google Calendar Event Created:', eventId, meetLink);
-
-        } catch (calError: any) {
-            console.warn('Google Calendar API failed (Service Account Limit likely):', calError.message);
-            // Fallback: Generate a placeholder or generic link since Service Accounts often lack Meet License
-            meetLink = 'https://meet.google.com/lookup/bethel-' + Math.random().toString(36).substring(7);
-            eventId = 'manual-' + Date.now();
         }
 
         // Internal Logic: Resolve Emails to UIDs (for in-app display)
