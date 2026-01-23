@@ -165,13 +165,13 @@ export default function DonationWidget({ initialCampaignId, compact = false, onC
 
     const headerClasses = compact
         ? "relative bg-transparent p-4 border-b border-gray-100 dark:border-gray-700/50 overflow-hidden transition-colors duration-300"
-        : "relative bg-transparent p-8 border-b border-gray-100 dark:border-gray-700/50 overflow-hidden transition-colors duration-300";
+        : "relative bg-transparent p-5 border-b border-gray-100 dark:border-gray-700/50 overflow-hidden transition-colors duration-300";
 
     const bodyClasses = compact
-        ? "p-4 space-y-2" // Reduced space-y-3 to 2
-        : "p-6 md:p-8 space-y-8";
+        ? "p-4 space-y-2"
+        : "p-5 md:p-6 space-y-5"; // Reduced from p-8 space-y-8
 
-    const inputPadding = compact ? "py-2.5" : "py-4"; // Reduced py-3 to 2.5
+    const inputPadding = compact ? "py-2.5" : "py-3"; // Reduced from py-4
 
     return (
         <div className={containerClasses}>
@@ -189,11 +189,11 @@ export default function DonationWidget({ initialCampaignId, compact = false, onC
                 )}
 
                 <div className="relative z-10 text-center">
-                    <div className={`${compact ? 'w-10 h-10 mb-2' : 'w-12 h-12 mb-4'} bg-white dark:bg-gray-800 rounded-2xl flex items-center justify-center mx-auto border border-gray-200 dark:border-gray-700 shadow-sm`}>
-                        <Heart className={`${compact ? 'w-5 h-5' : 'w-6 h-6'} text-pink-500 fill-pink-500/20`} />
+                    <div className={`${compact ? 'w-10 h-10 mb-2' : 'w-10 h-10 mb-2'} bg-white dark:bg-gray-800 rounded-2xl flex items-center justify-center mx-auto border border-gray-200 dark:border-gray-700 shadow-sm`}>
+                        <Heart className={`${compact ? 'w-5 h-5' : 'w-5 h-5'} text-pink-500 fill-pink-500/20`} />
                     </div>
-                    <h2 className={`${compact ? 'text-lg' : 'text-2xl'} font-bold tracking-tight text-gray-900 dark:text-white`}>Giving</h2>
-                    {!compact && <p className="text-gray-500 dark:text-gray-400 text-sm mt-1 font-medium">Empowering our community, together.</p>}
+                    <h2 className={`${compact ? 'text-lg' : 'text-xl'} font-bold tracking-tight text-gray-900 dark:text-white`}>Giving</h2>
+                    {!compact && <p className="text-gray-500 dark:text-gray-400 text-xs mt-0.5 font-medium">Empowering our community, together.</p>}
                 </div>
             </div>
 
@@ -347,7 +347,7 @@ export default function DonationWidget({ initialCampaignId, compact = false, onC
                     <button
                         onClick={handleContinue}
                         disabled={isLoading || baseAmount <= 0}
-                        className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-lg shadow-lg shadow-blue-200 dark:shadow-none transition-all flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed transform active:scale-[0.98]"
+                        className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-lg shadow-lg shadow-blue-200 dark:shadow-none transition-all flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed transform active:scale-[0.98]"
                     >
                         {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Continue to Payment'}
                     </button>
@@ -358,7 +358,7 @@ export default function DonationWidget({ initialCampaignId, compact = false, onC
                     </div>
                 </div>
             </div>
-        </div>
+        </div >
     );
 }
 

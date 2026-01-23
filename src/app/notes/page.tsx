@@ -1,17 +1,15 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { db } from '@/lib/firebase';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { Plus, Trash2, Save, MessageSquare, Maximize2, Minimize2, ChevronLeft, Search, FileText, Users } from 'lucide-react';
+import { Plus, Search, FileText } from 'lucide-react';
 import { useChat } from '@/context/ChatContext';
-import { useBible } from '@/context/BibleContext';
-import TiptapEditor, { TiptapEditorRef } from '@/components/Editor/TiptapEditor';
+import { useBible } from '@/context/BibleContext'; // Still needed for deep linking potentially
 import AiNotesModal from '@/components/Sermons/AiNotesModal';
-import { useMediaQuery } from '@/lib/hooks/useMediaQuery';
 import { cn } from '@/lib/utils';
-
+import { NoteAccordionItem } from '@/components/Notes/NoteAccordionItem';
 
 interface Note {
     id: string;
@@ -24,42 +22,15 @@ export default function NotesPage() {
     const { user, loading } = useAuth();
     const [notes, setNotes] = useState<Note[]>([]);
     const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
-    const [title, setTitle] = useState('');
-    const [content, setContent] = useState('');
-    const [isSaving, setIsSaving] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+
+    // AI Modal State
     const [isAiNotesModalOpen, setIsAiNotesModalOpen] = useState(false);
     const [initialAiQuery, setInitialAiQuery] = useState('');
     const [chats, setChats] = useState<Record<string, any[]>>({});
-    const [isMaximized, setIsMaximized] = useState(false);
-    const [searchQuery, setSearchQuery] = useState('');
-
-
-
-    // Responsive State
-    const isMobile = useMediaQuery('(max-width: 768px)');
-    const [showEditorMobile, setShowEditorMobile] = useState(false);
 
     // Register Context Handler for Global Chat
     const { registerContextHandler } = useChat();
-    const { openBible } = useBible();
-
-    const handleLinkClick = (href: string) => {
-        if (href.startsWith('verse://')) {
-            const ref = decodeURIComponent((href || '').replace('verse://', ''));
-            const match = ref.match(/((?:[123]\s)?[A-Z][a-z]+\.?)\s(\d+):(\d+)(?:-(\d+))?/);
-            if (match) {
-                const book = match[1].trim();
-                const chapter = parseInt(match[2]);
-                const startVerse = parseInt(match[3]);
-                const endVerse = match[4] ? parseInt(match[4]) : undefined;
-                openBible({ book, chapter, verse: startVerse, endVerse }, true);
-            }
-        } else {
-            window.open(href, '_blank');
-        }
-    };
-
-    const editorRef = React.useRef<TiptapEditorRef>(null);
 
     // Load notes
     useEffect(() => {
@@ -81,32 +52,7 @@ export default function NotesPage() {
         return () => unsubscribe();
     }, [user]);
 
-    // Load active note into editor
-    useEffect(() => {
-        if (activeNoteId) {
-            const note = notes.find(n => n.id === activeNoteId);
-            if (note) {
-                setTitle(note.title);
-                setContent(note.content);
-                if (isMobile) setShowEditorMobile(true);
-            }
-        } else {
-            setTitle('');
-            setContent('');
-        }
-    }, [activeNoteId, notes, isMobile]);
-
-    // Register handler whenever NotesPage is active (and a note is selected)
-    useEffect(() => {
-        if (activeNoteId) {
-            registerContextHandler((msg) => handleOpenAiNotes(msg));
-        } else {
-            registerContextHandler(null);
-        }
-        return () => registerContextHandler(null);
-    }, [activeNoteId, registerContextHandler]);
-
-    // Fetch Chat History for active note
+    // Load Chat History for active note (to support context)
     useEffect(() => {
         if (!user || !activeNoteId) return;
 
@@ -132,10 +78,17 @@ export default function NotesPage() {
         return () => unsubscribe();
     }, [user, activeNoteId]);
 
-    const handleOpenAiNotes = (query?: string) => {
-        setInitialAiQuery(query || '');
-        setIsAiNotesModalOpen(true);
-    };
+
+    // Context Handler registration
+    useEffect(() => {
+        if (activeNoteId) {
+            registerContextHandler((msg) => handleOpenAiNotes(msg));
+        } else {
+            registerContextHandler(null);
+        }
+        return () => registerContextHandler(null);
+    }, [activeNoteId, registerContextHandler]);
+
 
     const handleCreateNote = async () => {
         if (!user) return;
@@ -146,101 +99,43 @@ export default function NotesPage() {
             updatedAt: serverTimestamp()
         });
         setActiveNoteId(docRef.id);
-        if (isMobile) setShowEditorMobile(true);
     };
 
-    const saveTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
-
-    // Auto-save with debounce
-    const debouncedSave = (newTitle: string, newContent: string) => {
-        setIsSaving(true);
-
-        if (saveTimeoutRef.current) {
-            clearTimeout(saveTimeoutRef.current);
-        }
-
-        saveTimeoutRef.current = setTimeout(async () => {
-            if (!user || !activeNoteId) return;
-
-            try {
-                await updateDoc(doc(db, 'users', user.uid, 'notes', activeNoteId), {
-                    title: newTitle,
-                    content: newContent,
-                    updatedAt: serverTimestamp()
-                });
-            } catch (error) {
-                console.error("Error saving note:", error);
-            } finally {
-                setIsSaving(false);
-            }
-        }, 1500);
+    const handleUpdateNote = async (id: string, title: string, content: string) => {
+        if (!user) return;
+        await updateDoc(doc(db, 'users', user.uid, 'notes', id), {
+            title,
+            content,
+            updatedAt: serverTimestamp()
+        });
     };
 
-    const handleAddToNotes = (text: string) => {
+    const handleDeleteNote = async (id: string) => {
+        if (!user) return;
+        await deleteDoc(doc(db, 'users', user.uid, 'notes', id));
+        if (activeNoteId === id) setActiveNoteId(null);
+    };
+
+    const handleOpenAiNotes = (query?: string) => {
+        setInitialAiQuery(query || '');
+        setIsAiNotesModalOpen(true);
+    };
+
+    const handleAiInsert = async (text: string) => {
+        // Since the editor is inside the child component, we need a way to insert text.
+        // For simplicity in this architecture, we append to the content and update.
+        // Ideally, we'd use a Context or Event Bus to push to the active editor ref,
+        // but updating the doc directly will trigger a reactive update in the child 
+        // via the useEffect syncing props. It might move the cursor, which is a tradeoff.
         if (!activeNoteId) return;
 
-        if (editorRef.current) {
-            editorRef.current.insertContent(text);
-        } else {
-            // Fallback if editor not ready (unlikely when modal is open)
-            const newContent = content + '\n\n' + text;
-            setContent(newContent);
-            debouncedSave(title, newContent);
+        const currentNote = notes.find(n => n.id === activeNoteId);
+        if (currentNote) {
+            const newContent = (currentNote.content || '') + '\n\n' + text;
+            await handleUpdateNote(activeNoteId, currentNote.title, newContent);
+            setIsAiNotesModalOpen(false);
         }
     };
-
-    // Cleanup on unmount
-    useEffect(() => {
-        return () => {
-            if (saveTimeoutRef.current) {
-                clearTimeout(saveTimeoutRef.current);
-            }
-        };
-    }, []);
-
-    const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const newTitle = e.target.value;
-        setTitle(newTitle);
-        debouncedSave(newTitle, content);
-    };
-
-    const handleContentChange = (newContent: string) => {
-        setContent(newContent);
-        debouncedSave(title, newContent);
-    };
-
-    // Manual save (immediate)
-    const handleManualSave = async () => {
-        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-        if (!user || !activeNoteId) return;
-
-        setIsSaving(true);
-        try {
-            await updateDoc(doc(db, 'users', user.uid, 'notes', activeNoteId), {
-                title,
-                content,
-                updatedAt: serverTimestamp()
-            });
-        } catch (error) {
-            console.error("Error saving note:", error);
-        } finally {
-            setIsSaving(false);
-        }
-    };
-
-    const handleDelete = async (e: React.MouseEvent, id: string) => {
-        e.stopPropagation();
-        if (!user || !confirm('Are you sure you want to delete this note?')) return;
-
-        await deleteDoc(doc(db, 'users', user.uid, 'notes', id));
-        if (activeNoteId === id) {
-            setActiveNoteId(null);
-            setShowEditorMobile(false);
-        }
-    };
-
-    // ============== COLLABORATION HANDLERS ==============
-
 
     const filteredNotes = notes.filter(note =>
         (note.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -259,201 +154,83 @@ export default function NotesPage() {
     }
 
     return (
-        <div className="flex h-screen bg-white dark:bg-zinc-950 overflow-hidden">
-            {/* Left Sidebar: Note List */}
-            <div className={cn(
-                "flex flex-col bg-gray-50/50 dark:bg-zinc-900/50 border-r border-gray-200 dark:border-zinc-800 transition-all duration-300",
-                isMobile ? (showEditorMobile ? "hidden" : "w-full") : "w-80"
-            )}>
+        <div className="min-h-screen bg-gray-50/50 dark:bg-black pb-20">
+            <div className="max-w-3xl mx-auto px-4 py-8">
+
                 {/* Header */}
-                <div className="p-4 border-b border-gray-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm sticky top-0 z-10">
-                    <div className="flex justify-between items-center mb-4">
-                        <h2 className="text-xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                    <div>
+                        <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
                             My Notes
-                        </h2>
-                        <button
-                            onClick={handleCreateNote}
-                            className="p-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl shadow-lg hover:shadow-xl hover:scale-105 transition-all active:scale-95"
-                        >
-                            <Plus className="w-5 h-5" />
-                        </button>
+                        </h1>
+                        <p className="text-gray-500 dark:text-gray-400 mt-1">
+                            Capture your thoughts, sermon takeaways, and revelations.
+                        </p>
                     </div>
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                        <input
-                            type="text"
-                            placeholder="Search notes..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-9 pr-4 py-2 bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all"
-                        />
-                    </div>
+
+                    <button
+                        onClick={handleCreateNote}
+                        className="flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl shadow-lg hover:shadow-xl hover:scale-105 transition-all font-bold active:scale-95"
+                    >
+                        <Plus className="w-5 h-5" />
+                        New Note
+                    </button>
                 </div>
 
-                {/* List */}
-                <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
+                {/* Search */}
+                <div className="relative mb-6">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                        type="text"
+                        placeholder="Search your notes..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full pl-12 pr-4 py-3 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all text-base"
+                    />
+                </div>
+
+                {/* Notes List (Accordion) */}
+                <div className="space-y-4">
                     {filteredNotes.length === 0 ? (
-                        <div className="text-center py-12 text-gray-400">
-                            <FileText className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                            <p className="text-sm">No notes found</p>
+                        <div className="text-center py-20 bg-white dark:bg-zinc-900 rounded-2xl border border-dashed border-gray-200 dark:border-zinc-800">
+                            <div className="w-16 h-16 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-blue-500/20">
+                                <FileText className="w-8 h-8 text-blue-500" />
+                            </div>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No notes found</h3>
+                            <p className="text-gray-500 dark:text-zinc-500 max-w-sm mx-auto mb-6">
+                                {searchQuery ? 'Try adjusting your search terms.' : 'Create your first note to get started.'}
+                            </p>
+                            {!searchQuery && (
+                                <button
+                                    onClick={handleCreateNote}
+                                    className="text-blue-500 hover:text-blue-600 font-medium hover:underline"
+                                >
+                                    Create a Note
+                                </button>
+                            )}
                         </div>
                     ) : (
                         filteredNotes.map(note => (
-                            <div
+                            <NoteAccordionItem
                                 key={note.id}
-                                onClick={() => {
-                                    setActiveNoteId(note.id);
-                                    if (isMobile) setShowEditorMobile(true);
-                                }}
-                                className={cn(
-                                    "p-4 rounded-xl cursor-pointer group relative transition-all duration-200 border",
-                                    activeNoteId === note.id
-                                        ? "bg-white dark:bg-zinc-800 shadow-md border-purple-100 dark:border-purple-900/30 ring-1 ring-purple-500/20"
-                                        : "bg-transparent border-transparent hover:bg-white dark:hover:bg-zinc-800 hover:shadow-sm hover:border-gray-100 dark:hover:border-zinc-700"
-                                )}
-                            >
-                                <h3 className={cn(
-                                    "font-semibold text-sm truncate pr-6 mb-1",
-                                    activeNoteId === note.id ? "text-purple-700 dark:text-purple-300" : "text-gray-900 dark:text-gray-100"
-                                )}>
-                                    {note.title || 'Untitled Note'}
-                                </h3>
-                                <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 h-8">
-                                    {(note.content || '').replace(/<[^>]*>/g, '') || 'No content'}
-                                </p>
-                                <div className="flex items-center justify-between mt-2">
-                                    <span className="text-[10px] text-gray-400 font-medium">
-                                        {note.updatedAt?.toDate ? note.updatedAt.toDate().toLocaleDateString() : (note.updatedAt instanceof Date ? note.updatedAt.toLocaleDateString() : 'Recently')}
-                                    </span>
-                                    <button
-                                        onClick={(e) => handleDelete(e, note.id)}
-                                        className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all"
-                                    >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                </div>
-                            </div>
+                                note={note}
+                                isActive={activeNoteId === note.id}
+                                onToggle={() => setActiveNoteId(prev => prev === note.id ? null : note.id)}
+                                onUpdate={handleUpdateNote}
+                                onDelete={handleDeleteNote}
+                                onAskAi={handleOpenAiNotes}
+                            />
                         ))
                     )}
                 </div>
             </div>
 
-            {/* Center: Editor */}
-            <div className={cn(
-                "flex-1 flex flex-col min-w-0 bg-white dark:bg-zinc-950 transition-all duration-300",
-                isMobile ? (showEditorMobile ? "fixed inset-0 z-20" : "hidden") : "relative"
-            )}>
-                {activeNoteId ? (
-                    <>
-                        {/* Editor Header */}
-                        <div className="border-b border-gray-100 dark:border-zinc-800 p-4 flex items-center gap-3 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-md sticky top-0 z-10">
-                            {isMobile && (
-                                <button
-                                    onClick={() => setShowEditorMobile(false)}
-                                    className="p-2 -ml-2 text-gray-500 hover:text-gray-900 dark:hover:text-gray-100"
-                                >
-                                    <ChevronLeft className="w-6 h-6" />
-                                </button>
-                            )}
-                            <input
-                                type="text"
-                                value={title}
-                                onChange={handleTitleChange}
-                                placeholder="Note Title"
-                                className="flex-1 text-xl font-bold bg-transparent border-none focus:ring-0 p-0 text-gray-900 dark:text-white placeholder-gray-400 truncate"
-                            />
-                            <div className="flex items-center gap-1">
-                                {!isMobile && (
-                                    <button
-                                        onClick={() => setIsMaximized(!isMaximized)}
-                                        className="p-2 text-gray-500 hover:text-blue-600 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
-                                        title={isMaximized ? "Exit Handwriting Mode" : "Handwriting Mode"}
-                                    >
-                                        {isMaximized ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-                                    </button>
-                                )}
-                                <button
-                                    onClick={handleManualSave}
-                                    disabled={isSaving}
-                                    className="p-2 text-gray-500 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors"
-                                    title="Save"
-                                >
-                                    <Save className={cn("w-5 h-5", isSaving && "animate-pulse")} />
-                                </button>
-                                <button
-                                    onClick={() => handleOpenAiNotes()}
-                                    className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg shadow-md hover:shadow-lg hover:opacity-90 transition-all text-sm font-medium"
-                                >
-                                    <MessageSquare className="w-4 h-4" />
-                                    <span className="hidden sm:inline">Ask AI</span>
-                                </button>
-
-                            </div>
-                        </div>
-
-                        {/* Editor Content */}
-                        <div className={cn(
-                            "flex-1 overflow-y-auto custom-scrollbar",
-                            isMaximized ? "fixed inset-0 z-[9999] bg-white dark:bg-zinc-950 p-0" : "p-4 sm:p-8"
-                        )}>
-                            {isMaximized && (
-                                <div className="sticky top-0 z-10 flex items-center justify-between p-4 bg-white/90 dark:bg-zinc-950/90 backdrop-blur border-b border-gray-100 dark:border-zinc-800">
-                                    <input
-                                        type="text"
-                                        value={title}
-                                        onChange={handleTitleChange}
-                                        className="text-2xl font-bold bg-transparent border-none focus:ring-0 p-0 text-gray-900 dark:text-white"
-                                    />
-                                    <div className="flex items-center gap-2">
-                                        <button
-                                            onClick={handleManualSave}
-                                            className="p-2 text-gray-500 hover:text-blue-600 rounded-lg"
-                                        >
-                                            <Save className="w-5 h-5" />
-                                        </button>
-                                        <button
-                                            onClick={() => setIsMaximized(false)}
-                                            className="p-2 text-gray-500 hover:text-red-600 rounded-lg"
-                                        >
-                                            <Minimize2 className="w-5 h-5" />
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                            <div className={cn("max-w-3xl mx-auto h-full", isMaximized && "p-8")}>
-                                <TiptapEditor
-                                    ref={editorRef}
-                                    content={content}
-                                    onChange={handleContentChange}
-                                    placeholder="Start typing your notes here..."
-                                    className="min-h-[calc(100vh-200px)]"
-                                    onAskAi={handleOpenAiNotes}
-                                    onLinkClick={handleLinkClick}
-
-                                />
-                            </div>
-                        </div>
-                    </>
-                ) : (
-                    <div className="flex-1 flex flex-col items-center justify-center text-gray-400 bg-gray-50/30 dark:bg-zinc-900/30">
-                        <div className="w-20 h-20 bg-gradient-to-br from-blue-100 to-purple-100 dark:from-blue-900/20 dark:to-purple-900/20 rounded-3xl flex items-center justify-center mb-6 shadow-inner">
-                            <FileText className="w-10 h-10 text-blue-500/50 dark:text-blue-400/50" />
-                        </div>
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Select a note to view</h3>
-                        <p className="text-sm text-gray-500 max-w-xs text-center">
-                            Choose a note from the sidebar or create a new one to get started.
-                        </p>
-                    </div>
-                )}
-            </div>
-
-
-
+            {/* AI Modal (Global for page) */}
             <AiNotesModal
                 isOpen={isAiNotesModalOpen}
                 onClose={() => setIsAiNotesModalOpen(false)}
                 sermonId="general-notes"
-                sermonTitle={title}
+                sermonTitle="General Notes"
                 initialQuery={initialAiQuery}
                 messages={activeNoteId ? (chats[activeNoteId] || []) : []}
                 onMessagesChange={(newMessages) => {
@@ -476,11 +253,8 @@ export default function NotesPage() {
                         console.error("Error saving chat:", error);
                     }
                 }}
-                onInsertToNotes={(text) => {
-                    handleAddToNotes(text);
-                    setIsAiNotesModalOpen(false);
-                }}
+                onInsertToNotes={handleAiInsert}
             />
-        </div >
+        </div>
     );
 }
