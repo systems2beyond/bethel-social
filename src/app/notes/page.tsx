@@ -27,6 +27,7 @@ export default function NotesPage() {
     // AI Modal State
     const [isAiNotesModalOpen, setIsAiNotesModalOpen] = useState(false);
     const [initialAiQuery, setInitialAiQuery] = useState('');
+    const [autoSendAi, setAutoSendAi] = useState(false);
     const [chats, setChats] = useState<Record<string, any[]>>({});
 
     // Register Context Handler for Global Chat
@@ -116,8 +117,9 @@ export default function NotesPage() {
         if (activeNoteId === id) setActiveNoteId(null);
     };
 
-    const handleOpenAiNotes = (query?: string) => {
+    const handleOpenAiNotes = (query?: string, autoSend?: boolean) => {
         setInitialAiQuery(query || '');
+        setAutoSendAi(!!autoSend);
         setIsAiNotesModalOpen(true);
     };
 
@@ -232,6 +234,7 @@ export default function NotesPage() {
                 sermonId="general-notes"
                 sermonTitle="General Notes"
                 initialQuery={initialAiQuery}
+                autoSend={autoSendAi}
                 messages={activeNoteId ? (chats[activeNoteId] || []) : []}
                 onMessagesChange={(newMessages) => {
                     if (activeNoteId) {

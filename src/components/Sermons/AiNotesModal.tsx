@@ -16,13 +16,14 @@ interface AiNotesModalProps {
     sermonId: string;
     sermonTitle: string;
     initialQuery?: string;
+    autoSend?: boolean;
     messages: any[];
     onMessagesChange: (messages: any[]) => void;
     onInsertToNotes: (content: string) => void;
     onSaveMessage?: (role: string, content: string) => Promise<void>;
 }
 
-export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, initialQuery, messages, onMessagesChange, onInsertToNotes, onSaveMessage }: AiNotesModalProps) {
+export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, initialQuery, autoSend, messages, onMessagesChange, onInsertToNotes, onSaveMessage }: AiNotesModalProps) {
     const { user, userData } = useAuth();
     const { openBible } = useBible();
     // Removed local messages state
@@ -41,33 +42,27 @@ export default function AiNotesModal({ isOpen, onClose, sermonId, sermonTitle, i
         };
     }, [isOpen]);
 
-    // Initial Query Handling
     useEffect(() => {
-        console.log('AiNotesModal useEffect. isOpen:', isOpen, 'initialQuery:', initialQuery);
-
         if (isOpen && initialQuery && initialQuery.trim().length > 0) {
-            console.log('AiNotesModal: Processing initialQuery:', initialQuery);
-
             // Check if we already asked this recently
-            // Find the last user message (reverse search)
             const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
-            console.log('AiNotesModal: Last user message:', lastUserMsg);
 
             if (lastUserMsg && lastUserMsg.content.trim() === initialQuery.trim()) {
-                console.log('AiNotesModal: Skipping duplicate query:', initialQuery);
                 return; // Already asked
             }
-            if (isLoading) {
-                console.log('AiNotesModal: Skipping because loading');
-                return; // Prevent double-fire
-            }
 
-            console.log('AiNotesModal: Triggering handleSendMessage');
-            handleSendMessage(undefined, initialQuery);
-        } else {
-            console.log('AiNotesModal: No initialQuery or not open');
+            if (autoSend) {
+                if (isLoading) return;
+                handleSendMessage(undefined, initialQuery);
+            } else {
+                setInput(initialQuery);
+                // Focus the input if possible
+                setTimeout(() => {
+                    document.getElementById('ai-notes-input')?.focus();
+                }, 100);
+            }
         }
-    }, [isOpen, initialQuery]);
+    }, [isOpen, initialQuery, autoSend]);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

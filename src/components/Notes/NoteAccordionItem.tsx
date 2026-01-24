@@ -21,7 +21,7 @@ interface NoteAccordionItemProps {
     onToggle: () => void;
     onUpdate: (id: string, title: string, content: string) => Promise<void>;
     onDelete: (id: string) => Promise<void>;
-    onAskAi: (query?: string) => void;
+    onAskAi: (query?: string, autoSend?: boolean) => void;
 }
 
 export function NoteAccordionItem({
@@ -251,7 +251,7 @@ export function NoteAccordionItem({
                                     onChange={handleContentChange}
                                     placeholder="Write something amazing..."
                                     className="p-4"
-                                    onAskAi={() => onAskAi()}
+                                    onAskAi={(query, autoSend) => onAskAi(query, autoSend)}
                                     onLinkClick={handleLinkClick}
                                 />
                             </div>
