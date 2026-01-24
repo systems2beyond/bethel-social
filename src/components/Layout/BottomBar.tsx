@@ -5,6 +5,7 @@ import { Send, Paperclip, Mic, Plus, ExternalLink } from 'lucide-react';
 import { useFeed } from '@/context/FeedContext';
 import { useChat } from '@/context/ChatContext';
 import { useAuth } from '@/context/AuthContext';
+import { usePathname, useRouter } from 'next/navigation';
 import { PostComposer } from '../Feed/PostComposer';
 
 export function BottomBar() {
@@ -16,6 +17,8 @@ export function BottomBar() {
     const { activePost } = useFeed();
     const { userData } = useAuth();
     const menuRef = React.useRef<HTMLDivElement>(null);
+    const pathname = usePathname();
+    const router = useRouter();
 
     // Close menu when clicking outside
     React.useEffect(() => {
@@ -37,28 +40,43 @@ export function BottomBar() {
 
         // If there is an active post, add context
         if (activePost) {
-            console.log('Attaching context from active post:', activePost);
+            console.log('[DEBUG_BOTTOMBAR] Attaching context from active post:', activePost.id);
             context = `\n\n[Context: User is looking at a post. Content: "${activePost.content || ''}". Media Type: ${activePost.type || 'unknown'}. Media URL: ${activePost.mediaUrl || 'none'}]`;
         } else {
-            console.log('No active post found for context.');
+            console.log('[DEBUG_BOTTOMBAR] No active post found for context. (Benign if standard chat)');
         }
 
         setInput(''); // Clear immediately for better UX
 
-        // If context handler exists (e.g. Notes Modal open), use it instead of navigating
-        if (hasContextHandler) {
+        try {
+            console.log(`[DEBUG_BOTTOMBAR] Attempting to send message. Length: ${message.length}, Mode: ${mode}, Path: ${pathname}`);
+
+            // If context handler exists (e.g. Notes Modal open), use it instead of navigating
+            if (hasContextHandler) {
+                console.log('[DEBUG_BOTTOMBAR] Handing off to Context Handler (e.g. Modal)');
+                await sendMessage(message, context, { intent: mode });
+                return;
+            }
+
+            // Normalize pathname (remove trailing slash) to prevent unnecessary navigation
+            const normalizedPath = pathname?.replace(/\/$/, '') || '';
+            const isChatPage = normalizedPath === '/chat';
+
+            // If not on chat page, navigate with query param
+            if (!isChatPage) {
+                console.log(`[DEBUG_BOTTOMBAR] Navigating to /chat (Current: ${pathname}, Normalized: ${normalizedPath})`);
+                const fullMessage = message + context;
+                router.push(`/chat?q=${encodeURIComponent(fullMessage)}&intent=${mode}`);
+                return;
+            }
+
+            console.log('[DEBUG_BOTTOMBAR] Calling ChatContext.sendMessage direct');
             await sendMessage(message, context, { intent: mode });
-            return;
+            console.log('[DEBUG_BOTTOMBAR] sendMessage completed successfully');
+        } catch (error) {
+            console.error("Failed to send message:", error);
+            setInput(message); // Restore input on error
         }
-
-        // If not on chat page, navigate with query param
-        if (window.location.pathname !== '/chat') {
-            const fullMessage = message + context;
-            window.location.href = `/chat?q=${encodeURIComponent(fullMessage)}&intent=${mode}`;
-            return;
-        }
-
-        await sendMessage(message, context, { intent: mode });
     };
 
     const canCreatePost = userData?.role === 'admin' || userData?.role === 'staff';

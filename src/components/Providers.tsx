@@ -7,6 +7,7 @@ import { FeedProvider } from '@/context/FeedContext';
 import { LightboxProvider } from '@/context/LightboxContext';
 import { AuthProvider } from '@/context/AuthContext';
 import { ActivityProvider } from '@/context/ActivityContext';
+import { BibleProvider } from '@/context/BibleContext';
 
 export function Providers({ children }: { children: React.ReactNode }) {
     return (
@@ -26,9 +27,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
                 <ActivityProvider>
                     <FeedProvider>
                         <LightboxProvider>
-                            <ChatProvider>
-                                {children}
-                            </ChatProvider>
+                            <BibleProvider>
+                                <ChatProvider>
+                                    {children}
+                                </ChatProvider>
+                            </BibleProvider>
                         </LightboxProvider>
                     </FeedProvider>
                 </ActivityProvider>

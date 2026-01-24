@@ -346,8 +346,8 @@ function RecentChats() {
                     Recent Chats
                 </h3>
                 <button
-                    onClick={() => {
-                        createNewChat();
+                    onClick={async () => {
+                        await createNewChat();
                         router.push('/chat');
                     }}
                     className="p-1 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"

@@ -3,8 +3,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useChat } from '@/context/ChatContext';
 import { cn } from '@/lib/utils';
-import { Bot, User, Calendar, Mail, X, ImageIcon } from 'lucide-react';
-import { doc, getDoc } from 'firebase/firestore';
+import { Bot, User, Calendar, Mail, X, ImageIcon, StickyNote, ArrowRight } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import { doc, getDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Post } from '@/types';
 import VerseLink from '../Bible/VerseLink';
@@ -16,6 +17,7 @@ export function ChatInterface() {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const searchParams = useSearchParams();
     const router = useRouter();
+    const { user } = useAuth();
     const hasInitialized = useRef(false);
     const [activePost, setActivePost] = useState<Post | null>(null);
 
@@ -44,12 +46,30 @@ export function ChatInterface() {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
 
+    const handleCreateNote = async (title: string, content: string) => {
+        if (!user) return;
+        try {
+            const noteRef = await addDoc(collection(db, 'users', user.uid, 'notes'), {
+                title,
+                content,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+            });
+            alert('Note created successfully!');
+            // Optional: Redirect to notes or show toast
+            router.push('/notes');
+        } catch (error) {
+            console.error("Error creating note:", error);
+            alert("Failed to create note.");
+        }
+    };
+
     const renderMessageContent = (content: string) => {
         // Strip <SUGGEST_SUMMARY> tag
         const cleanContent = content.replace(/<SUGGEST_SUMMARY>/g, '').trim();
 
-        // Regex to match ACTION tags
-        const actionRegex = /\[ACTION:(CALENDAR|EMAIL)\s*\|\s*(.*?)\]/g;
+        // Regex to match ACTION tags - uses [\s\S] to support multi-line note content
+        const actionRegex = /\[ACTION:(CALENDAR|EMAIL|CREATE_NOTE)\s*\|\s*([\s\S]*?)\]/g;
         const parts = [];
         let lastIndex = 0;
         let match;
@@ -106,6 +126,40 @@ export function ChatInterface() {
                             <p className="text-xs text-purple-600 dark:text-purple-300">Open Mail App</p>
                         </div>
                     </a>
+                );
+            } else if (type === 'CREATE_NOTE') {
+                const [title, noteContent] = params;
+
+                parts.push(
+                    <div
+                        key={`action-${match.index}`}
+                        className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-100 dark:border-amber-800 my-2"
+                    >
+                        <div className="flex items-start space-x-3 mb-3">
+                            <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-800 flex items-center justify-center text-amber-600 dark:text-amber-400 flex-shrink-0">
+                                <StickyNote className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <p className="font-semibold text-amber-900 dark:text-amber-100">Create New Note</p>
+                                <p className="text-xs text-amber-600 dark:text-amber-300">Matthew suggested saving this info</p>
+                            </div>
+                        </div>
+
+                        <div className="bg-white dark:bg-zinc-800 rounded-lg p-3 mb-3 border border-amber-100 dark:border-amber-900/50">
+                            <p className="font-medium text-gray-900 dark:text-gray-100 mb-1">{title}</p>
+                            <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-3">{noteContent}</p>
+                        </div>
+
+                        <div className="flex items-center space-x-2">
+                            <button
+                                onClick={() => handleCreateNote(title, noteContent)}
+                                className="flex-1 px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-lg hover:bg-amber-700 transition-colors flex items-center justify-center space-x-2 touch-manipulation cursor-pointer"
+                            >
+                                <span>Save Note</span>
+                                <ArrowRight className="w-4 h-4" />
+                            </button>
+                        </div>
+                    </div>
                 );
             }
 
@@ -209,7 +263,13 @@ export function ChatInterface() {
                 </div>
             )}
 
-            {messages.map((msg) => (
+            {messages.filter((msg, index, all) => {
+                // Hide 'welcome' message if there are other messages (prevent clutter)
+                if (msg.id.toString().startsWith('welcome') && all.length > 1) {
+                    return false;
+                }
+                return true;
+            }).map((msg) => (
                 <div
                     key={msg.id}
                     className={cn(
