@@ -35,6 +35,7 @@ export default function ShareScrollModal({ isOpen, onClose, title = "Share Scrol
             const promises = selectedUsers.map(recipient => {
                 return addDoc(collection(db, 'invitations'), {
                     toUserId: recipient.uid,
+                    invitedBy: user.uid, // Required by security rules
                     fromUser: {
                         uid: user.uid,
                         displayName: userData?.displayName || user.displayName || 'Unknown',
