@@ -15,6 +15,7 @@ interface CreateSermonModalProps {
 }
 
 export default function CreateSermonModal({ onClose, onSuccess }: CreateSermonModalProps) {
+    const { userData } = useAuth();
     const [activeTab, setActiveTab] = useState<'upload' | 'youtube'>('upload');
     const [title, setTitle] = useState('');
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -104,6 +105,7 @@ export default function CreateSermonModal({ onClose, onSuccess }: CreateSermonMo
                 driveFileId: driveFileId,
                 source: activeTab, // 'youtube' or 'upload'
                 transcript: transcript || null,
+                churchId: userData?.churchId || 'bethel-metro',
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
             });

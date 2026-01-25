@@ -79,7 +79,7 @@ export function BottomBar() {
         }
     };
 
-    const canCreatePost = userData?.role === 'admin' || userData?.role === 'staff';
+    const canCreatePost = userData?.role === 'admin' || userData?.role === 'staff' || userData?.role === 'super_admin';
 
     return (
         <>

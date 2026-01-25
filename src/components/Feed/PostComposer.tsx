@@ -49,8 +49,8 @@ export function PostComposer({ isOpen, onClose, initialContent = '', groupId }: 
 
         setIsSubmitting(true);
         try {
-            let mediaUrl: string | undefined;
-            let mediaType: string | undefined;
+            let mediaUrl: string | null = null;
+            let mediaType: string | null = null;
 
             if (mediaFile) {
                 mediaUrl = await uploadMedia(mediaFile);
@@ -60,8 +60,8 @@ export function PostComposer({ isOpen, onClose, initialContent = '', groupId }: 
             if (groupId) {
                 await GroupsService.createGroupPost(groupId, {
                     content,
-                    mediaUrl,
-                    mediaType,
+                    mediaUrl: mediaUrl || null,
+                    mediaType: mediaType || null,
                     author: {
                         name: userData?.displayName || user.displayName || 'Anonymous',
                         avatarUrl: user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`
@@ -69,21 +69,29 @@ export function PostComposer({ isOpen, onClose, initialContent = '', groupId }: 
                     type: 'user_post'
                 });
             } else {
-                await addDoc(collection(db, 'posts'), {
+                const postData: any = {
                     content,
-                    mediaUrl,
-                    mediaType,
+                    mediaUrl: mediaUrl || null,
+                    mediaType: mediaType || null,
                     author: {
                         uid: user.uid,
                         name: userData?.displayName || user.displayName || 'Anonymous',
-                        avatarUrl: user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`
+                        avatarUrl: userData?.photoURL || user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`
                     },
                     timestamp: Date.now(),
                     createdAt: serverTimestamp(),
                     likes: 0,
                     comments: 0,
-                    type: 'user_post'
+                    type: 'user_post',
+                    churchId: userData?.churchId || 'bethel-metro' // Fallback for safety
+                };
+
+                // Remove any key with undefined value to satisfy Firestore
+                Object.keys(postData).forEach(key => {
+                    if (postData[key] === undefined) delete postData[key];
                 });
+
+                await addDoc(collection(db, 'posts'), postData);
             }
 
             setContent('');

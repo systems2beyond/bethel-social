@@ -8,6 +8,8 @@ import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
 import { Loader2, ShieldCheck, Gift, ChevronDown, ChevronUp, AlertCircle, Ticket, CalendarClock, ChevronLeft } from 'lucide-react';
 import { toast } from 'sonner';
+import { resolveChurchIdFromHostname } from '@/lib/tenant';
+import { useAuth } from '@/context/AuthContext';
 
 // Initialize Stripe
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
@@ -24,6 +26,7 @@ interface EventPaymentModalProps {
     dateLabel: string; // "Oct 5, 2025"
     onSuccess: (registrationId: string) => void;
     onBack: () => void;
+    initialChurchId?: string;
 }
 
 export default function EventPaymentModal({
@@ -35,9 +38,22 @@ export default function EventPaymentModal({
     registrationData,
     dateLabel,
     onSuccess,
-    onBack
+    onBack,
+    initialChurchId
 }: EventPaymentModalProps) {
+    const { userData } = useAuth();
+    const [resolvedChurchId, setResolvedChurchId] = useState<string | null>(initialChurchId || userData?.churchId || null);
     const [step, setStep] = useState<number>(1); // 1: Tip & Review, 2: Payment
+
+    useEffect(() => {
+        if (!resolvedChurchId) {
+            const init = async () => {
+                const id = await resolveChurchIdFromHostname(window.location.hostname);
+                setResolvedChurchId(id || 'bethel-metro');
+            };
+            init();
+        }
+    }, [resolvedChurchId]);
 
     // Tipping
     const [tipPercent, setTipPercent] = useState<number>(0.03); // Default 3%
@@ -64,7 +80,7 @@ export default function EventPaymentModal({
             const result = await createIntent({
                 amount: baseAmount * 100, // Cents
                 tipAmount: tipAmount * 100, // Cents
-                churchId: 'default_church',
+                churchId: resolvedChurchId || 'bethel-metro',
                 eventId: eventId,
                 ticketType: ticketType,
                 quantity: quantity,

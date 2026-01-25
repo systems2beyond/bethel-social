@@ -6,6 +6,7 @@ export interface UserProfile {
     displayName: string;
     photoURL?: string;
     email?: string;
+    churchId?: string; // [MULTI-CHURCH]
 }
 
 export const UsersService = {

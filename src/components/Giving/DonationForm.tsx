@@ -13,6 +13,7 @@ import { useChurchConfig } from '@/hooks/useChurchConfig';
 import { ChevronDown, ChevronUp, Plus } from 'lucide-react';
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { useAuth } from '@/context/AuthContext';
 
 // Initialize Stripe
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
@@ -26,6 +27,7 @@ const TIP_PERCENTAGES = [0, 0.03, 0.05, 0.08];
 
 interface DonationWidgetProps {
     initialCampaignId?: string;
+    initialChurchId?: string;
     compact?: boolean;
     onClose?: () => void;
 }
@@ -35,7 +37,9 @@ import { X as CloseIcon } from 'lucide-react';
 
 // ... (existing imports)
 
-export default function DonationWidget({ initialCampaignId, compact = false, onClose }: DonationWidgetProps) {
+export default function DonationWidget({ initialCampaignId, initialChurchId, compact = false, onClose }: DonationWidgetProps) {
+    const { userData } = useAuth();
+    const effectiveChurchId = initialChurchId || userData?.churchId || 'bethel-metro';
     const [campaigns, setCampaigns] = useState<Campaign[]>(DEFAULT_CAMPAIGNS);
     // Fetch campaigns from collection
     React.useEffect(() => {
@@ -117,7 +121,7 @@ export default function DonationWidget({ initialCampaignId, compact = false, onC
             const result = await createIntent({
                 amount: baseAmount * 100,
                 tipAmount: tipAmount * 100,
-                churchId: 'default_church',
+                churchId: effectiveChurchId,
                 frequency: 'one_time',
                 campaign: campaign,
                 donorName: donorName,

@@ -60,7 +60,7 @@ export default function UsersPage() {
         );
     }
 
-    if (userData?.role !== 'admin') {
+    if (userData?.role !== 'admin' && userData?.role !== 'super_admin') {
         return (
             <div className="min-h-screen flex flex-col items-center justify-center p-4">
                 <ShieldAlert className="w-16 h-16 text-red-500 mb-4" />

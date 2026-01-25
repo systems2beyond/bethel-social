@@ -1,9 +1,11 @@
 'use client';
 
 import React from 'react';
-import { Download, Filter, Loader2, CreditCard } from 'lucide-react';
+import { Download, Filter, Loader2, CreditCard, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
 import { Timestamp } from 'firebase/firestore';
+import { auth } from '@/lib/firebase';
+import { toast } from 'sonner';
 
 interface Donation {
     id: string;
@@ -30,6 +32,50 @@ interface AdminDonationsTableProps {
 }
 
 export default function AdminDonationsTable({ donations, loading = false }: AdminDonationsTableProps) {
+    const [isVerifying, setIsVerifying] = React.useState<string | null>(null);
+
+    const handleVerifyStatus = async (donationId: string) => {
+        setIsVerifying(donationId);
+        try {
+            const token = await auth.currentUser?.getIdToken();
+            if (!token) throw new Error('Not authenticated');
+
+            const response = await fetch('/api/verifyDonation', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ data: { donationId } }) // onCall expects contents in 'data' key!
+            });
+
+            // onCall protocol response usually is wrapped in { result: ... } or { error: ... }
+            // But since we are using 'fetch' to a redirect, we are hitting the HTTPS trigger.
+            // Wait, for 'onCall' functions, the protocol is specific (verb POST, body { data: args }).
+            // And response is { result: ... }.
+
+            const json = await response.json();
+
+            if (!response.ok) {
+                const errorMsg = json.details || json.error?.message || json.error || json.message || 'Failed to verify';
+                throw new Error(errorMsg);
+            }
+
+            const data = json.result; // Extract result from onCall wrapper
+
+            if (data.updated) {
+                toast.success(`Status updated to: ${data.status}`);
+            } else {
+                toast.info(`Status confirmed: ${data.status}`);
+            }
+        } catch (error: any) {
+            console.error('Verify error:', error);
+            toast.error(error.message || 'Failed to verify status');
+        } finally {
+            setIsVerifying(null);
+        }
+    };
+
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('en-US', {
             style: 'currency',
@@ -142,7 +188,19 @@ export default function AdminDonationsTable({ donations, loading = false }: Admi
                                 return (
                                     <tr key={donation.id} className="hover:bg-gray-50/50 transition-colors">
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            <StatusBadge status={donation.status} />
+                                            <div className="flex items-center gap-2">
+                                                <StatusBadge status={donation.status} />
+                                                {(donation.status === 'pending' || donation.status === 'processing') && (
+                                                    <button
+                                                        onClick={() => handleVerifyStatus(donation.id)}
+                                                        disabled={isVerifying === donation.id}
+                                                        className="p-1 hover:bg-gray-200 rounded-full transition-colors text-gray-500 hover:text-blue-600"
+                                                        title="Check Status with Stripe"
+                                                    >
+                                                        <RefreshCw className={`w-3.5 h-3.5 ${isVerifying === donation.id ? 'animate-spin text-blue-600' : ''}`} />
+                                                    </button>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="px-6 py-4 text-sm text-gray-900 font-semibold text-right whitespace-nowrap">
                                             {formatCurrency(netAmount)}

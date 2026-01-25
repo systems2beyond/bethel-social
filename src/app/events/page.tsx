@@ -7,7 +7,10 @@ import { EventCard } from '@/components/Events/EventCard';
 import { MeetingCard } from '@/components/Meeting/MeetingCard';
 import { CalendarX, Loader2 } from 'lucide-react';
 
+import { useAuth } from '@/context/AuthContext';
+
 export default function EventsPage() {
+    const { userData } = useAuth();
     const [events, setEvents] = useState<any[]>([]);
     const [meetings, setMeetings] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -23,7 +26,16 @@ export default function EventsPage() {
                 // 1. Fetch Events - REMOVED orderBy to ensure we get mixed types (Strings & Timestamps)
                 // 1. Fetch Events
                 // Query all events and filter client-side to handle potential data type mismatches (Strings vs Timestamps)
-                const eventsQuery = query(collection(db, 'events'));
+                // [FIX] Must filter by churchId to satisfy Firestore rules
+                if (!userData?.churchId) {
+                    logs.push('No churchId found in userData, skipping fetch.');
+                    setLoading(false);
+                    return;
+                }
+
+                const eventsQuery = query(
+                    collection(db, 'events')
+                );
                 logs.push('Querying events collection (no filter/sort)...');
                 const eventsSnapshot = await getDocs(eventsQuery);
                 logs.push(`Snapshot size: ${eventsSnapshot.size}`);
@@ -51,11 +63,17 @@ export default function EventsPage() {
                             ...data,
                             startDate,
                             endDate,
+                            churchId: data.churchId || null,
                             _source: 'event'
                         };
                     })
-                    // Client-side filter: Only show future events
+                    // Client-side filter: Only show future events and match churchId
                     .filter((event: any) => {
+                        // 1. Church Scoping (Match current church OR legacy if bethel-metro)
+                        const isLegacyVisible = userData.churchId === 'bethel-metro' || userData.role === 'super_admin';
+                        const matchesChurch = event.churchId === userData.churchId || (!event.churchId && isLegacyVisible);
+                        if (!matchesChurch) return false;
+
                         if (!event.startDate) {
                             // DEEP DEBUG: Log keys to see what's actually there
                             logs.push(`Skipping ${event.id}: No startDate. Keys: ${Object.keys(event).join(', ')}`);
@@ -101,8 +119,10 @@ export default function EventsPage() {
             }
         };
 
-        fetchData();
-    }, []);
+        if (userData?.churchId) {
+            fetchData();
+        }
+    }, [userData?.churchId]);
 
     // Categorization Helper
     const getCategory = (item: any) => {

@@ -13,10 +13,11 @@ import {
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { useTheme } from 'next-themes';
+import { FirestoreUser } from '@/types';
 
 interface AuthContextType {
     user: User | null;
-    userData: any | null;
+    userData: FirestoreUser | null;
     loading: boolean;
     googleAccessToken: string | null;
     signInWithGoogle: () => Promise<void>;
@@ -30,7 +31,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
-    const [userData, setUserData] = useState<any | null>(null);
+    const [userData, setUserData] = useState<FirestoreUser | null>(null);
     const [loading, setLoading] = useState(true);
     const { setTheme } = useTheme();
 
@@ -44,20 +45,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 const userSnap = await getDoc(userRef);
 
                 if (!userSnap.exists()) {
+                    // [MULTI-CHURCH] Dynamic Resolution
+                    // We must resolve the churchId from the current subdomain to ensure they join the correct instance.
+                    const { resolveChurchIdFromHostname } = await import('@/lib/tenant');
+                    const resolvedChurchId = await resolveChurchIdFromHostname(window.location.hostname);
+
+                    if (!resolvedChurchId) {
+                        console.error('CRITICAL: Could not resolve church ID from hostname during signup. User created as orphan (or signup blocked).');
+                        // Ideally we throw an error here or redirect to error page.
+                        // For now, we allow creation but they will see empty feed. 
+                        // Or we can default to a "waiting room" status?
+                    }
+
                     // Create new user doc
                     const newUserData = {
-                        email: currentUser.email,
-                        displayName: currentUser.displayName,
-                        photoURL: currentUser.photoURL,
+                        uid: currentUser.uid,
+                        email: currentUser.email || '',
+                        displayName: currentUser.displayName || 'User',
+                        photoURL: currentUser.photoURL || undefined,
                         createdAt: serverTimestamp(),
                         theme: 'system', // Default theme
-                        role: 'member' // Default role
+                        role: 'member' as const, // Default role
+                        churchId: resolvedChurchId || undefined // Allow undefined if resolution fails (will be caught by app logic later)
                     };
                     await setDoc(userRef, newUserData);
-                    setUserData(newUserData);
+                    setUserData(newUserData as FirestoreUser);
                 } else {
                     // Update existing user doc (if needed) and load theme
-                    const data = userSnap.data();
+                    const data = userSnap.data() as FirestoreUser;
                     setUserData(data);
                     // FIXED: Do not sync theme from Firestore. Let next-themes manage it locally.
                     // if (data.theme) {

@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Sparkles, Upload, Image as ImageIcon, Loader2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { uploadMedia, dataURLtoBlob } from '@/lib/storage';
 
 interface StickerPopoverProps {
     onInsert: (url: string) => void;
@@ -16,6 +17,8 @@ export function StickerPopover({ onInsert, onClose, triggerRef }: StickerPopover
     const [isGenerating, setIsGenerating] = useState(false);
     const [generatedUrl, setGeneratedUrl] = useState<string | null>(null);
     const [uploadUrl, setUploadUrl] = useState<string | null>(null);
+    const [uploadFileObject, setUploadFileObject] = useState<File | null>(null);
+    const [isUploading, setIsUploading] = useState(false);
     const [position, setPosition] = useState<{ top: number, left: number } | null>(null);
 
     // Calculate position on mount if triggerRef is provided (Desktop)
@@ -251,6 +254,7 @@ export function StickerPopover({ onInsert, onClose, triggerRef }: StickerPopover
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
+            setUploadFileObject(file);
             const reader = new FileReader();
             reader.onloadend = () => {
                 setUploadUrl(reader.result as string);
@@ -336,20 +340,26 @@ export function StickerPopover({ onInsert, onClose, triggerRef }: StickerPopover
                                     <button
                                         onClick={async () => {
                                             if (generatedUrl) {
+                                                setIsUploading(true);
                                                 try {
                                                     const processedUrl = await processImage(generatedUrl);
-                                                    onInsert(processedUrl);
+                                                    const blob = dataURLtoBlob(processedUrl);
+                                                    const remoteUrl = await uploadMedia(blob, 'stickers', 'ai_sticker.png');
+                                                    onInsert(remoteUrl);
                                                 } catch (e) {
                                                     console.error("Failed to process image", e);
                                                     onInsert(generatedUrl);
+                                                } finally {
+                                                    setIsUploading(false);
                                                 }
                                                 onClose();
                                             }
                                         }}
+                                        disabled={isUploading}
                                         className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                                     >
-                                        <span className="px-4 py-2 bg-white text-black text-sm font-bold rounded-full shadow-lg transform scale-95 group-hover:scale-100 transition-transform">
-                                            Insert Sticker
+                                        <span className="px-4 py-2 bg-white text-black text-sm font-bold rounded-full shadow-lg transform scale-95 group-hover:scale-100 transition-transform flex items-center gap-2">
+                                            {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Insert Sticker'}
                                         </span>
                                     </button>
                                 </div>
@@ -380,14 +390,27 @@ export function StickerPopover({ onInsert, onClose, triggerRef }: StickerPopover
                                 <div className="relative aspect-square rounded-lg overflow-hidden border border-gray-200 dark:border-zinc-700 bg-gray-50 dark:bg-zinc-800 group">
                                     <img src={uploadUrl} alt="Uploaded sticker" className="w-full h-full object-contain" />
                                     <button
-                                        onClick={() => {
-                                            onInsert(uploadUrl);
+                                        onClick={async () => {
+                                            setIsUploading(true);
+                                            try {
+                                                if (uploadFileObject) {
+                                                    const remoteUrl = await uploadMedia(uploadFileObject, 'stickers');
+                                                    onInsert(remoteUrl);
+                                                } else if (uploadUrl) {
+                                                    onInsert(uploadUrl);
+                                                }
+                                            } catch (e) {
+                                                console.error("Failed to upload sticker", e);
+                                            } finally {
+                                                setIsUploading(false);
+                                            }
                                             onClose();
                                         }}
+                                        disabled={isUploading}
                                         className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                                     >
-                                        <span className="px-4 py-2 bg-white text-black text-sm font-bold rounded-full shadow-lg transform scale-95 group-hover:scale-100 transition-transform">
-                                            Insert Sticker
+                                        <span className="px-4 py-2 bg-white text-black text-sm font-bold rounded-full shadow-lg transform scale-95 group-hover:scale-100 transition-transform flex items-center gap-2">
+                                            {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Insert Sticker'}
                                         </span>
                                     </button>
                                 </div>

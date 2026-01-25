@@ -109,14 +109,19 @@ export const GroupsService = {
     /**
      * Get Public Groups (Active)
      */
-    getPublicGroups: async () => {
-        const q = query(
-            collection(db, GROUPS_COLLECTION),
+    getPublicGroups: async (churchId?: string) => {
+        let constraints: any[] = [
             where('privacy', '==', 'public'),
             where('status', '==', 'active'),
             orderBy('lastActivityAt', 'desc'),
             limit(20)
-        );
+        ];
+
+        if (churchId) {
+            constraints.unshift(where('churchId', '==', churchId));
+        }
+
+        const q = query(collection(db, GROUPS_COLLECTION), ...constraints);
         const snapshot = await getDocs(q);
         return snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() || {}) } as Group));
     },
@@ -124,23 +129,28 @@ export const GroupsService = {
     /**
      * Get Pending Groups (For Admin)
      */
-    getPendingGroups: async () => {
+    getPendingGroups: async (churchId?: string) => {
         try {
-            const q = query(
-                collection(db, GROUPS_COLLECTION),
+            let constraints: any[] = [
                 where('status', '==', 'pending'),
                 orderBy('createdAt', 'desc')
-            );
+            ];
+
+            if (churchId) {
+                constraints.unshift(where('churchId', '==', churchId));
+            }
+
+            const q = query(collection(db, GROUPS_COLLECTION), ...constraints);
             const snapshot = await getDocs(q);
             return snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() || {}) } as Group));
         } catch (error: any) {
             console.error("Error fetching pending groups (likely missing index):", error);
             // Fallback: Try without sorting if index is missing
             if (error.code === 'failed-precondition') {
-                const q = query(
-                    collection(db, GROUPS_COLLECTION),
-                    where('status', '==', 'pending')
-                );
+                let constraints: any[] = [where('status', '==', 'pending')];
+                if (churchId) constraints.unshift(where('churchId', '==', churchId));
+
+                const q = query(collection(db, GROUPS_COLLECTION), ...constraints);
                 const snapshot = await getDocs(q);
                 // Sort manually in client
                 const docs = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() || {}) } as Group));

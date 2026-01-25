@@ -2,37 +2,123 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Helper function to check if user is admin
-    function isAdmin() {
-      return request.auth != null && (
-        request.auth.token.role == 'admin' || 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+    // [MULTI-CHURCH] Helper Functions
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function getChurchId() {
+       // Ideally this is on the auth token (custom claim), but for now we read from the User doc
+       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.churchId;
+    }
+
+    function isSuperAdmin() {
+      // Check if user has 'super_admin' role in their user profile OR fall back to hardcoded email
+      return isAuthenticated() && (
+          request.auth.token.email == 'ryansyffus@gmail.com' ||
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'super_admin'
       );
     }
 
-    // Public Data (Social Feed, Events, etc.)
-    match /posts/{postId} {
-      allow read: if true;
-      allow write: if request.auth != null;
-      
-      match /comments/{commentId} {
-        allow read: if true;
-        allow write: if request.auth != null;
+    function matchesChurch(resourceData) {
+      // 1. Super Admin bypass (check first to avoid getChurchId error if field missing)
+      // 2. Strict ID match
+      return isSuperAdmin() || resourceData.churchId == getChurchId(); 
+    }
 
-        match /likes/{likeId} {
-          allow read: if true;
-          allow write: if request.auth != null;
-        }
-      }
+    // ---------------------------------------------------------
+    // 1. Churches & Configuration (Super Admin Only)
+    // ---------------------------------------------------------
+    match /churches/{churchId} {
+      allow read: if true; // Public can read config (to load themes)
+      allow write: if isSuperAdmin(); // Only Super User can deploy new churches
       
-      match /likes/{likeId} {
-        allow read: if true;
-        allow write: if request.auth != null;
+      // Allow access to all subcollections (settings, etc.)
+      match /{allChildren=**} {
+         allow read: if true;
+         allow write: if isSuperAdmin();
       }
     }
 
-    match /reports/{reportId} {
-      allow read, write: if isAdmin();
+    // ---------------------------------------------------------
+    // 2. Users Collection (Private & Nested Data)
+    // ---------------------------------------------------------
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.auth.uid == userId; 
+      allow update: if isAuthenticated() && request.auth.uid == userId;
+      
+      // Nested Collections
+      match /chats/{chatId} {
+        allow read, write: if isAuthenticated() && request.auth.uid == userId;
+        
+        match /messages/{messageId} {
+          allow read, write: if isAuthenticated() && request.auth.uid == userId;
+        }
+      }
+
+      match /sermon_notes/{noteId} {
+         allow read, write: if isAuthenticated() && request.auth.uid == userId;
+      }
+
+      match /notes/{noteId} {
+         allow read, write: if isAuthenticated() && request.auth.uid == userId;
+
+         match /chat/{messageId} {
+           allow read, write: if isAuthenticated() && request.auth.uid == userId;
+         }
+      }
+
+      match /settings/{settingId} {
+         allow read, write: if isAuthenticated() && request.auth.uid == userId;
+      }
+    }
+    
+    // ---------------------------------------------------------
+    // 3. Social Data (Posts, Events, Groups) - Scoped by Church
+    // ---------------------------------------------------------
+    
+    match /posts/{postId} {
+        allow read: if isAuthenticated() && matchesChurch(resource.data);
+        allow create: if isAuthenticated() && request.resource.data.churchId == getChurchId();
+        allow update, delete: if isAuthenticated() && (isSuperAdmin() || (resource.data.churchId == getChurchId() && resource.data.author.id == request.auth.uid));
+        
+        match /comments/{commentId} {
+            allow read: if isAuthenticated(); 
+            allow write: if isAuthenticated();
+        }
+        match /likes/{likeId} {
+            allow read, write: if isAuthenticated();
+        }
+    }
+
+    match /events/{eventId} {
+       allow read: if isAuthenticated() && (isSuperAdmin() || resource.data.churchId == getChurchId() || (!('churchId' in resource.data) && getChurchId() == 'default_church'));
+       allow write: if isAuthenticated() && request.resource.data.churchId == getChurchId();
+       
+       match /registrations/{registrationId} {
+         allow create: if request.auth != null;
+         allow read, update, delete: if request.auth != null && (resource.data.userId == request.auth.uid || isSuperAdmin());
+       }
+
+       match /ticket_configs/{configId} {
+         allow read, write: if request.auth != null;
+       }
+    }
+    
+    match /groups/{groupId} {
+       allow read: if isAuthenticated() && matchesChurch(resource.data);
+       allow write: if isAuthenticated() && request.resource.data.churchId == getChurchId();
+       
+       match /{allChildren=**} {
+           allow read, write: if isAuthenticated();
+       }
+    }
+    
+    match /sermons/{sermonId} {
+       allow read: if isAuthenticated() && matchesChurch(resource.data);
+       allow write: if isAuthenticated() && (request.resource.data.churchId == getChurchId() || isSuperAdmin());
     }
     
     match /sermon_chunks/{chunkId} {
@@ -40,164 +126,68 @@ service cloud.firestore {
       allow write: if request.auth != null;
     }
 
-    match /sermons/{sermonId} {
-      allow read: if true;
-      allow write: if request.auth != null;
+    match /suggested_events/{suggestionId} {
+       allow read, write: if isAuthenticated() && (isSuperAdmin() || matchesChurch(resource.data) || request.resource.data.churchId == getChurchId());
     }
 
-    // Groups Feature
-    match /groups/{groupId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null;
-      allow update: if request.auth != null; // Refine later
-      allow delete: if request.auth != null; // Refine later
-      
-      match /members/{memberId} {
-        allow read, write: if request.auth != null;
-      }
-      
-      match /posts/{postId} {
-        allow read, write: if request.auth != null;
-        
-        match /likes/{likeId} {
-            allow read: if true;
-            allow write: if request.auth != null;
-        }
-
-        match /comments/{commentId} {
-            allow read: if true;
-            allow write: if request.auth != null;
-
-            match /likes/{likeId} {
-                allow read: if true;
-                allow write: if request.auth != null;
-            }
-        }
-      }
-    }
-
-    // Collection Group for My Groups
-    match /{path=**}/members/{memberId} {
-      allow read: if request.auth != null;
-    }
-
-    // User Private Data (Profile, Chat History)
-    match /users/{userId} {
-      // Allow any auth user to read profiles (for invitations), but only owner can write
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId;
-      
-      match /chats/{chatId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-        
-        match /messages/{messageId} {
-          allow read, write: if request.auth != null && request.auth.uid == userId;
-        }
-      }
-
-      match /sermon_notes/{sermonId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-
-        match /chat/{messageId} {
-          allow read, write: if request.auth != null && request.auth.uid == userId;
-        }
-      }
-
-      // Settings (Bible, Theme, etc.)
-      match /settings/{settingId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-      }
-      // Unified Notes
-      match /notes/{noteId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-
-        match /chat/{messageId} {
-          allow read, write: if request.auth != null && request.auth.uid == userId;
-        }
-      }
-    }
-
-    // Global App Settings (Drive, Integrations)
-    match /settings/{settingId} {
-      allow read: if isAdmin();
-      allow write: if isAdmin();
-    }
-
-    match /events/{eventId} {
-      allow read: if true;
-      allow write: if request.auth != null;
-
-      match /registrations/{registrationId} {
-        allow create: if request.auth != null;
-        allow read, update, delete: if request.auth != null && (resource.data.userId == request.auth.uid || isAdmin());
-      }
-
-      match /ticket_configs/{configId} {
-        allow read, write: if request.auth != null;
-      }
-    }
-
-    // Google Meets & Chat Bridge
     match /meetings/{meetingId} {
       allow read: if request.auth != null;
       allow write: if request.auth != null;
 
       match /comments/{commentId} {
-        allow read, write: if request.auth != null; // Allow participants to chat
-
+        allow read, write: if request.auth != null; 
         match /likes/{likeId} {
           allow read, write: if request.auth != null;
         }
       }
     }
 
+    // ---------------------------------------------------------
+    // 4. Admin & Management (Donations, Reports, Settings)
+    // ---------------------------------------------------------
 
-    // Invitations (Shared Scrolls)
-    match /invitations/{invitationId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null && request.resource.data.fromUser.uid == request.auth.uid;
-      allow update, delete: if request.auth != null && (resource.data.toUserId == request.auth.uid || resource.data.fromUser.uid == request.auth.uid);
-    }
-
-    // Notifications
-    match /notifications/{notificationId} {
-        // Any authenticated user can create notifications (to send to others)
-        allow create: if request.auth != null;
-        // Only recipient can read their notifications
-        allow read: if request.auth != null && resource.data.toUserId == request.auth.uid;
-        // Only recipient can update (mark read) or delete their notifications
-        allow update, delete: if request.auth != null && resource.data.toUserId == request.auth.uid;
-    }
-
-
-    // Donations
-    match /tickets/{ticketId} {
-      allow read: if true; // Public can verify tickets
-      allow write: if isAdmin(); // Only admins can manage tickets
-    }
-    
-    match /campaigns/{campaignId} {
-      allow read: if true;
-      allow write: if isAdmin();
+    match /settings/{settingId} {
+        allow read: if isAuthenticated();
+        allow write: if isSuperAdmin();
     }
 
     match /donations/{donationId} {
-      // Admins can read all. Users can read their own.
-      allow read: if isAdmin() || (request.auth != null && resource.data.donorId == request.auth.uid);
-      // Only allow writes from server/functions (admin SDK bypasses rules) or specific authorized clients if needed. 
-      // For now, restrict client-side writes to be safe.
-      allow write: if false; 
+        allow read: if isAuthenticated() && matchesChurch(resource.data);
+        allow write: if isSuperAdmin(); // Usually written by backend webhook, but allowing super admin for manual fixes
     }
 
-    // Church Configuration (Public/Admin)
-    match /churches/{churchId} {
-      allow read: if true; // Allow public read for feature flags (dynamic landing pages, etc.)
-      allow write: if isAdmin();
+    match /reports/{reportId} {
+        allow read: if isAuthenticated() && matchesChurch(resource.data);
+        allow create: if isAuthenticated(); // Anyone can report
+        allow update, delete: if isAuthenticated() && matchesChurch(resource.data);
     }
 
-    // Default deny
-    match /{document=**} {
-      allow read, write: if false;
+    match /campaigns/{campaignId} {
+        allow read: if isAuthenticated() && (isSuperAdmin() || resource.data.churchId == getChurchId() || (!('churchId' in resource.data) && getChurchId() == 'bethel-metro'));
+        allow write: if isAuthenticated() && matchesChurch(resource.data) && (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
     }
+
+    // ---------------------------------------------------------
+    // Global & Legacy
+    // ---------------------------------------------------------
+    
+    match /{path=**}/members/{memberId} {
+      allow read: if isAuthenticated();
+    }
+    
+    match /invitations/{invitationId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.resource.data.invitedBy == request.auth.uid;
+      allow update, delete: if request.auth != null && (resource.data.toUserId == request.auth.uid || resource.data.invitedBy == request.auth.uid);
+    }
+    
+    match /notifications/{notificationId} {
+        allow create: if request.auth != null;
+        allow read: if request.auth != null && resource.data.toUserId == request.auth.uid;
+        allow update, delete: if request.auth != null && resource.data.toUserId == request.auth.uid;
+    }
+
+    // Default deny for safety
+    // match /{document=**} { allow read, write: if false; } 
   }
 }

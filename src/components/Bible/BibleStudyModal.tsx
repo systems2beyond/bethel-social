@@ -337,6 +337,12 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
             return;
         }
 
+        // Safety Check: Firestore 1MB limit
+        if (content.length > 1000000) {
+            console.error('BibleStudyModal: Note content is too large (>1MB). Skipping save to avoid Firestore error.');
+            return;
+        }
+
         setSavingNotes(true);
         try {
             const noteDocId = activeNoteId || 'bible-study-general';

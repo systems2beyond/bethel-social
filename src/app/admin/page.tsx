@@ -54,7 +54,7 @@ interface PinnedPost {
 }
 
 export default function AdminPage() {
-    const { userData } = useAuth();
+    const { userData, loading: authLoading } = useAuth();
     const [activeTab, setActiveTab] = useState<'overview' | 'reports' | 'pinned' | 'groups' | 'giving' | 'config' | 'sermons'>('overview');
 
     // Overview State
@@ -69,45 +69,89 @@ export default function AdminPage() {
     useEffect(() => {
         if (activeTab === 'overview') {
             const fetchStats = async () => {
-                setLoadingStats(true); // Don't reset if already loaded? Maybe only on first load.
-                try {
-                    // 1. Members Count
-                    const usersColl = collection(db, 'users');
-                    const membersSnapshot = await getCountFromServer(usersColl);
-                    const membersCount = membersSnapshot.data().count;
+                if (authLoading) return;
+                setLoadingStats(true);
 
-                    // 2. Weekly Giving (Last 7 Days)
+                // Debug userData
+                console.log("DEBUG: fetchStats userData", userData);
+
+                const isSuperAdmin = userData?.role === 'super_admin';
+                const churchId = userData?.churchId;
+
+                // Safety check: Regular admins MUST have a churchId to query restricted collections
+                if (!isSuperAdmin && !churchId) {
+                    console.warn("DEBUG: Regular admin missing churchId, skipping restricted stats fetch");
+                    setLoadingStats(false);
+                    return;
+                }
+
+                // 1. Members Count (Users collection is generally readable, but we scope it)
+                let membersCount = 0;
+                try {
+                    const usersColl = collection(db, 'users');
+                    const usersQuery = (isSuperAdmin && !churchId)
+                        ? query(usersColl) // Super admin seeing all
+                        : query(usersColl, where('churchId', '==', churchId));
+
+                    const membersSnapshot = await getCountFromServer(usersQuery);
+                    membersCount = membersSnapshot.data().count;
+                } catch (e) {
+                    console.error("DEBUG: Error fetching users stats", e);
+                }
+
+                // 2. Weekly Giving (Last 7 Days)
+                let weeklyGiving = 0;
+                try {
                     const sevenDaysAgo = new Date();
                     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-                    const donationsQuery = query(
+
+                    let donationsQuery = query(
                         collection(db, 'donations'),
                         where('createdAt', '>=', Timestamp.fromDate(sevenDaysAgo)),
                         where('status', '==', 'paid')
                     );
+
+                    // Must filter by churchId for non-super admins to satisfy 'matchesChurch' rule
+                    if (isSuperAdmin && !churchId) {
+                        // Fetching all (Super Admin bypass rule handles this)
+                    } else {
+                        donationsQuery = query(donationsQuery, where('churchId', '==', churchId));
+                    }
+
                     const donationsSnapshot = await getDocs(donationsQuery);
-                    let weeklyGiving = 0;
                     donationsSnapshot.forEach(doc => {
                         weeklyGiving += ((doc.data().amount || 0) / 100);
                     });
+                } catch (e) {
+                    console.error("DEBUG: Error fetching donations stats", e);
+                }
 
-                    // 3. Upcoming Events
-                    const eventsQuery = query(
+                // 3. Upcoming Events
+                let eventsCount = 0;
+                try {
+                    let eventsQuery = query(
                         collection(db, 'events'),
                         where('startDate', '>=', Timestamp.now())
                     );
-                    const eventsSnapshot = await getCountFromServer(eventsQuery);
-                    const eventsCount = eventsSnapshot.data().count;
 
-                    setStats({ members: membersCount, giving: weeklyGiving, events: eventsCount });
-                } catch (error) {
-                    console.error("Error fetching admin stats:", error);
-                } finally {
-                    setLoadingStats(false);
+                    if (isSuperAdmin && !churchId) {
+                        // Fetching all
+                    } else {
+                        eventsQuery = query(eventsQuery, where('churchId', '==', churchId));
+                    }
+
+                    const eventsSnapshot = await getCountFromServer(eventsQuery);
+                    eventsCount = eventsSnapshot.data().count;
+                } catch (e) {
+                    console.error("DEBUG: Error fetching events stats", e);
                 }
+
+                setStats({ members: membersCount, giving: weeklyGiving, events: eventsCount });
+                setLoadingStats(false);
             };
             fetchStats();
         }
-    }, [activeTab]);
+    }, [activeTab, userData, authLoading]);
 
     // Reports State
     const [reports, setReports] = useState<Report[]>([]);
@@ -124,38 +168,45 @@ export default function AdminPage() {
     // Fetch Reports
     useEffect(() => {
         if (activeTab === 'reports') {
-            const q = query(collection(db, 'reports'), orderBy('timestamp', 'desc'));
+            let q = query(collection(db, 'reports'), orderBy('timestamp', 'desc'));
+            if (userData?.churchId) {
+                // Compound query requires index: churchId ASC, timestamp DESC
+                q = query(collection(db, 'reports'), where('churchId', '==', userData.churchId), orderBy('timestamp', 'desc'));
+            }
             const unsubscribe = onSnapshot(q, (snapshot) => {
                 setReports(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Report)));
                 setLoadingReports(false);
             });
             return () => unsubscribe();
         }
-    }, [activeTab]);
+    }, [activeTab, userData]);
 
     // Fetch Pinned Posts
     useEffect(() => {
         if (activeTab === 'pinned') {
-            const q = query(collection(db, 'posts'), where('pinned', '==', true));
+            let q = query(collection(db, 'posts'), where('pinned', '==', true));
+            if (userData?.churchId) {
+                q = query(q, where('churchId', '==', userData.churchId));
+            }
             const unsubscribe = onSnapshot(q, (snapshot) => {
                 setPinnedPosts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PinnedPost)));
                 setLoadingPinned(false);
             });
             return () => unsubscribe();
         }
-    }, [activeTab]);
+    }, [activeTab, userData]);
 
     // Fetch Pending Groups
     useEffect(() => {
         if (activeTab === 'groups') {
             loadPendingGroups();
         }
-    }, [activeTab]);
+    }, [activeTab, userData]);
 
     const loadPendingGroups = async () => {
         setLoadingGroups(true);
         try {
-            const data = await GroupsService.getPendingGroups();
+            const data = await GroupsService.getPendingGroups(userData?.churchId);
             setPendingGroups(data);
         } catch (e) {
             console.error(e);
@@ -218,7 +269,7 @@ export default function AdminPage() {
         }
     };
 
-    if (userData?.role !== 'admin') {
+    if (userData?.role !== 'admin' && userData?.role !== 'super_admin') {
         return (
             <div className="min-h-screen flex flex-col items-center justify-center p-4">
                 <AlertCircle className="w-16 h-16 text-red-500 mb-4" />
@@ -595,6 +646,7 @@ export default function AdminPage() {
 
 
 function ConfigurationTab() {
+    const { userData } = useAuth();
     const [config, setConfig] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
@@ -606,7 +658,8 @@ function ConfigurationTab() {
     const [stripeLoading, setStripeLoading] = useState(false);
 
     useEffect(() => {
-        const unsub = onSnapshot(doc(db, 'churches', 'default_church'), (doc) => {
+        if (!userData?.churchId) return;
+        const unsub = onSnapshot(doc(db, 'churches', userData.churchId), (doc) => {
             if (doc.exists()) {
                 const data = doc.data();
                 setConfig(data);
@@ -615,11 +668,12 @@ function ConfigurationTab() {
             setLoading(false);
         });
         return () => unsub();
-    }, []);
+    }, [userData?.churchId]);
 
     const toggleFeature = async (feature: string, currentValue: boolean) => {
+        if (!userData?.churchId) return;
         try {
-            await setDoc(doc(db, 'churches', 'default_church'), {
+            await setDoc(doc(db, 'churches', userData.churchId), {
                 features: {
                     [feature]: !currentValue
                 }
@@ -631,9 +685,10 @@ function ConfigurationTab() {
     };
 
     const handleSaveWebhook = async () => {
+        if (!userData?.churchId) return;
         setIsSavingWebhook(true);
         try {
-            await setDoc(doc(db, 'churches', 'default_church'), {
+            await setDoc(doc(db, 'churches', userData.churchId), {
                 webhookUrl: webhookUrl.trim()
             }, { merge: true });
             // Show success momentarily?
@@ -646,11 +701,12 @@ function ConfigurationTab() {
     };
 
     const handleConnectStripe = async () => {
+        if (!userData?.churchId) return;
         setStripeLoading(true);
         try {
             const createExpressAccount = httpsCallable(functions, 'createExpressAccount');
             const result = await createExpressAccount({
-                churchId: 'default_church',
+                churchId: userData.churchId,
                 redirectUrl: window.location.origin
             });
             const { url } = result.data as any;
@@ -668,10 +724,11 @@ function ConfigurationTab() {
     };
 
     const handleStripeDashboard = async () => {
+        if (!userData?.churchId) return;
         setStripeLoading(true);
         try {
             const getLoginLink = httpsCallable(functions, 'getStripeLoginLink');
-            const result = await getLoginLink({ churchId: 'default_church' });
+            const result = await getLoginLink({ churchId: userData.churchId });
             const { url } = result.data as any;
             window.open(url, '_blank');
             setStripeLoading(false);

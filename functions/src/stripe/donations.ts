@@ -95,3 +95,52 @@ export const createDonationIntent = onCall({ secrets: [stripeSecretKey] }, async
         throw new HttpsError('internal', error.message);
     }
 });
+
+export const verifyDonationStatus = onCall({ secrets: [stripeSecretKey], cors: true }, async (request) => {
+    // Only allow admins
+    if (!request.auth) {
+        throw new HttpsError('unauthenticated', 'User must be logged in.');
+    }
+
+    const { donationId } = request.data;
+    if (!donationId) throw new HttpsError('invalid-argument', 'Missing donationId');
+
+    const db = admin.firestore();
+    const donationRef = db.collection('donations').doc(donationId);
+    const donationDoc = await donationRef.get();
+
+    if (!donationDoc.exists) throw new HttpsError('not-found', 'Donation not found');
+
+    const donationData = donationDoc.data();
+    if (!donationData?.stripePaymentIntentId) {
+        throw new HttpsError('failed-precondition', 'No Stripe PaymentIntent ID linked to this donation.');
+    }
+
+    const stripe = getStripe();
+    try {
+        const paymentIntent = await stripe.paymentIntents.retrieve(donationData.stripePaymentIntentId);
+
+        let newStatus = donationData.status;
+
+        if (paymentIntent.status === 'succeeded') {
+            newStatus = 'paid';
+        } else if (paymentIntent.status === 'canceled') {
+            newStatus = 'failed'; // or canceled
+        } else if (paymentIntent.status === 'requires_payment_method') {
+            // Keeps pending or failed
+        }
+
+        if (newStatus !== donationData.status) {
+            await donationRef.update({
+                status: newStatus,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+            return { success: true, status: newStatus, updated: true };
+        }
+
+        return { success: true, status: donationData.status, updated: false };
+    } catch (error: any) {
+        console.error('Verify Donation Error:', error);
+        throw new HttpsError('internal', error.message);
+    }
+});

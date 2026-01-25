@@ -4,7 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { Post } from '@/types';
 import { PostCard } from './PostCard';
 import { useFeed } from '@/context/FeedContext';
-import { collection, query, orderBy, limit, getDocs, startAfter, where } from 'firebase/firestore';
+import { useAuth } from '@/context/AuthContext';
+import { collection, query, orderBy, limit, getDocs, startAfter, where, QueryConstraint } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { LiveStreamBanner } from './LiveStreamBanner';
 import MeetingInviteCard from '../Meeting/MeetingInviteCard';
@@ -12,6 +13,7 @@ import MeetingLobby from '../Meeting/MeetingLobby';
 import { Meeting } from '@/types';
 
 export const SocialFeed: React.FC = () => {
+    const { userData } = useAuth();
     const [posts, setPosts] = useState<Post[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
@@ -28,8 +30,15 @@ export const SocialFeed: React.FC = () => {
     // Fetch Live Post
     useEffect(() => {
         const fetchLivePost = async () => {
+            if (!userData?.churchId) return;
+
             try {
-                const q = query(collection(db, 'posts'), where('isLive', '==', true), limit(1));
+                const q = query(
+                    collection(db, 'posts'),
+                    where('isLive', '==', true),
+                    where('churchId', '==', userData.churchId),
+                    limit(1)
+                );
                 const snapshot = await getDocs(q);
                 if (!snapshot.empty) {
                     setLivePost({ id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as Post);
@@ -77,19 +86,40 @@ export const SocialFeed: React.FC = () => {
     }, []);
 
     const fetchPosts = React.useCallback(async (isInitial = false) => {
-        console.log('fetchPosts called', { isInitial, loading, loadingMore, hasMore, refreshTrigger });
+        console.log('fetchPosts called', { isInitial, loading, loadingMore, hasMore, refreshTrigger, churchId: userData?.churchId });
+
+        // Wait for userData to be available
+        if (!userData?.churchId) {
+            console.log('Waiting for userData with churchId...');
+            return;
+        }
+
         if ((!isInitial && loading) || loadingMore || (!isInitial && !hasMore)) return;
 
         try {
             setError(null);
             const postsRef = collection(db, 'posts');
-            // Use stable sort with secondary ID field
-            let q = query(postsRef, orderBy('timestamp', 'desc'), orderBy('__name__', 'desc'), limit(10));
+
+            // [MULTI-CHURCH] Isolation Logic
+            const constraints: QueryConstraint[] = [orderBy('timestamp', 'desc'), orderBy('__name__', 'desc'), limit(10)];
+
+            if (userData?.churchId) {
+                const churchIds = [userData.churchId, ...(userData.connectedChurchIds || [])];
+                constraints.unshift(where('churchId', 'in', churchIds.slice(0, 10)));
+            }
+
+            let q = query(postsRef, ...constraints);
 
             if (!isInitial && lastVisible) {
                 setLoadingMore(true);
-                // Use explicit field values for cursor
-                q = query(postsRef, orderBy('timestamp', 'desc'), orderBy('__name__', 'desc'), startAfter(lastVisible.timestamp, lastVisible.id), limit(10));
+                // Rebuild query with startAfter
+                const pagedConstraints = [...constraints];
+                // Insert startAfter before limit if possible, or just append
+                // Note: 'limit' is already at the end of constraints.
+                // We need to insert startAfter BEFORE limit but AFTER orderBys.
+                // Actually query() accepts varargs.
+
+                q = query(postsRef, ...constraints.slice(0, -1), startAfter(lastVisible.timestamp, lastVisible.id), limit(10));
             } else {
                 setLoading(true);
             }
@@ -137,16 +167,18 @@ export const SocialFeed: React.FC = () => {
             setLoading(false);
             setLoadingMore(false);
         }
-    }, [lastVisible, hasMore, loading, loadingMore]);
+    }, [lastVisible, hasMore, loading, loadingMore, userData]);
 
     const { refreshTrigger } = useFeed();
 
     useEffect(() => {
-        console.log('refreshTrigger changed:', refreshTrigger);
-        setHasMore(true);
-        setLastVisible(null);
-        fetchPosts(true);
-    }, [refreshTrigger]); // Reload when refreshTrigger changes
+        console.log('refreshTrigger changed or userData loaded:', { refreshTrigger, churchId: userData?.churchId });
+        if (userData?.churchId) {
+            setHasMore(true);
+            setLastVisible(null);
+            fetchPosts(true);
+        }
+    }, [refreshTrigger, userData?.churchId]); // Reload when refreshTrigger changes or user data loads
 
     useEffect(() => {
         const observer = new IntersectionObserver(

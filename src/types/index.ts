@@ -2,8 +2,47 @@ import { Timestamp } from 'firebase/firestore';
 
 export type PostType = 'manual' | 'facebook' | 'youtube' | 'video';
 
+// [MULTI-CHURCH] Core Church Definition
+export interface Church {
+    id: string; // e.g. "bethel-metro"
+    name: string;
+    subdomain: string; // e.g. "bethel"
+    theme: {
+        primaryColor: string; // Hex code
+        logoUrl: string;
+    };
+    config: {
+        googleMapsApiKey?: string;
+        facebookAppId?: string;
+        stripeAccountId?: string;
+    };
+    connectedChurchIds: string[]; // Federation
+    createdAt: any;
+}
+
+// [MULTI-CHURCH] User Schema
+export interface FirestoreUser {
+    uid: string;
+    email: string;
+    displayName: string;
+    photoURL?: string;
+    phoneNumber?: string;
+    notificationSettings?: {
+        posts?: boolean;
+        messages?: boolean;
+        sermons?: boolean;
+    };
+    churchId?: string; // Mandatory eventually
+    role?: 'super_admin' | 'admin' | 'staff' | 'member';
+    connectedChurchIds?: string[];
+    customBibleSources?: any[]; // For custom bible versions
+    theme?: string;
+    createdAt?: any;
+}
+
 export interface Post {
     id: string;
+    churchId?: string; // [MULTI-CHURCH] Optional during migration
     type: PostType;
     content: string;
     mediaUrl?: string;
@@ -37,6 +76,7 @@ export type GroupRole = 'admin' | 'moderator' | 'member';
 
 export interface Group {
     id: string;
+    churchId?: string; // [MULTI-CHURCH]
     name: string;
     description: string;
     bannerImage?: string;
@@ -92,6 +132,7 @@ export interface EventMedia {
 
 export interface Event {
     id: string;
+    churchId?: string; // [MULTI-CHURCH]
     title: string;
     description: string;
     startDate: Timestamp;
@@ -167,6 +208,7 @@ export interface Comment {
 
 export interface Sermon {
     id: string;
+    churchId?: string; // [MULTI-CHURCH]
     title: string;
     date: { seconds: number; nanoseconds: number } | string; // Firestore Timestamp or ISO string
     videoUrl: string;
@@ -181,6 +223,7 @@ export interface Sermon {
 
 export interface Meeting {
     id: string;
+    churchId?: string; // [MULTI-CHURCH]
     hostId: string;
     hostName: string;
     topic: string;
@@ -252,6 +295,7 @@ export interface EventRegistration {
 
 export interface Campaign {
     id: string;
+    churchId?: string; // [MULTI-CHURCH]
     name: string;
     description?: string;
     createdAt?: any;

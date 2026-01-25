@@ -82,7 +82,7 @@ export const LiveStreamBanner = ({ post, onDismiss }: LiveStreamBannerProps) => 
                             <Radio className="w-3 h-3" />
                             Live Now
                         </div>
-                        {userData?.role === 'admin' && (
+                        {(userData?.role === 'admin' || userData?.role === 'super_admin') && (
                             <button
                                 onClick={handleEndLive}
                                 disabled={isEnding}

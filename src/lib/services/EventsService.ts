@@ -96,35 +96,44 @@ export const EventsService = {
         }
     },
 
-    async getAllEvents(includeDrafts = false): Promise<Event[]> {
+    async getAllEvents(includeDrafts = false, churchId?: string): Promise<Event[]> {
         try {
-            let q = query(collection(db, COLLECTION_NAME), orderBy('startDate', 'desc')); // Order by event date ideally
+            // We fetch all events and filter client-side to support legacy events missing churchId
+            const q = query(collection(db, COLLECTION_NAME), orderBy('startDate', 'desc'));
+
             const snapshot = await getDocs(q);
 
-            const events = snapshot.docs.map(doc => {
-                const data = doc.data();
-                // Helper to date fix
-                const fixDate = (val: any) => {
-                    if (!val) return null;
-                    if (val.toDate && typeof val.toDate === 'function') return val;
-                    if (typeof val === 'object' && typeof val.seconds === 'number') {
-                        return new Timestamp(val.seconds, val.nanoseconds || 0);
-                    }
-                    if (typeof val === 'string') {
-                        try { return Timestamp.fromDate(new Date(val)); } catch (e) { return null; }
-                    }
-                    return null;
-                };
+            const events = snapshot.docs
+                .map(doc => {
+                    const data = doc.data();
+                    // Helper to date fix
+                    const fixDate = (val: any) => {
+                        if (!val) return null;
+                        if (val.toDate && typeof val.toDate === 'function') return val;
+                        if (typeof val === 'object' && typeof val.seconds === 'number') {
+                            return new Timestamp(val.seconds, val.nanoseconds || 0);
+                        }
+                        if (typeof val === 'string') {
+                            try { return Timestamp.fromDate(new Date(val)); } catch (e) { return null; }
+                        }
+                        return null;
+                    };
 
-                return {
-                    id: doc.id,
-                    ...data,
-                    startDate: fixDate(data.startDate || data.date),
-                    endDate: fixDate(data.endDate),
-                    createdAt: fixDate(data.createdAt),
-                    updatedAt: fixDate(data.updatedAt)
-                } as Event;
-            });
+                    return {
+                        id: doc.id,
+                        ...data,
+                        startDate: fixDate(data.startDate || data.date),
+                        endDate: fixDate(data.endDate),
+                        createdAt: fixDate(data.createdAt),
+                        updatedAt: fixDate(data.updatedAt)
+                    } as Event;
+                })
+                .filter(event => {
+                    // Filter for churchId match OR legacy (missing churchId - only for default church)
+                    if (!churchId) return true;
+                    const isLegacyVisible = churchId === 'bethel-metro';
+                    return event.churchId === churchId || (!event.churchId && isLegacyVisible);
+                });
 
             if (includeDrafts) return events;
             return events.filter(e => e.status === 'published');
@@ -161,9 +170,12 @@ export const EventsService = {
         }
     },
 
-    async getSuggestedEvents(): Promise<SuggestedEvent[]> {
+    async getSuggestedEvents(churchId?: string): Promise<SuggestedEvent[]> {
         try {
-            const q = query(collection(db, 'suggested_events'), where('status', '==', 'pending'));
+            let q = query(collection(db, 'suggested_events'), where('status', '==', 'pending'));
+            if (churchId) {
+                q = query(collection(db, 'suggested_events'), where('status', '==', 'pending'), where('churchId', '==', churchId));
+            }
             const snapshot = await getDocs(q);
             return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SuggestedEvent));
         } catch (error) {
@@ -176,9 +188,9 @@ export const EventsService = {
         await updateDoc(doc(db, 'suggested_events', id), { status: 'rejected' });
     },
 
-    async approveSuggestion(suggestion: SuggestedEvent): Promise<string> {
+    async approveSuggestion(suggestion: SuggestedEvent, churchId?: string): Promise<string> {
         // Create draft event from suggestion
-        const eventData: Omit<Event, 'id' | 'createdAt' | 'updatedAt'> = {
+        const eventData: any = {
             title: suggestion.title,
             description: suggestion.description,
             startDate: suggestion.date,
@@ -187,7 +199,8 @@ export const EventsService = {
             imageUrl: suggestion.imageUrl,
             featuredGuests: [],
             status: 'draft',
-            sourcePostId: suggestion.sourcePostId
+            sourcePostId: suggestion.sourcePostId,
+            churchId: churchId || 'default_church'
         };
 
         const eventId = await this.createEvent(eventData);

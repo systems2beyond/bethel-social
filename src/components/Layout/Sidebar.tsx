@@ -253,7 +253,7 @@ function UserSection() {
         );
     }
 
-    const isAdmin = userData?.role === 'admin';
+    const isAdmin = userData?.role === 'admin' || userData?.role === 'super_admin';
 
     // Notification count from context
     const notificationCount = notifications.filter(n => !n.viewed).length + invitations.filter(i => !i.viewed).length;

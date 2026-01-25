@@ -307,6 +307,13 @@ export default function SermonModal({ sermon, initialMode, onClose }: SermonModa
         saveTimeoutRef.current = setTimeout(async () => {
             if (!user || !sermon.id) return;
 
+            // Safety Check: Firestore 1MB limit
+            if (newNotes.length > 1000000) {
+                console.error('SermonModal: Note content is too large (>1MB). Skipping save to avoid Firestore error.');
+                setSavingNotes(false);
+                return;
+            }
+
             try {
                 const noteId = `sermon_${sermon.id}`;
                 const noteRef = doc(db, 'users', user.uid, 'notes', noteId);

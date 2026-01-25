@@ -2,9 +2,10 @@
 
 import React, { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
 import { EventsService } from '@/lib/services/EventsService';
 import { Event, FeaturedGuest, TicketTier, LandingPageBlock, RegistrationField, Campaign } from '@/types';
-import { Timestamp, collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { Timestamp, collection, getDocs, query, orderBy, where } from 'firebase/firestore';
 import { ArrowLeft, Save, Plus, Trash2, Upload, Calendar, MapPin, Loader2, Image as ImageIcon, Crop, LayoutTemplate, Eye, Users, QrCode } from 'lucide-react';
 import ImageCropper from '@/components/Shared/ImageCropper';
 import LocationSearchInput from '@/components/Shared/LocationSearchInput';
@@ -16,6 +17,7 @@ import { db } from '@/lib/firebase';
 
 export default function EventEditorPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
+    const { userData } = useAuth();
     const router = useRouter();
     const isNew = id === 'new';
 
@@ -63,21 +65,31 @@ export default function EventEditorPage({ params }: { params: Promise<{ id: stri
     const [uploadingGuestIndex, setUploadingGuestIndex] = useState<number | null>(null);
 
     useEffect(() => {
-        loadCampaigns();
-        if (!isNew) {
-            loadEvent(id);
+        if (userData?.churchId) {
+            loadCampaigns();
+            if (!isNew) {
+                loadEvent(id);
+            }
         }
-    }, [id, isNew]);
+    }, [id, isNew, userData]);
 
     const loadCampaigns = async () => {
+        if (!userData?.churchId) return;
         try {
-            const q = query(collection(db, 'campaigns'), orderBy('name', 'asc'));
+            const q = query(
+                collection(db, 'campaigns'),
+                orderBy('name', 'asc')
+            );
             const snapshot = await getDocs(q);
             const data = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
             })) as Campaign[];
-            setCampaigns(data);
+
+            // Filter for churchId match OR missing churchId (legacy - only for default church)
+            const isLegacyVisible = userData.churchId === 'bethel-metro' || userData.role === 'super_admin';
+            const filteredData = data.filter(c => c.churchId === userData.churchId || (!c.churchId && isLegacyVisible));
+            setCampaigns(filteredData);
         } catch (error) {
             console.error("Error loading campaigns:", error);
         }
@@ -219,7 +231,8 @@ export default function EventEditorPage({ params }: { params: Promise<{ id: stri
                     ticketPrice: ticketPrice,
                     capacity: registrationCapacity,
                     currency: 'USD'
-                }
+                },
+                churchId: userData?.churchId || 'default_church'
             };
 
             if (isNew) {

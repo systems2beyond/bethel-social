@@ -20,6 +20,7 @@ import { CustomCollaborationCursor } from './CustomCollaborationCursor';
 import * as Y from 'yjs';
 import { HocuspocusProvider } from '@hocuspocus/provider';
 import { cn } from '@/lib/utils';
+import { uploadMedia } from '@/lib/storage';
 
 interface TiptapEditorProps {
     content: string;
@@ -595,6 +596,47 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
                             onAskAiRef.current(query);
                             return true;
                         }
+                    }
+                }
+                return false;
+            },
+            handleDrop: (view, event, slice, moved) => {
+                if (!moved && event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0]) {
+                    const file = event.dataTransfer.files[0];
+                    if (file.type.startsWith('image/')) {
+                        const { schema } = view.state;
+                        const coordinates = view.posAtCoords({ left: event.clientX, top: event.clientY });
+
+                        // Upload to Firebase Storage
+                        uploadMedia(file, 'notes/images').then((url) => {
+                            const node = schema.nodes.image.create({ src: url });
+                            const transaction = view.state.tr.insert(coordinates?.pos || view.state.selection.from, node);
+                            view.dispatch(transaction);
+                        }).catch(err => {
+                            console.error('Failed to upload dropped image', err);
+                        });
+
+                        return true; // handled
+                    }
+                }
+                return false;
+            },
+            handlePaste: (view, event, slice) => {
+                const items = Array.from(event.clipboardData?.items || []);
+                const imageItem = items.find(item => item.type.startsWith('image/'));
+
+                if (imageItem) {
+                    const file = imageItem.getAsFile();
+                    if (file) {
+                        // Upload to Firebase Storage
+                        uploadMedia(file, 'notes/images').then((url) => {
+                            const node = view.state.schema.nodes.image.create({ src: url });
+                            const transaction = view.state.tr.replaceSelectionWith(node);
+                            view.dispatch(transaction);
+                        }).catch(err => {
+                            console.error('Failed to upload pasted image', err);
+                        });
+                        return true; // handled
                     }
                 }
                 return false;

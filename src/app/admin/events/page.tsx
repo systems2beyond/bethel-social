@@ -8,8 +8,10 @@ import { Event } from '@/types';
 import { useRouter } from 'next/navigation';
 
 import SuggestedEventsList from '@/components/Admin/Events/SuggestedEventsList';
+import { useAuth } from '@/context/AuthContext';
 
 export default function EventsListPage() {
+    const { userData, loading: authLoading } = useAuth();
     const [events, setEvents] = useState<Event[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -17,13 +19,19 @@ export default function EventsListPage() {
     const router = useRouter();
 
     useEffect(() => {
-        loadEvents();
-    }, []);
+        if (!authLoading && userData?.churchId) {
+            loadEvents();
+        } else if (!authLoading && !userData) {
+            // Handle not logged in or no user data
+            setLoading(false);
+        }
+    }, [authLoading, userData]);
 
     const loadEvents = async () => {
         try {
             setError(null);
-            const data = await EventsService.getAllEvents(true); // Include drafts
+            // Pass churchId (and true for drafts)
+            const data = await EventsService.getAllEvents(true, userData?.churchId);
             setEvents(data);
         } catch (error: any) {
             console.error('Failed to load events', error);

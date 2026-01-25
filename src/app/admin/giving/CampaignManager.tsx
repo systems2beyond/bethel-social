@@ -1,24 +1,20 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy, serverTimestamp, where } from 'firebase/firestore';
+import { useAuth } from '@/context/AuthContext';
 import { db } from '@/lib/firebase';
 import { Plus, Trash2, Tag, Loader2, Search, LayoutGrid, List as ListIcon, Heart, FolderOpen, X, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
-
-interface Campaign {
-    id: string;
-    name: string;
-    description?: string;
-    createdAt?: any;
-}
+import { Campaign } from '@/types';
 
 export default function CampaignManager() {
+    const { userData } = useAuth();
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
     const [searchQuery, setSearchQuery] = useState('');
-    const [view, setView] = useState<'grid' | 'list'>('grid');
 
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -26,18 +22,30 @@ export default function CampaignManager() {
     const [newDesc, setNewDesc] = useState('');
 
     useEffect(() => {
-        const q = query(collection(db, 'campaigns'), orderBy('name', 'asc'));
+        if (!userData?.churchId) return;
+
+        const q = query(
+            collection(db, 'campaigns'),
+            orderBy('name', 'asc')
+        );
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const data = snapshot.docs.map(doc => ({
+            const allData = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
             })) as Campaign[];
-            setCampaigns(data);
+
+            // Match current church OR has no churchId (legacy - only for default church)
+            const isLegacyVisible = userData.churchId === 'bethel-metro' || userData.role === 'super_admin';
+            const filteredData = allData.filter(c =>
+                c.churchId === userData.churchId || (!c.churchId && isLegacyVisible)
+            );
+
+            setCampaigns(filteredData);
             setLoading(false);
         });
 
         return () => unsubscribe();
-    }, []);
+    }, [userData?.churchId, userData?.role]);
 
     const handleAdd = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -48,6 +56,7 @@ export default function CampaignManager() {
             await addDoc(collection(db, 'campaigns'), {
                 name: newName.trim(),
                 description: newDesc.trim() || null,
+                churchId: userData?.churchId || 'default_church',
                 createdAt: serverTimestamp()
             });
             setNewName('');
@@ -124,15 +133,15 @@ export default function CampaignManager() {
 
                     <div className="flex items-center space-x-2 bg-white border border-gray-200 rounded-xl p-1 shadow-sm">
                         <button
-                            onClick={() => setView('grid')}
-                            className={`p-2 rounded-lg transition-all ${view === 'grid' ? 'bg-gray-100 text-blue-600 shadow-inner' : 'text-gray-400 hover:text-gray-600'}`}
+                            onClick={() => setViewMode('grid')}
+                            className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-gray-100 text-blue-600 shadow-inner' : 'text-gray-400 hover:text-gray-600'}`}
                             title="Grid View"
                         >
                             <LayoutGrid className="w-5 h-5" />
                         </button>
                         <button
-                            onClick={() => setView('list')}
-                            className={`p-2 rounded-lg transition-all ${view === 'list' ? 'bg-gray-100 text-blue-600 shadow-inner' : 'text-gray-400 hover:text-gray-600'}`}
+                            onClick={() => setViewMode('list')}
+                            className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-gray-100 text-blue-600 shadow-inner' : 'text-gray-400 hover:text-gray-600'}`}
                             title="List View"
                         >
                             <ListIcon className="w-5 h-5" />
@@ -162,24 +171,24 @@ export default function CampaignManager() {
                         )}
                     </div>
                 ) : (
-                    <div className={view === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" : "flex flex-col space-y-3"}>
+                    <div className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" : "flex flex-col space-y-3"}>
                         {filteredCampaigns.map((campaign) => (
                             <div
                                 key={campaign.id}
                                 className={`
                                     bg-white border text-left rounded-2xl transition-all duration-200
-                                    ${view === 'grid'
+                                    ${viewMode === 'grid'
                                         ? 'border-gray-200 p-6 shadow-sm hover:shadow-md hover:border-blue-200 flex flex-col h-full hover:-translate-y-1'
                                         : 'border-gray-100 p-4 shadow-sm hover:border-blue-200 flex items-center justify-between'
                                     }
                                 `}
                             >
-                                <div className={`flex items-start gap-4 ${view === 'grid' ? '' : 'flex-1'}`}>
+                                <div className={`flex items-start gap-4 ${viewMode === 'grid' ? '' : 'flex-1'}`}>
                                     <div className={`
                                         rounded-xl flex items-center justify-center flex-shrink-0 transition-colors
-                                        ${view === 'grid' ? 'w-12 h-12 bg-blue-50 text-blue-600 mb-4' : 'w-10 h-10 bg-gray-50 text-gray-400'}
+                                        ${viewMode === 'grid' ? 'w-12 h-12 bg-blue-50 text-blue-600 mb-4' : 'w-10 h-10 bg-gray-50 text-gray-400'}
                                     `}>
-                                        <Heart className={`${view === 'grid' ? 'w-6 h-6' : 'w-5 h-5'}`} />
+                                        <Heart className={`${viewMode === 'grid' ? 'w-6 h-6' : 'w-5 h-5'}`} />
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <h4 className="font-bold text-gray-900 text-lg line-clamp-1">{campaign.name}</h4>
@@ -191,7 +200,7 @@ export default function CampaignManager() {
                                     </div>
                                 </div>
 
-                                <div className={`${view === 'grid' ? 'mt-6 pt-4 border-t border-gray-50 flex justify-end' : 'ml-4'}`}>
+                                <div className={`${viewMode === 'grid' ? 'mt-6 pt-4 border-t border-gray-50 flex justify-end' : 'ml-4'}`}>
                                     <button
                                         onClick={() => handleDelete(campaign.id, campaign.name)}
                                         className="text-gray-400 hover:text-red-600 p-2 rounded-lg hover:bg-red-50 transition-colors"

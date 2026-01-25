@@ -13,7 +13,7 @@ import NotificationSettings from '@/components/Settings/NotificationSettings';
 export default function SettingsPage() {
     const { user, userData, loading, signOut } = useAuth();
     const router = useRouter();
-    const isAdmin = userData?.role === 'admin';
+    const isAdmin = userData?.role === 'admin' || userData?.role === 'super_admin';
 
     if (loading) {
         return (

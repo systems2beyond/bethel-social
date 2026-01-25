@@ -3,21 +3,25 @@ import { EventsService } from '@/lib/services/EventsService';
 import { SuggestedEvent } from '@/types';
 import { Loader2, Calendar, MapPin, Check, X, Sparkles, ExternalLink } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
 
 export default function SuggestedEventsList() {
+    const { userData, loading: authLoading } = useAuth();
     const [suggestions, setSuggestions] = useState<SuggestedEvent[]>([]);
     const [loading, setLoading] = useState(true);
     const [processingId, setProcessingId] = useState<string | null>(null);
     const router = useRouter();
 
     useEffect(() => {
-        loadSuggestions();
-    }, []);
+        if (!authLoading && userData?.churchId) {
+            loadSuggestions();
+        }
+    }, [authLoading, userData]);
 
     const loadSuggestions = async () => {
         try {
             setLoading(true);
-            const data = await EventsService.getSuggestedEvents();
+            const data = await EventsService.getSuggestedEvents(userData?.churchId);
             setSuggestions(data);
         } catch (error) {
             console.error('Failed to load suggestions', error);
@@ -29,7 +33,7 @@ export default function SuggestedEventsList() {
     const handleApprove = async (suggestion: SuggestedEvent) => {
         try {
             setProcessingId(suggestion.id);
-            const eventId = await EventsService.approveSuggestion(suggestion);
+            const eventId = await EventsService.approveSuggestion(suggestion, userData?.churchId);
             router.push(`/admin/events/${eventId}`);
         } catch (error) {
             console.error('Failed to approve suggestion', error);

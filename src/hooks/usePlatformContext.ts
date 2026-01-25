@@ -5,7 +5,7 @@ import { db } from '@/lib/firebase';
 import { collection, query, orderBy, limit, onSnapshot, where, getDocs } from 'firebase/firestore';
 
 export function usePlatformContext() {
-    const { user } = useAuth();
+    const { user, userData } = useAuth();
     const { reference, tabs, activeTabId } = useBible();
 
     const [contextData, setContextData] = useState({
@@ -38,19 +38,21 @@ export function usePlatformContext() {
 
     // 2. Firestore Subscriptions (Events, Posts, Groups, Notifications, Notes)
     useEffect(() => {
-        if (!user) return;
+        if (!user || !userData?.churchId) return;
 
-        // Events: Next 5 upcoming
+        // Events: Next 5 upcoming for THIS church
         const eventsQ = query(
             collection(db, 'events'),
+            where('churchId', '==', userData.churchId),
             where('startDate', '>=', new Date().toISOString()),
             orderBy('startDate', 'asc'),
             limit(5)
         );
 
-        // Posts: Latest 3
+        // Posts: Latest 3 for THIS church
         const postsQ = query(
             collection(db, 'posts'),
+            where('churchId', '==', userData.churchId),
             orderBy('createdAt', 'desc'),
             limit(3)
         );
@@ -111,7 +113,7 @@ export function usePlatformContext() {
             unsubNotifs();
             unsubGroups();
         };
-    }, [user]);
+    }, [user, userData]);
 
     // Construct the final system string
     const contextString = `

@@ -56,7 +56,7 @@ export default function GivingAnalytics({ donations }: GivingAnalyticsProps) {
 
         // For Trend Chart (Last 4 Weeks)
         const weeklyTrends: { [key: string]: number } = {};
-        // Initialize last 4 weeks
+        // Initialize last 4 weeks (0 = current week)
         for (let i = 0; i < 4; i++) {
             const weekStart = startOfWeek(subDays(now, i * 7));
             const label = format(weekStart, 'MMM d');
@@ -68,7 +68,8 @@ export default function GivingAnalytics({ donations }: GivingAnalyticsProps) {
             const date = d.createdAt?.toDate ? d.createdAt.toDate() : new Date();
 
             // Only count "paid" or "succeeded"
-            if (d.status !== 'paid' && d.status !== 'succeeded') return;
+            const status = (d.status || '').toLowerCase();
+            if (status !== 'paid' && status !== 'succeeded') return;
 
             // Total Stats
             totalRaised += (d.amount / 100);
@@ -81,11 +82,12 @@ export default function GivingAnalytics({ donations }: GivingAnalyticsProps) {
             campaigns[campaignName] = (campaigns[campaignName] || 0) + (d.amount / 100);
 
             // Trend Data (aggregating by week start)
-            if (isAfter(date, subDays(now, 35))) { // Roughly last month
-                const weekLabel = format(startOfWeek(date), 'MMM d');
-                if (weeklyTrends[weekLabel] !== undefined) {
-                    weeklyTrends[weekLabel] += (d.amount / 100);
-                }
+            // Use same logic as initialization:
+            const weekStart = startOfWeek(date);
+            const weekLabel = format(weekStart, 'MMM d');
+
+            if (weeklyTrends[weekLabel] !== undefined) {
+                weeklyTrends[weekLabel] += (d.amount / 100);
             }
         });
 
@@ -144,9 +146,9 @@ export default function GivingAnalytics({ donations }: GivingAnalyticsProps) {
                         <h3 className="text-lg font-bold text-gray-900">Donation Trends</h3>
                         <p className="text-sm text-gray-500">Weekly giving over the last month</p>
                     </div>
-                    <div className="w-full h-[300px] min-w-0" style={{ minHeight: '300px' }}>
+                    <div style={{ width: '100%', height: '300px' }}>
                         {isClient && (
-                            <ResponsiveContainer width="100%" height="100%">
+                            <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={100}>
                                 <BarChart data={analytics.barData}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
                                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#6B7280', fontSize: 12 }} dy={10} />
@@ -174,9 +176,9 @@ export default function GivingAnalytics({ donations }: GivingAnalyticsProps) {
                         <h3 className="text-lg font-bold text-gray-900">Fund Breakdown</h3>
                         <p className="text-sm text-gray-500">Distribution by envelope/campaign</p>
                     </div>
-                    <div className="w-full h-[300px] min-w-0" style={{ minHeight: '300px' }}>
+                    <div style={{ width: '100%', height: '300px' }}>
                         {isClient && analytics.pieData.length > 0 ? (
-                            <ResponsiveContainer width="100%" height="100%">
+                            <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={100}>
                                 <PieChart>
                                     <Pie
                                         data={analytics.pieData}

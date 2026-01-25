@@ -113,7 +113,7 @@ export const PostOptionsMenu: React.FC<PostOptionsMenuProps> = ({ post }) => {
         setIsOpen(false);
     };
 
-    const isAdmin = userData?.role === 'admin';
+    const isAdmin = userData?.role === 'admin' || userData?.role === 'super_admin';
 
     // If not logged in, don't show menu
     if (!user) {

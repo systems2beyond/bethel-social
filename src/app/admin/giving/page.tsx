@@ -35,14 +35,16 @@ interface Payout {
 }
 
 const PayoutsList = () => {
+    const { userData } = useAuth();
     const [payouts, setPayouts] = useState<Payout[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        if (!userData?.churchId) return;
         const fetchPayouts = async () => {
             try {
                 const getRecentPayouts = httpsCallable(functions, 'getRecentPayouts');
-                const result = await getRecentPayouts({ churchId: 'default_church' });
+                const result = await getRecentPayouts({ churchId: userData.churchId });
                 const data = result.data as any;
                 setPayouts(data.payouts || []);
             } catch (err) {
@@ -52,7 +54,7 @@ const PayoutsList = () => {
             }
         };
         fetchPayouts();
-    }, []);
+    }, [userData?.churchId]);
 
     if (loading) return <div className="text-sm text-gray-400 py-2">Loading payouts...</div>;
 
@@ -118,8 +120,8 @@ function AdminGivingContent() {
     const [stripeDetailsSubmitted, setStripeDetailsSubmitted] = useState<boolean>(false);
 
     useEffect(() => {
-        // Assume single church for now
-        const unsub = onSnapshot(doc(db, 'churches', 'default_church'), (docSnapshot) => {
+        if (!userData?.churchId) return;
+        const unsub = onSnapshot(doc(db, 'churches', userData.churchId), (docSnapshot) => {
             const data = docSnapshot.data();
             if (data?.stripeAccountStatus) {
                 setStripeStatus(data.stripeAccountStatus);
@@ -131,26 +133,29 @@ function AdminGivingContent() {
             }
         });
         return () => unsub();
-    }, []);
+    }, [userData?.churchId]);
 
     // Fetch Donations
     useEffect(() => {
+        if (!userData?.churchId) return;
         const donationsRef = collection(db, 'donations');
+        // We fetch ALL recent donations and filter client-side to support legacy data 
+        // ONLY for the default church. New churches will only see their own.
         const q = query(
             donationsRef,
-            where('churchId', '==', 'default_church'),
+            where('churchId', '==', userData.churchId),
             orderBy('createdAt', 'desc'),
             limit(100)
         );
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const donationsData: Donation[] = [];
+
             snapshot.forEach((doc) => {
                 const data = doc.data();
                 donationsData.push({
                     id: doc.id,
                     ...data,
-                    // Ensure defaults
                     amount: data.amount || 0,
                     tipAmount: data.tipAmount || 0,
                     totalAmount: data.totalAmount || 0,
@@ -166,15 +171,16 @@ function AdminGivingContent() {
         });
 
         return () => unsubscribe();
-    }, []);
+    }, [userData?.churchId]);
 
 
     const handleOnboard = async () => {
+        if (!userData?.churchId) return;
         setIsLoadingUrl(true);
         try {
             const createExpressAccount = httpsCallable(functions, 'createExpressAccount');
             const result = await createExpressAccount({
-                churchId: 'default_church',
+                churchId: userData.churchId,
                 redirectUrl: window.location.origin
             });
             const { url } = result.data as any;
@@ -187,6 +193,7 @@ function AdminGivingContent() {
     };
 
     const handleLoginLink = async () => {
+        if (!userData?.churchId) return;
         setIsLoadingUrl(true);
         try {
             // Open window immediately to avoid popup blockers
@@ -194,7 +201,7 @@ function AdminGivingContent() {
             if (newWindow) newWindow.document.body.innerHTML = 'Loading Stripe Dashboard...';
 
             const getLoginLink = httpsCallable(functions, 'getStripeLoginLink');
-            const result = await getLoginLink({ churchId: 'default_church' });
+            const result = await getLoginLink({ churchId: userData.churchId });
             const { url } = result.data as any;
 
             if (newWindow) {
@@ -211,7 +218,7 @@ function AdminGivingContent() {
         }
     };
 
-    if (userData?.role !== 'admin') {
+    if (userData?.role !== 'admin' && userData?.role !== 'super_admin') {
         return (
             <div className="min-h-screen flex flex-col items-center justify-center p-4">
                 <AlertCircle className="w-16 h-16 text-red-500 mb-4" />

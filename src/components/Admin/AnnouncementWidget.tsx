@@ -81,7 +81,8 @@ export default function AnnouncementWidget() {
                     avatarUrl: userData?.photoURL || user?.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=Admin'
                 },
                 createdAt: serverTimestamp(),
-                attachments: uploadedAttachments
+                attachments: uploadedAttachments,
+                churchId: userData?.churchId || 'bethel-metro'
             });
 
             // 3. Reset State

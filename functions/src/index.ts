@@ -147,7 +147,7 @@ export { generateTiptapToken } from './collaboration/token';
 // Stripe Functions
 export { createExpressAccount, getStripeLoginLink, getRecentPayouts } from './stripe/connect';
 export { stripeWebhookHandler as stripeWebhook } from './stripe/webhooks';
-export { createDonationIntent } from './stripe/donations';
+export { createDonationIntent, verifyDonationStatus } from './stripe/donations';
 export { createEventPaymentIntent } from './stripe/events';
 
 export { saveEvent } from './admin/events';

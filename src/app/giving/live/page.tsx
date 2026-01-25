@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { Loader2, QrCode, Heart } from 'lucide-react';
 import Image from 'next/image';
+import { resolveChurchIdFromHostname } from '@/lib/tenant';
 
 interface Donation {
     id: string;
@@ -34,12 +35,22 @@ export default function GalaGivingPage() {
     const [totalRaised, setTotalRaised] = useState(0);
     const [recentDonations, setRecentDonations] = useState<Donation[]>([]);
     const [loading, setLoading] = useState(true);
+    const [churchId, setChurchId] = useState<string | null>(null);
     const initialLoadDone = useRef(false);
 
     // Goal could be dynamic, hardcoding for demo
     const GOAL = 10000;
 
     useEffect(() => {
+        const init = async () => {
+            const resolvedId = await resolveChurchIdFromHostname(window.location.hostname);
+            setChurchId(resolvedId || 'bethel-metro');
+        };
+        init();
+    }, []);
+
+    useEffect(() => {
+        if (!churchId) return;
         const donationsRef = collection(db, 'donations');
         // Get all donations for the total
         // In a real app with thousands of docs, you'd want a separate "aggregates" document.
@@ -47,7 +58,7 @@ export default function GalaGivingPage() {
 
         const qTotal = query(
             donationsRef,
-            where('churchId', '==', 'default_church')
+            where('churchId', '==', churchId)
         );
 
         const unsubscribeTotal = onSnapshot(qTotal, (snapshot) => {
@@ -62,7 +73,7 @@ export default function GalaGivingPage() {
         // Separate listener for "New" donations to show in ticker and trigger confetti
         const qRecent = query(
             donationsRef,
-            where('churchId', '==', 'default_church'),
+            where('churchId', '==', churchId),
             orderBy('createdAt', 'desc'),
             limit(10)
         );
@@ -102,10 +113,10 @@ export default function GalaGivingPage() {
         });
 
         return () => {
-            unsubscribeTotal();
-            unsubscribeRecent();
+            if (unsubscribeTotal) unsubscribeTotal();
+            if (unsubscribeRecent) unsubscribeRecent();
         };
-    }, []);
+    }, [churchId]);
 
     const triggerConfetti = () => {
         const duration = 3000;

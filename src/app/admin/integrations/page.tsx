@@ -24,7 +24,8 @@ export default function IntegrationsPage() {
     useEffect(() => {
         const fetchConfig = async () => {
             try {
-                const docRef = doc(db, 'settings', 'integrations');
+                if (!userData?.churchId) return;
+                const docRef = doc(db, 'churches', userData.churchId, 'settings', 'integrations');
                 const docSnap = await getDoc(docRef);
 
                 if (docSnap.exists()) {
@@ -42,7 +43,7 @@ export default function IntegrationsPage() {
             }
         };
 
-        if (!authLoading && userData?.role === 'admin') {
+        if (!authLoading && (userData?.role === 'admin' || userData?.role === 'super_admin')) {
             fetchConfig();
         }
     }, [authLoading, userData]);
@@ -50,7 +51,8 @@ export default function IntegrationsPage() {
     const handleSave = async () => {
         setSaving(true);
         try {
-            const docRef = doc(db, 'settings', 'integrations');
+            if (!userData?.churchId) throw new Error("No church ID found");
+            const docRef = doc(db, 'churches', userData.churchId, 'settings', 'integrations');
             await setDoc(docRef, {
                 facebook: {
                     pageId: fbPageId,
@@ -80,7 +82,7 @@ export default function IntegrationsPage() {
         );
     }
 
-    if (userData?.role !== 'admin') {
+    if (userData?.role !== 'admin' && userData?.role !== 'super_admin') {
         return <div className="p-8 text-center text-gray-500">Access Denied</div>;
     }
 
