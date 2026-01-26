@@ -56,6 +56,8 @@ export function ActivityProvider({ children }: { children: ReactNode }) {
         );
         const unsub = onSnapshot(qInvites, (snap) => {
             setInvitations(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        }, (err) => {
+            console.error('[ActivityContext] Invitations listener error:', err);
         });
         return () => unsub();
     }, [user?.uid]);
@@ -70,6 +72,8 @@ export function ActivityProvider({ children }: { children: ReactNode }) {
         );
         const unsub = onSnapshot(qNotifs, (snap) => {
             setNotifications(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        }, (err) => {
+            console.error('[ActivityContext] Notifications listener error:', err);
         });
         return () => unsub();
     }, [user?.uid]);

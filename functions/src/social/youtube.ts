@@ -159,6 +159,7 @@ export const syncYoutubeContent = async () => {
                 },
                 externalUrl: `https://www.youtube.com/watch?v=${video.videoId}`,
                 isLive: video.isLive,
+                churchId: 'default_church', // Hardcoded for single-tenant migration phase
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
             }, { merge: true });
 

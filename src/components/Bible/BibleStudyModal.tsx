@@ -55,9 +55,20 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
         openVideo,
         closeVideo,
     } = useBible();
-    const [editor, setEditor] = useState<any>(null);
+    const [personalEditor, setPersonalEditor] = useState<any>(null);
+    const [fellowshipEditor, setFellowshipEditor] = useState<any>(null);
     const [notes, setNotes] = useState('');
     const [noteTitle, setNoteTitle] = useState(contextNoteTitle || 'General Bible Study');
+
+    const [rightPaneView, setRightPaneView] = useState<'notes' | 'fellowship' | 'search'>('notes');
+
+    // Helper to get active editor based on current view
+    const getActiveEditor = useCallback(() => {
+        if (collaborationId && (rightPaneView === 'fellowship' || rightPaneView === 'search')) {
+            return fellowshipEditor;
+        }
+        return personalEditor;
+    }, [collaborationId, rightPaneView, personalEditor, fellowshipEditor]);
 
     const pathname = usePathname();
     const prevPathname = useRef(pathname);
@@ -143,7 +154,6 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
 
     const [isSearching, setIsSearching] = useState(false);
     const [isIndexing, setIsIndexing] = useState(false); // New state for loading index
-    const [rightPaneView, setRightPaneView] = useState<'notes' | 'fellowship' | 'search'>('notes');
 
     useEffect(() => {
         console.log('[BibleStudyModal] rightPaneView changed:', rightPaneView);
@@ -302,7 +312,7 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                 if (data.content && data.content !== notes) {
                     // Only set if we don't have an editor instance OR if we are switching docs
                     // If editor exists, we rely on it, unless we just switched activeNoteId
-                    if (!editor || activeNoteId) setNotes(data.content);
+                    if (!personalEditor || activeNoteId) setNotes(data.content);
                 }
                 if (data.title && !contextNoteTitle) setNoteTitle(data.title);
             } else {
@@ -316,7 +326,7 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
             }
         });
         return () => unsubscribe();
-    }, [user, editor, activeNoteId, collaborationId, contextNoteTitle]);
+    }, [user, personalEditor, activeNoteId, collaborationId, contextNoteTitle]);
 
 
 
@@ -363,8 +373,8 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
     const handleTitleChange = (newTitle: string) => {
         setNoteTitle(newTitle);
         // Save immediately (debounced ideally, but direct for now)
-        if (editor) {
-            handleSaveNotes(editor.getHTML(), newTitle);
+        if (personalEditor) {
+            handleSaveNotes(personalEditor.getHTML(), newTitle);
         }
     };
 
@@ -391,16 +401,17 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
     // Register Bible Insert Handler
     useEffect(() => {
         registerInsertHandler((html) => {
-            if (editor) {
+            const activeEditor = getActiveEditor();
+            if (activeEditor) {
                 // Focus end to ensure valid selection target
-                editor.commands.focus('end');
-                editor.commands.insertContent(html);
-                const newContent = editor.getHTML();
+                activeEditor.commands.focus('end');
+                activeEditor.commands.insertContent(html);
+                const newContent = activeEditor.getHTML();
                 handleSaveNotes(newContent);
             }
         });
         return () => registerInsertHandler(null);
-    }, [editor, registerInsertHandler]);
+    }, [getActiveEditor, registerInsertHandler]);
 
     // Ratio-based Resizing Logic (0.0 to 1.0)
     // 1.0 = Full Reader (Notes Hidden)
@@ -502,38 +513,24 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
     }, []);
 
     const handleAddToNotes = (text: string) => {
-        console.log("BibleStudyModal: handleAddToNotes called with text length:", text?.length);
-
-        const performFallback = () => {
-            console.warn("BibleStudyModal: Performing fallback append (Editor invalid/crashed).");
+        // Simple, robust check. Editor must exist to insert programmatically.
+        // If it's hidden (CSS), it still exists, so this works.
+        const activeEditor = getActiveEditor();
+        if (activeEditor && !activeEditor.isDestroyed) {
+            try {
+                activeEditor.commands.focus('end');
+                activeEditor.commands.insertContent(text);
+                const newContent = activeEditor.getHTML();
+                handleSaveNotes(newContent);
+            } catch (err) {
+                console.error("BibleStudyModal: Editor insert failed:", err);
+            }
+        } else {
+            console.warn("BibleStudyModal: Editor missing or destroyed.", { personal: !!personalEditor, fellowship: !!fellowshipEditor });
+            // Fallback: Append to local state string directly (Safe)
             const newContent = notes + text;
             setNotes(newContent);
             handleSaveNotes(newContent);
-        };
-
-        if (editor && !editor.isDestroyed) {
-            console.log("BibleStudyModal: Editor instance exists. Trying insert...");
-            try {
-                // Try-catch wrapped insert. If ANYTHING fails (focus or insert), we go to catch -> fallback.
-                try {
-                    editor.commands.focus('end');
-                } catch (focusErr) {
-                    // Just warn for focus, might still be able to insert?
-                    // Actually, if focus fails due to view issues, insert might too.
-                    console.warn("BibleStudyModal: Focus failed", focusErr);
-                }
-
-                editor.commands.insertContent(text);
-                const newContent = editor.getHTML();
-                handleSaveNotes(newContent);
-                console.log("BibleStudyModal: Content inserted via Editor.");
-            } catch (err) {
-                console.error("BibleStudyModal: Editor insert crashed:", err);
-                performFallback();
-            }
-        } else {
-            console.warn("BibleStudyModal: Editor missing or destroyed.", { exists: !!editor, destroyed: editor?.isDestroyed });
-            performFallback();
         }
     };
 
@@ -937,7 +934,9 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                         <div className="flex-1 overflow-y-auto custom-scrollbar relative bg-gray-50/50 dark:bg-zinc-900/50">
 
                             {/* VIEW SWITCHER */}
-                            {rightPaneView === 'search' ? (
+                            {/* VIEW SWITCHER */}
+                            {/* --- SEARCH VIEW --- */}
+                            {rightPaneView === 'search' && (
                                 /* --- SEARCH VIEW --- */
                                 <div ref={searchResultsContainerRef} className="p-6">
                                     <div id="search-results-top" className="flex items-center justify-between mb-4 sticky top-0 bg-gray-50/95 dark:bg-zinc-900/95 backdrop-blur z-10 py-2 border-b border-transparent">
@@ -1082,8 +1081,9 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                                             <div
                                                                 key={i}
                                                                 onClick={() => {
-                                                                    if (editor) {
-                                                                        editor.chain().focus().setImage({ src: img.url }).run();
+                                                                    const activeEditor = getActiveEditor();
+                                                                    if (activeEditor) {
+                                                                        activeEditor.chain().focus().setImage({ src: img.url }).run();
                                                                     }
                                                                 }}
                                                                 className="relative rounded-lg overflow-hidden cursor-pointer group shadow-sm hover:shadow-md transition-all border border-gray-100 dark:border-zinc-800 h-24 sm:h-20"
@@ -1241,8 +1241,10 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                         </div>
                                     )}
                                 </div>
-                            ) : rightPaneView === 'fellowship' ? (
-                                /* --- FELLOWSHIP VIEW --- */
+                            )}
+
+                            {/* --- FELLOWSHIP VIEW --- */}
+                            <div className={cn("flex-1 flex flex-col overflow-hidden", rightPaneView !== 'fellowship' && "hidden")}>
                                 <FellowshipView
                                     content={collaborationInitialContent || ''}
                                     collaborationId={collaborationId || `fellowship-${tabs.find(t => t.id === activeTabId)?.reference.book}-${tabs.find(t => t.id === activeTabId)?.reference.chapter}`}
@@ -1252,72 +1254,73 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                     scrollId={collaborationId || `fellowship-${tabs.find(t => t.id === activeTabId)?.reference.book}-${tabs.find(t => t.id === activeTabId)?.reference.chapter}`}
                                     fallbackId={`fellowship-${tabs.find(t => t.id === activeTabId)?.reference.book}-${tabs.find(t => t.id === activeTabId)?.reference.chapter}`}
                                     onJoinScroll={handleJoinFellowshipScroll}
-                                    onEditorReady={setEditor}
+                                    onEditorReady={setFellowshipEditor}
                                     debugLabel="Fellowship"
                                 />
-                            ) : (
-                                /* --- PERSONAL NOTES VIEW --- */
-                                <div className="h-full flex flex-col overflow-hidden">
-                                    {/* Toolbar Header */}
-                                    <div className="sticky top-0 z-10 bg-white dark:bg-zinc-900 border-b border-gray-100 dark:border-zinc-800 px-4 py-2 flex items-center justify-between shrink-0">
-                                        <div className="flex flex-col gap-0.5 flex-1 mr-4">
-                                            <div className="flex items-center gap-2">
-                                                <Edit3 className="w-4 h-4 text-blue-500 shrink-0" />
-                                                <input
-                                                    type="text"
-                                                    value={noteTitle}
-                                                    onChange={(e) => handleTitleChange(e.target.value)}
-                                                    className="bg-transparent border-none p-0 text-base sm:text-sm font-bold text-gray-800 dark:text-white focus:ring-0 w-full placeholder-gray-400"
-                                                    placeholder="Note Title..."
-                                                />
-                                            </div>
-                                            {savingNotes && <span className="text-[10px] text-green-600 animate-pulse font-medium ml-6">Saving...</span>}
-                                        </div>
+                            </div>
+
+                            {/* --- PERSONAL NOTES VIEW (ALWAYS MOUNTED, HIDDEN IF NOT ACTIVE) --- */}
+                            <div className={cn("h-full flex flex-col overflow-hidden", rightPaneView !== 'notes' && "hidden")}>
+                                {/* Toolbar Header */}
+                                <div className="sticky top-0 z-10 bg-white dark:bg-zinc-900 border-b border-gray-100 dark:border-zinc-800 px-4 py-2 flex items-center justify-between shrink-0">
+                                    <div className="flex flex-col gap-0.5 flex-1 mr-4">
                                         <div className="flex items-center gap-2">
-                                            <button
-                                                onClick={handleOpenShareModal}
-                                                className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-indigo-500"
-                                                title="Share Note"
-                                            >
-                                                <Share2 className="w-4 h-4" />
-                                            </button>
-                                            <div className="w-px h-4 bg-gray-200 dark:bg-zinc-800 mx-1" />
-                                            {/* Toggle Full Screen for Notes */}
-                                            <button
-                                                onClick={toggleNotesMaximize}
-                                                className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors text-gray-500 hover:text-gray-700"
-                                                title={isNotesMaximized ? "Restore View" : "Full Screen Notes"}
-                                            >
-                                                {isNotesMaximized ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-                                            </button>
+                                            <Edit3 className="w-4 h-4 text-blue-500 shrink-0" />
+                                            <input
+                                                type="text"
+                                                value={noteTitle}
+                                                onChange={(e) => handleTitleChange(e.target.value)}
+                                                className="bg-transparent border-none p-0 text-base sm:text-sm font-bold text-gray-800 dark:text-white focus:ring-0 w-full placeholder-gray-400"
+                                                placeholder="Note Title..."
+                                            />
                                         </div>
+                                        {savingNotes && <span className="text-[10px] text-green-600 animate-pulse font-medium ml-6">Saving...</span>}
                                     </div>
-                                    <div
-                                        className="h-full overflow-y-auto px-4 pt-4 pb-48 custom-scrollbar cursor-text"
-                                        onClick={() => {
-                                            // Safely focus editor if available
-                                            if (editor && !editor.isDestroyed) {
-                                                editor.chain().focus().run();
-                                            }
-                                        }}
-                                    >
-                                        <TiptapEditor
-                                            content={notes}
-                                            onChange={handleNoteChange}
-                                            placeholder="Write your study notes here..."
-                                            className="min-h-full focus:outline-none max-w-none prose prose-sm dark:prose-invert text-gray-900 dark:text-gray-100"
-                                            onEditorReady={setEditor}
-                                            onAskAi={handleAskAi}
-                                            onLinkClick={handleLinkClick}
-                                            showToolbar={true}
-                                            collaborationId={undefined}
-                                            user={tiptapUser}
-                                            authReady={!!user}
-                                            debugLabel="PersonalNotes"
-                                        />
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={handleOpenShareModal}
+                                            className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-indigo-500"
+                                            title="Share Note"
+                                        >
+                                            <Share2 className="w-4 h-4" />
+                                        </button>
+                                        <div className="w-px h-4 bg-gray-200 dark:bg-zinc-800 mx-1" />
+                                        {/* Toggle Full Screen for Notes */}
+                                        <button
+                                            onClick={toggleNotesMaximize}
+                                            className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors text-gray-500 hover:text-gray-700"
+                                            title={isNotesMaximized ? "Restore View" : "Full Screen Notes"}
+                                        >
+                                            {isNotesMaximized ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                                        </button>
                                     </div>
                                 </div>
-                            )}
+                                <div
+                                    className="h-full overflow-y-auto px-4 pt-4 pb-48 custom-scrollbar cursor-text"
+                                    onClick={() => {
+                                        // Safely focus editor if available
+                                        const activeEditor = getActiveEditor();
+                                        if (activeEditor && !activeEditor.isDestroyed) {
+                                            activeEditor.chain().focus().run();
+                                        }
+                                    }}
+                                >
+                                    <TiptapEditor
+                                        content={notes}
+                                        onChange={handleNoteChange}
+                                        placeholder="Write your study notes here..."
+                                        className="min-h-full focus:outline-none max-w-none prose prose-sm dark:prose-invert text-gray-900 dark:text-gray-100"
+                                        onEditorReady={setPersonalEditor}
+                                        onAskAi={handleAskAi}
+                                        onLinkClick={handleLinkClick}
+                                        showToolbar={true}
+                                        collaborationId={undefined}
+                                        user={tiptapUser}
+                                        authReady={!!user}
+                                        debugLabel="PersonalNotes"
+                                    />
+                                </div>
+                            </div>
 
                         </div>
                     </div>
@@ -1365,17 +1368,17 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                     onClose={() => setCreateMeetingState({ isOpen: false })}
                     initialTopic={createMeetingState.topic || ''}
                     initialDate={createMeetingState.date}
-                    initialDescription={editor ? editor.getHTML() : ''}
+                    initialDescription={getActiveEditor() ? getActiveEditor().getHTML() : ''}
                 />
 
                 <ShareScrollModal
                     isOpen={showPrivateShareModal}
                     onClose={() => setShowPrivateShareModal(false)}
                     title={`Share "${noteTitle}"`}
-                    currentContent={editor?.getHTML() || ''}
+                    currentContent={personalEditor?.getHTML() || ''}
                     scrollId={generatedShareId}
                     onShareComplete={(newScrollId) => {
-                        const contentToShare = editor?.getHTML() || '';
+                        const contentToShare = getActiveEditor()?.getHTML() || '';
                         console.log('[BibleStudyModal] Sharing Content:', contentToShare.slice(0, 50) + '...', 'Length:', contentToShare.length);
                         // Switch the sender to the new collaboration session immediately
                         setCollaborationInitialContent(contentToShare);
@@ -1384,7 +1387,7 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                     }}
                 />
 
-            </motion.div>
-        </div>
+            </motion.div >
+        </div >
     );
 }

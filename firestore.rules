@@ -9,8 +9,10 @@ service cloud.firestore {
     }
     
     function getChurchId() {
-       // Ideally this is on the auth token (custom claim), but for now we read from the User doc
-       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.churchId;
+       // Robust lookup: check exists() and data.get() to avoid errors in transient auth states
+       return exists(/databases/$(database)/documents/users/$(request.auth.uid)) 
+         ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('churchId', 'default_church')
+         : 'default_church';
     }
 
     function isSuperAdmin() {
@@ -24,7 +26,10 @@ service cloud.firestore {
     function matchesChurch(resourceData) {
       // 1. Super Admin bypass (check first to avoid getChurchId error if field missing)
       // 2. Strict ID match
-      return isSuperAdmin() || resourceData.churchId == getChurchId(); 
+      // 3. Fallback for legacy data missing churchId (assign to default_church or bethel-metro)
+      return isSuperAdmin() || 
+             (resourceData.get('churchId', null) == getChurchId()) ||
+             (!('churchId' in resourceData) && (getChurchId() == 'default_church' || getChurchId() == 'bethel-metro')); 
     }
 
     // ---------------------------------------------------------
@@ -85,8 +90,11 @@ service cloud.firestore {
         allow update, delete: if isAuthenticated() && (isSuperAdmin() || (resource.data.churchId == getChurchId() && resource.data.author.id == request.auth.uid));
         
         match /comments/{commentId} {
-            allow read: if isAuthenticated(); 
-            allow write: if isAuthenticated();
+            allow read, write: if isAuthenticated(); 
+            
+            match /likes/{userId} {
+                allow read, write: if isAuthenticated();
+            }
         }
         match /likes/{likeId} {
             allow read, write: if isAuthenticated();
@@ -94,7 +102,7 @@ service cloud.firestore {
     }
 
     match /events/{eventId} {
-       allow read: if isAuthenticated() && (isSuperAdmin() || resource.data.churchId == getChurchId() || (!('churchId' in resource.data) && getChurchId() == 'default_church'));
+       allow read: if isAuthenticated() && matchesChurch(resource.data);
        allow write: if isAuthenticated() && request.resource.data.churchId == getChurchId();
        
        match /registrations/{registrationId} {

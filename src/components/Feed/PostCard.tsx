@@ -177,22 +177,24 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
     const videoPlayerRef = React.useRef<VideoPlayerRef>(null);
 
     // Register post with FeedContext
+    const isVideo = post.type === 'video' || post.type === 'youtube';
+
     React.useEffect(() => {
         registerPost(post.id, {
             content: post.content,
             mediaUrl: post.mediaUrl,
-            type: post.type === 'video' || post.type === 'youtube' ? 'video' : (post.mediaUrl ? 'image' : 'text'),
-            play: () => {
-                console.log(`[PostCard] Playing video ${post.id}`, videoPlayerRef.current);
+            type: isVideo ? 'video' : (post.mediaUrl ? 'image' : 'text'),
+            play: isVideo ? () => {
+                console.log(`[PostCard] Playing video ${post.id}`);
                 videoPlayerRef.current?.play();
-            },
-            pause: () => {
+            } : undefined,
+            pause: isVideo ? () => {
                 console.log(`[PostCard] Pausing video ${post.id}`);
                 videoPlayerRef.current?.pause();
-            }
+            } : undefined
         });
         return () => unregisterPost(post.id);
-    }, [post, registerPost, unregisterPost]);
+    }, [post.id, post.content, post.mediaUrl, post.type, isVideo, registerPost, unregisterPost]);
 
     // Observe visibility for ALL posts
     React.useEffect(() => {

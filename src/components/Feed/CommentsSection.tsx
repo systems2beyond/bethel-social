@@ -86,6 +86,8 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post, onCommen
                 ...doc.data()
             })) as Comment[];
             setComments(msgs);
+        }, (err) => {
+            console.error('[CommentsSection] Comments listener error:', err);
         });
 
         return () => unsubscribe();
@@ -249,6 +251,8 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post, onCommen
             // Real-time listener for my like status
             const unsubscribe = onSnapshot(likeRef, (doc) => {
                 setIsLiked(doc.exists());
+            }, (err) => {
+                console.error('[CommentsSection] Like status listener error:', err);
             });
             return () => unsubscribe();
         }, [comment.id, user]);

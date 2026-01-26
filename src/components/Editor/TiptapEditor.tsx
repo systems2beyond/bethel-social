@@ -295,9 +295,9 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
                 const generateToken = httpsCallable(functions, 'generateTiptapToken');
                 console.log('[Tiptap] Calling generateTiptapToken for user:', auth.currentUser.uid);
 
-                // Add 10s timeout to fail fast
+                // Add 30s timeout to fail fast (increased from 10s for reliability)
                 const timeoutPromise = new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('Token generation timed out after 10s')), 10000)
+                    setTimeout(() => reject(new Error('Token generation timed out after 30s')), 30000)
                 );
 
                 const result = await Promise.race([
@@ -509,9 +509,10 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
 
         const exts = [
             StarterKit.configure({
-                history: collaborationId ? false : true, // Explicitly disable history for collab
-                codeBlock: false, // We might want our own code block later
-                link: false, // Disable default Link extension from StarterKit
+                history: collaborationId ? false : true,
+                undoRedo: collaborationId ? false : true, // Some versions use this key
+                codeBlock: false,
+                link: false,
             } as any),
             Placeholder.configure({
                 placeholder: placeholder || 'Write something amazing...',
@@ -668,6 +669,8 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
                 }
             }
         }
+        // Collaboration extensions are conditionally added to this list in `extensions` useMemo.
+        // We MUST verify extensions list in useMemo doesn't have both History and Collaboration.
     }, [extensions, collaborationId, yDoc, provider, isProviderReady]); // Re-create editor if these change
 
     // Phase 3: Content Seeding Logic

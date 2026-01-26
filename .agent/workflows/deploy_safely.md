@@ -6,9 +6,12 @@ description: robustly deploy to netlify by cleaning and rebuilding, handling mem
 // turbo
 rm -rf .next out
 
-2. Build the project locally (verification step)
+2. Systematic Debugging Check
+View the `skills/systematic-debugging/SKILL.md` file and follow the debugging process to verify code stability before building.
+
+3. Build the project locally (verification step)
 npm run build
 
-3. Deploy to Netlify Production with increased memory
+4. Deploy to Netlify Production with increased memory
 // turbo
 NODE_OPTIONS=--max-old-space-size=4096 npx netlify deploy --prod

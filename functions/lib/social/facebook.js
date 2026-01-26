@@ -209,6 +209,7 @@ const syncFacebookPosts = async (backfill = false) => {
                         avatarUrl: null
                     },
                     externalUrl: post.permalink_url,
+                    churchId: 'default_church', // Hardcoded for single-tenant migration phase
                     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
                 }, { merge: true });
                 batchCount++;
@@ -283,6 +284,7 @@ const syncFacebookLiveStatus = async () => {
                     avatarUrl: null
                 },
                 externalUrl: video.permalink_url,
+                churchId: 'default_church', // Hardcoded for single-tenant migration phase
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
             }, { merge: true });
         }

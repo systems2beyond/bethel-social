@@ -333,6 +333,8 @@ export function BibleProvider({ children }: { children: ReactNode }) {
                 // Also restore search version if saved
                 if (data.searchVersion) setSearchVersion(data.searchVersion);
             }
+        }, (err) => {
+            console.error('[BibleContext] Bible tabs listener error:', err);
         });
         return () => unsubscribe();
     }, [user]);
