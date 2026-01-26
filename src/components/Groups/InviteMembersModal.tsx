@@ -5,6 +5,7 @@ import { X, Copy, Check, Link as LinkIcon, Users, Search, UserPlus, Loader2, Mai
 import { toast } from 'sonner';
 import { UsersService, UserProfile } from '@/lib/users';
 import { GroupsService } from '@/lib/groups';
+import { useAuth } from '@/context/AuthContext';
 
 interface InviteMembersModalProps {
     isOpen: boolean;
@@ -59,10 +60,23 @@ export function InviteMembersModal({ isOpen, onClose, group }: InviteMembersModa
         }
     };
 
+    const { user: currentUser } = useAuth();
+
+    // ...
+
     const handleInvite = async (user: UserProfile) => {
         setInvitingUsers(prev => new Set(prev).add(user.uid));
         try {
-            await GroupsService.inviteMember(group.id, user.uid);
+            await GroupsService.inviteMember(
+                group.id,
+                user.uid,
+                currentUser ? {
+                    uid: currentUser.uid,
+                    displayName: currentUser.displayName || 'Someone',
+                    photoURL: currentUser.photoURL
+                } : undefined,
+                group.name
+            );
             toast.success(`Invited ${user.displayName}!`);
             // Optionally remove from list or mark as invited
         } catch (error: any) {

@@ -25,9 +25,58 @@ export function PostComposer({ isOpen, onClose, initialContent = '', groupId }: 
     const [isSubmitting, setIsSubmitting] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    const [members, setMembers] = useState<any[]>([]);
+    const [showSuggestions, setShowSuggestions] = useState(false);
+    const [mentionQuery, setMentionQuery] = useState('');
+    const [cursorPosition, setCursorPosition] = useState(0);
+
     React.useEffect(() => {
         setContent(initialContent);
     }, [initialContent]);
+
+    React.useEffect(() => {
+        if (groupId && isOpen) {
+            GroupsService.getGroupMembers(groupId).then(setMembers).catch(console.error);
+        }
+    }, [groupId, isOpen]);
+
+    const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        const newContent = e.target.value;
+        const newPosition = e.target.selectionStart;
+        setContent(newContent);
+        setCursorPosition(newPosition);
+
+        // Check for mention trigger
+        const textBeforeCursor = newContent.slice(0, newPosition);
+        const mentionMatch = textBeforeCursor.match(/@(\w*)$/);
+
+        if (mentionMatch) {
+            setMentionQuery(mentionMatch[1].toLowerCase());
+            setShowSuggestions(true);
+        } else {
+            setShowSuggestions(false);
+        }
+    };
+
+    const selectMention = (member: any) => {
+        const textBeforeCursor = content.slice(0, cursorPosition);
+        const textAfterCursor = content.slice(cursorPosition);
+        const mentionMatch = textBeforeCursor.match(/@(\w*)$/);
+
+        if (mentionMatch) {
+            const matchIndex = mentionMatch.index!;
+            const memberName = member.user?.displayName || 'User';
+            // Insert name with space after
+            const newContent = content.slice(0, matchIndex) + `@${memberName} ` + textAfterCursor;
+            setContent(newContent);
+            setShowSuggestions(false);
+            // Ideally we'd set cursor position after the validation but React state update is basic here
+        }
+    };
+
+    const filteredMembers = members.filter(m =>
+        m.user?.displayName?.toLowerCase().includes(mentionQuery)
+    ).slice(0, 5); // Limit to 5 suggestions
 
     if (!isOpen) return null;
 
@@ -64,7 +113,8 @@ export function PostComposer({ isOpen, onClose, initialContent = '', groupId }: 
                     mediaType: mediaType || null,
                     author: {
                         name: userData?.displayName || user.displayName || 'Anonymous',
-                        avatarUrl: user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`
+                        avatarUrl: userData?.photoURL || user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`,
+                        uid: user.uid
                     },
                     type: 'user_post'
                 });
@@ -73,8 +123,8 @@ export function PostComposer({ isOpen, onClose, initialContent = '', groupId }: 
                     content,
                     mediaUrl: mediaUrl || null,
                     mediaType: mediaType || null,
+                    // [Modified] Prioritize userData for consistent avatar
                     author: {
-                        uid: user.uid,
                         name: userData?.displayName || user.displayName || 'Anonymous',
                         avatarUrl: userData?.photoURL || user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.uid}`
                     },
@@ -130,11 +180,37 @@ export function PostComposer({ isOpen, onClose, initialContent = '', groupId }: 
                 <div className="p-4 space-y-4">
                     <textarea
                         value={content}
-                        onChange={(e) => setContent(e.target.value)}
+                        onChange={handleContentChange}
                         placeholder="What's on your mind?"
                         className="w-full h-32 p-3 rounded-lg bg-gray-50 dark:bg-zinc-800 border-none focus:ring-2 focus:ring-blue-500 resize-none text-gray-900 dark:text-white placeholder-gray-400"
                         disabled={isSubmitting}
                     />
+
+                    {/* Mention Suggestions */}
+                    {showSuggestions && (
+                        <div className="absolute z-10 w-64 bg-white dark:bg-zinc-800 rounded-lg shadow-lg border border-gray-200 dark:border-zinc-700 max-h-48 overflow-y-auto mt-1 mx-3">
+                            {filteredMembers.map((member: any) => (
+                                <button
+                                    key={member.userId}
+                                    className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-zinc-700 flex items-center gap-2"
+                                    onClick={() => selectMention(member)}
+                                >
+                                    <div className="w-6 h-6 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
+                                        {member.user?.photoURL ? (
+                                            <img src={member.user.photoURL} alt={member.user.displayName} className="w-full h-full object-cover" />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center bg-blue-500 text-white text-xs">
+                                                {member.user?.displayName?.[0] || '?'}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <span className="text-sm text-gray-900 dark:text-white truncate">
+                                        {member.user?.displayName || 'Unknown'}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
 
                     {/* Media Preview */}
                     {mediaPreview && (

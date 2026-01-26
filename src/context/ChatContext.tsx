@@ -420,7 +420,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             console.error('Chat error:', error);
 
             // Check for Blocking/Network errors and try fallback
-            if (error?.message?.includes('BLOCKED_BY_CLIENT') || error?.code === 'unavailable' || error?.message?.includes('Failed to fetch')) {
+            if (error?.message?.includes('BLOCKED_BY_CLIENT') || error?.code === 'unavailable' || error?.message?.includes('Failed to fetch') || error?.message === 'Timeout') {
                 console.log('Attempting server-side fallback for chat...');
 
                 try {

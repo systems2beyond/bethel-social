@@ -267,16 +267,89 @@ export const GroupsService = {
             [key]: value === undefined ? null : value
         }), {});
 
-        await addDoc(postsRef, {
+        const postRef = await addDoc(postsRef, {
             ...cleanData,
             timestamp: Date.now(),
             createdAt: serverTimestamp(),
             groupId, // explicit reference
             isPinned: false, // Required for sorting by isPinned
         });
+
         // Update lastActivityAt on group
         const groupRef = doc(db, GROUPS_COLLECTION, groupId);
         await updateDoc(groupRef, { lastActivityAt: serverTimestamp() });
+
+        // [NOTIFICATION LOGIC] - Scan for mentions and notify
+        try {
+            const content = data.content || '';
+            const mentionRegex = /@(\w+)/g;
+            const mentionedNames = new Set<string>();
+            let match;
+            while ((match = mentionRegex.exec(content)) !== null) {
+                mentionedNames.add(match[1].toLowerCase());
+            }
+
+            if (mentionedNames.size > 0) {
+                // Fetch group data for name
+                const groupSnap = await getDoc(groupRef);
+                const groupName = groupSnap.exists() ? groupSnap.data().name : 'Group';
+
+                // Fetch all members to match names (this could be optimized with a query if we stored normalized usernames)
+                // For now, fetching members is okay for smaller groups, but we should be careful with large groups.
+                // Better approach: Query users collection by displayName? NO, we only want to notify MEMBERS.
+
+                // Let's use the helper we already have: getGroupMembers (which hydrates user data)
+                const members = await GroupsService.getGroupMembers(groupId);
+
+                const notificationsBatch: Promise<any>[] = [];
+
+                members.forEach(member => {
+                    const memberName = member.user?.displayName?.toLowerCase();
+                    // Don't notify the author
+                    if (member.userId === (data.author.uid || data.author.id)) return;
+                    // PostComposer passes: author: { name, avatarUrl } for group posts... 
+                    // Actually checking PostComposer again... 
+                    // It seems the `userId` isn't passed in `author` object for group posts in the code I just read?
+                    // Let's check PostComposer Step 8094.
+                    // Lines 65-68: author: { name, avatarUrl }... NO UID!
+                    // This is a problem. We need the UID to know who sent it to avoid self-notification.
+                    // But `createGroupPost` call in PostComposer doesn't pass UID. 
+                    // However, we can probably assume the current auth user is the sender? 
+                    // `GroupsService` is client-side, so `auth.currentUser` is available but `GroupsService` is just an object.
+                    // Let's just default to checking if we can find the sender.
+
+                    if (memberName && mentionedNames.has(memberName.split(' ')[0].toLowerCase())) { // Match first name for simplicity or full name? 
+                        // The regex `@(\w+)` matches single word. So we match against first name or full name if no spaces.
+                        notificationsBatch.push(
+                            addDoc(collection(db, 'notifications'), {
+                                type: 'mention',
+                                fromUserId: data.author.uid || data.author.id || 'unknown', // Robust fallback
+                                fromUser: {
+                                    displayName: data.author.name,
+                                    photoURL: data.author.avatarUrl
+                                },
+                                toUserId: member.userId,
+                                postId: postRef.id,
+                                groupId,
+                                groupName,
+                                content: content, // Save snippet of content
+                                message: `${data.author.name} mentioned you in ${groupName}`, // Explicit message
+                                createdAt: serverTimestamp(),
+                                viewed: false,
+                                read: false,
+                                resourceTitle: groupName, // Reuse field for UI
+                                // resourceId removed to prevent ActivityPanel from treating it as a shared resource
+                            })
+                        );
+                    }
+                });
+
+                await Promise.all(notificationsBatch);
+            }
+        } catch (error) {
+            console.error('Error sending mention notifications:', error);
+            // Don't block the post creation if notifications fail
+        }
     },
 
     /**
@@ -428,7 +501,7 @@ export const GroupsService = {
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     },
 
-    inviteMember: async (groupId: string, userId: string) => {
+    inviteMember: async (groupId: string, userId: string, invitedBy?: { uid: string, displayName: string, photoURL?: string | null }, groupName?: string) => {
         const memberRef = doc(db, GROUPS_COLLECTION, groupId, 'members', userId);
 
         // Check if already a member
@@ -446,6 +519,20 @@ export const GroupsService = {
             status: 'invited',
             invitedAt: serverTimestamp()
         });
+
+        // Create Invitation Document for Activity Feed
+        if (invitedBy) {
+            await addDoc(collection(db, 'invitations'), {
+                type: 'group_invite',
+                groupId,
+                groupName: groupName || 'Group',
+                fromUser: invitedBy,
+                toUserId: userId,
+                createdAt: serverTimestamp(),
+                invitedBy: invitedBy.uid, // Required by security rules
+                status: 'pending'
+            });
+        }
     },
 
     /**

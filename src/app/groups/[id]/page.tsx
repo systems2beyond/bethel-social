@@ -289,7 +289,9 @@ export default function GroupDetailsPage() {
                     ) : (
                         <>
                             {activeTab === 'feed' && (
-                                <GroupFeed groupId={group.id} membership={membership} />
+                                <React.Suspense fallback={<div className="p-8 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto text-blue-500" /></div>}>
+                                    <GroupFeed groupId={group.id} membership={membership} />
+                                </React.Suspense>
                             )}
 
                             {activeTab === 'about' && (

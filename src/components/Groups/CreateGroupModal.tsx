@@ -164,7 +164,16 @@ export default function CreateGroupModal({ isOpen, onClose }: CreateGroupModalPr
                 let inviteCount = 0;
                 for (const invitedUser of selectedUsers) {
                     try {
-                        await GroupsService.inviteMember(result.id, invitedUser.uid);
+                        await GroupsService.inviteMember(
+                            result.id,
+                            invitedUser.uid,
+                            {
+                                uid: user.uid,
+                                displayName: user.displayName || 'Group Admin',
+                                photoURL: user.photoURL
+                            },
+                            name
+                        );
                         inviteCount++;
                     } catch (err) {
                         console.error(`Failed to invite ${invitedUser.displayName}`, err);

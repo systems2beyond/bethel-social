@@ -8,6 +8,7 @@ import { PostComposer } from '../Feed/PostComposer';
 import { useAuth } from '@/context/AuthContext';
 import { Loader2, PenSquare, User } from 'lucide-react';
 import { useFeed } from '@/context/FeedContext';
+import { useSearchParams } from 'next/navigation';
 
 interface GroupFeedProps {
     groupId: string;
@@ -23,6 +24,10 @@ export function GroupFeed({ groupId, membership }: GroupFeedProps) {
     const [lastVisible, setLastVisible] = useState<any>(null);
     const [hasMore, setHasMore] = useState(true);
     const [isComposerOpen, setIsComposerOpen] = useState(false);
+
+    // Auto-scroll handler
+    const searchParams = useSearchParams();
+    const highlightPostId = searchParams.get('postId');
 
     // Intersection Observer for Infinite Scroll
     const observerTarget = useRef<HTMLDivElement>(null);
@@ -62,6 +67,27 @@ export function GroupFeed({ groupId, membership }: GroupFeedProps) {
     useEffect(() => {
         fetchPosts(true);
     }, [groupId, refreshTrigger]); // dependencies
+
+    // Handle Auto-Scroll
+    useEffect(() => {
+        if (highlightPostId) {
+            console.log('[GroupFeed] Logic Triggered:', { highlightPostId, loading, postsCount: posts.length });
+        }
+        if (highlightPostId && !loading && posts.length > 0) {
+            console.log('[GroupFeed] Attempting scroll to:', highlightPostId);
+            // Slight delay to ensure DOM is ready
+            setTimeout(() => {
+                const element = document.getElementById(`post-${highlightPostId}`);
+                console.log('[GroupFeed] Element found?', !!element);
+                if (element) {
+                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    // Optional: Highlight effect
+                    element.classList.add('ring-2', 'ring-indigo-500', 'ring-offset-2');
+                    setTimeout(() => element.classList.remove('ring-2', 'ring-indigo-500', 'ring-offset-2'), 2000);
+                }
+            }, 500);
+        }
+    }, [highlightPostId, loading, posts]);
 
     // Infinite scroll observer
     useEffect(() => {
@@ -116,7 +142,9 @@ export function GroupFeed({ groupId, membership }: GroupFeedProps) {
             <div className="space-y-6">
                 {posts.length > 0 ? (
                     posts.map(post => (
-                        <PostCard key={post.id} post={post} />
+                        <div key={post.id} id={`post-${post.id}`}>
+                            <PostCard post={post} />
+                        </div>
                     ))
                 ) : (
                     <div className="text-center py-12 text-gray-500 dark:text-gray-400">

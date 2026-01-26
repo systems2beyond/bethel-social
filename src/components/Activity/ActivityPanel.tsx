@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Bell, ChevronRight, ChevronDown, ScrollText, Clock, ExternalLink, Sparkles } from 'lucide-react';
+import { X, Bell, ChevronRight, ChevronDown, ScrollText, Clock, ExternalLink, Sparkles, Users } from 'lucide-react';
 import { useActivity } from '@/context/ActivityContext';
 import { useBible } from '@/context/BibleContext';
 import { useAuth } from '@/context/AuthContext';
@@ -65,7 +65,23 @@ export function ActivityPanel() {
     };
 
     const handleItemClick = async (item: any, type: 'invite' | 'notification') => {
+        console.log('[ActivityPanel] Clicked:', { type, itemType: item.type, groupId: item.groupId, postId: item.postId, hasGroupId: !!item.groupId });
+
         markAsViewed(item.id, type);
+
+        // For Group Invites and Mentions
+        if (item.type === 'group_invite' || item.type === 'mention' || item.groupId) {
+            console.log('[ActivityPanel] Entering Group Navigation Block');
+            if (item.groupId) {
+                const url = `/groups/${item.groupId}${item.postId ? `?postId=${item.postId}` : ''}`;
+                console.log('[ActivityPanel] Navigating to:', url);
+                router.push(url);
+            } else {
+                console.error('[ActivityPanel] Item has type match but NO groupId!', item);
+            }
+            setActivityPanelOpen(false);
+            return;
+        }
 
         // For shared scrolls (invites)
         if (type === 'invite') {
@@ -388,6 +404,8 @@ function RecentActivityItem({ item, usersMap, onClick }: { item: any; usersMap: 
     const fromUid = item.fromUserId || item.fromUser?.uid;
     const fromUser = usersMap[fromUid] || item.fromUser || { displayName: 'User' };
     const isInvite = item.itemType === 'invite';
+    const isGroupInvite = item.type === 'group_invite';
+    const isMention = item.type === 'mention';
 
     return (
         <motion.button
@@ -424,8 +442,9 @@ function RecentActivityItem({ item, usersMap, onClick }: { item: any; usersMap: 
                             ? "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400"
                             : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400"
                     )}>
-                        {isInvite ? 'Scroll' : 'Update'}
+                        {isGroupInvite ? 'Group Invite' : (isMention ? 'Mention' : (isInvite ? 'Scroll' : 'Update'))}
                     </span>
+                    {/* ... Rest of component ... */}
                     <span className="text-[9px] text-zinc-400 flex items-center gap-1">
                         <Clock className="w-2.5 h-2.5" />
                         {item.createdAt?.toDate ? formatRelativeTime(item.createdAt.toDate()) : 'Just now'}
@@ -434,7 +453,9 @@ function RecentActivityItem({ item, usersMap, onClick }: { item: any; usersMap: 
                 <p className="text-[11px] text-zinc-700 dark:text-zinc-300 leading-tight truncate">
                     <span className="font-semibold text-zinc-900 dark:text-zinc-100">{fromUser.displayName}</span>
                     {isInvite
-                        ? ` shared "${item.noteTitle || item.title || 'Untitled'}"`
+                        ? (isGroupInvite
+                            ? ` invited you to join "${item.groupName || 'a group'}"`
+                            : ` shared "${item.noteTitle || item.title || 'Untitled'}"`)
                         : `: ${(item.message || item.text || 'New activity').slice(0, 40)}${(item.message || item.text || '').length > 40 ? '...' : ''}`
                     }
                 </p>
@@ -447,7 +468,7 @@ function RecentActivityItem({ item, usersMap, onClick }: { item: any; usersMap: 
                     ? "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400"
                     : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500"
             )}>
-                {isInvite ? <ScrollText className="w-3.5 h-3.5" /> : <Bell className="w-3.5 h-3.5" />}
+                {isGroupInvite ? <Users className="w-3.5 h-3.5" /> : (isInvite ? <ScrollText className="w-3.5 h-3.5" /> : <Bell className="w-3.5 h-3.5" />)}
             </div>
         </motion.button>
     );
@@ -456,6 +477,9 @@ function RecentActivityItem({ item, usersMap, onClick }: { item: any; usersMap: 
 function ActivityItemComponent({ item, usersMap, type, onClick }: { item: any; usersMap: any; type: 'invite' | 'notification', onClick: () => void }) {
     const fromUid = item.fromUserId || item.fromUser?.uid;
     const fromUser = usersMap[fromUid] || item.fromUser || { displayName: 'User' };
+
+    const isGroupInvite = item.type === 'group_invite';
+    const isMention = item.type === 'mention';
 
     return (
         <motion.button
@@ -485,7 +509,9 @@ function ActivityItemComponent({ item, usersMap, type, onClick }: { item: any; u
             <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between mb-1">
                     <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">
-                        {type === 'invite' ? 'Shared Scroll' : 'Notification'}
+                        {type === 'invite'
+                            ? (isGroupInvite ? 'Group Invite' : 'Shared Scroll')
+                            : (isMention ? 'Mention' : 'Notification')}
                     </span>
                     <span className="text-[10px] text-zinc-400">
                         {item.createdAt?.toDate ? item.createdAt.toDate().toLocaleDateString() : 'Now'}
@@ -494,8 +520,14 @@ function ActivityItemComponent({ item, usersMap, type, onClick }: { item: any; u
                 <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-snug">
                     <span className="font-bold text-zinc-900 dark:text-zinc-100">{fromUser.displayName}</span>
                     {type === 'invite'
-                        ? ` shared a scroll with you: "${item.noteTitle || item.title || 'Untitled'}"`
-                        : ` sent an update: "${item.message || item.text || 'New activity'}"`
+                        ? (isGroupInvite
+                            ? ` invited you to join "${item.groupName || 'a group'}"`
+                            : ` shared a scroll with you: "${item.noteTitle || item.title || 'Untitled'}"`)
+                        : (isMention
+                            ? ` mentioned you in "${item.groupName || 'a group'}"`
+                            : (item.groupName
+                                ? ` posted in "${item.groupName}"`
+                                : ` sent an update: "${item.message || item.text || 'New activity'}"`))
                     }
                 </p>
             </div>

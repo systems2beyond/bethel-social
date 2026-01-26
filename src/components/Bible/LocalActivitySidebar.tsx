@@ -231,6 +231,16 @@ export function LocalActivitySidebar({ className }: { className?: string }) {
         console.log('handleItemClick called:', { item, type });
         markAsViewed(item.id, type);
 
+        // For Group Invites and Mentions
+        if (item.type === 'group_invite' || item.type === 'mention' || item.groupId) {
+            if (item.groupId) {
+                const url = `/groups/${item.groupId}${item.postId ? `?postId=${item.postId}` : ''}`;
+                router.push(url);
+            }
+            setIsExpanded(false);
+            return;
+        }
+
         let resolvedContent = item.content || item.noteContent || item.previewContent || '';
         const resourceId = item.noteId || item.resourceId;
 
@@ -353,7 +363,7 @@ export function LocalActivitySidebar({ className }: { className?: string }) {
                         <div className="p-4 pb-2 flex items-center justify-between">
                             <h3 className="font-bold flex items-center gap-2 text-sm">
                                 <BookOpen className="w-4 h-4 text-indigo-200" />
-                                Bible Hub
+                                Activity
                             </h3>
                             <button
                                 onClick={() => setIsExpanded(false)}
@@ -860,7 +870,9 @@ function RecentActivityItem({ item, usersMap, onClick }: { item: any; usersMap: 
                 <p className="text-[10px] text-slate-700 dark:text-slate-300 leading-tight truncate">
                     <span className="font-semibold">{fromUser.displayName}</span>
                     {isInvite
-                        ? ` shared "${(item.noteTitle || item.title || 'Untitled').slice(0, 20)}${(item.noteTitle || item.title || '').length > 20 ? '...' : ''}"`
+                        ? (item.type === 'group_invite'
+                            ? ` invited you to join "${item.groupName || 'a group'}"`
+                            : ` shared "${(item.noteTitle || item.title || 'Untitled').slice(0, 20)}${(item.noteTitle || item.title || '').length > 20 ? '...' : ''}"`)
                         : `: ${(item.message || item.text || 'Update').slice(0, 25)}...`
                     }
                 </p>
@@ -877,7 +889,7 @@ function RecentActivityItem({ item, usersMap, onClick }: { item: any; usersMap: 
                     ? "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400"
                     : "bg-slate-100 dark:bg-slate-800 text-slate-500"
             )}>
-                {isInvite ? <ScrollText className="w-3 h-3" /> : <Bell className="w-3 h-3" />}
+                {item.type === 'group_invite' ? <Users className="w-3 h-3" /> : (isInvite ? <ScrollText className="w-3 h-3" /> : <Bell className="w-3 h-3" />)}
             </div>
         </div>
     );
@@ -985,7 +997,9 @@ function ActivityItem({ item, usersMap, type, onClick }: { item: any; usersMap: 
             <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between mb-0.5">
                     <span className="text-[8px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest bg-indigo-50 dark:bg-indigo-900/20 px-1.5 py-0.5 rounded">
-                        {type === 'invite' ? 'Shared Scroll' : 'Update'}
+                        {type === 'invite'
+                            ? (item.type === 'group_invite' ? 'Group Invite' : 'Shared Scroll')
+                            : 'Update'}
                     </span>
                     {item.createdAt?.toDate && (
                         <div className="flex items-center gap-1 text-[8px] text-slate-400 font-medium whitespace-nowrap">
@@ -997,7 +1011,9 @@ function ActivityItem({ item, usersMap, type, onClick }: { item: any; usersMap: 
                 <p className="text-[11px] text-slate-700 dark:text-slate-300 leading-tight">
                     <span className="font-bold text-slate-900 dark:text-slate-100">{fromUser.displayName}</span>
                     {type === 'invite'
-                        ? ` shared "${item.noteTitle || item.title || 'Untitled'}"`
+                        ? (item.type === 'group_invite'
+                            ? ` invited you to join "${item.groupName || 'a group'}"`
+                            : ` shared "${item.noteTitle || item.title || 'Untitled'}"`)
                         : `: ${(item.message || item.text || 'New activity').slice(0, 40)}...`
                     }
                 </p>
