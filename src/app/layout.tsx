@@ -34,6 +34,7 @@ import BibleModal from "@/components/Bible/BibleModal";
 import BibleStudyModalWrapper from "@/components/Bible/BibleStudyModalWrapper";
 import { GlobalLayoutComponents } from "@/components/Layout/GlobalLayoutComponents";
 import { Toaster } from 'sonner';
+import { AuthModal } from "@/components/Auth/AuthModal";
 
 
 export default function RootLayout({
@@ -65,6 +66,7 @@ export default function RootLayout({
             </main>
           </div>
           <OnboardingModal />
+          <AuthModal />
           <BibleModal />
           <BibleStudyModalWrapper />
           <GlobalLayoutComponents />

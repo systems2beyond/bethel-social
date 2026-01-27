@@ -45,7 +45,7 @@ const MAX_RECENT_ITEMS = 6;
 export function LocalActivitySidebar({ className }: { className?: string }) {
     const router = useRouter();
     const { user } = useAuth();
-    const { invitations, notifications, usersMap, markAsViewed, setActivityPanelOpen } = useActivity();
+    const { invitations, notifications, sentInvitations, usersMap, markAsViewed, setActivityPanelOpen } = useActivity();
     const {
         openNote,
         openCollaboration,
@@ -54,10 +54,15 @@ export function LocalActivitySidebar({ className }: { className?: string }) {
         openStudyWithSearch,
         collaborationId: currentScrollId
     } = useBible();
-    const [localScrolls, setLocalScrolls] = useState<ActiveScroll[]>([]);
     const [isExpanded, setIsExpanded] = useState(false);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<TabType>('activity');
+
+    // Handle loading state
+    useEffect(() => {
+        const timer = setTimeout(() => setLoading(false), 1000);
+        return () => clearTimeout(timer);
+    }, []);
 
     // Bible Hub State
     const [searchQuery, setSearchQuery] = useState('');
@@ -185,42 +190,43 @@ export function LocalActivitySidebar({ className }: { className?: string }) {
         return allItems.slice(0, MAX_RECENT_ITEMS);
     }, [invitations, notifications]);
 
-    // ... (UseEffect for invites Unchanged) ...
-    useEffect(() => {
-        if (!user) return;
+    // Live Note Sessions (Filtered for user)
+    const localScrolls = useMemo(() => {
+        const scrolls: ActiveScroll[] = [];
+        const seenIds = new Set<string>();
 
-        const q = query(
-            collection(db, 'invitations'),
-            where('type', '==', 'scroll'),
-            limit(5)
-        );
-
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const scrolls: ActiveScroll[] = [];
-            const seenIds = new Set<string>();
-
-            snapshot.docs.forEach(doc => {
-                const data = doc.data();
-                const scrollId = data.resourceId;
-
-                if (scrollId && scrollId !== currentScrollId && !seenIds.has(scrollId)) {
-                    seenIds.add(scrollId);
-                    scrolls.push({
-                        id: scrollId,
-                        title: data.resourceTitle || 'Bible Study Session',
-                        description: data.message || 'Collaborative Bible study session',
-                        authorName: data.fromUser?.displayName || 'A fellow believer',
-                        participantCount: Math.floor(Math.random() * 5) + 2,
-                    });
-                }
+        // Combine received and sent invitations of type 'scroll'
+        const allPotentialScrolls = [...invitations, ...sentInvitations]
+            .filter(item => item.type === 'scroll')
+            .sort((a, b) => {
+                const dateA = a.createdAt?.toDate?.() || new Date(0);
+                const dateB = b.createdAt?.toDate?.() || new Date(0);
+                return dateB.getTime() - dateA.getTime();
             });
 
-            setLocalScrolls(scrolls);
-            setLoading(false);
+        allPotentialScrolls.forEach(data => {
+            const scrollId = data.resourceId;
+            if (scrollId && scrollId !== currentScrollId && !seenIds.has(scrollId)) {
+                seenIds.add(scrollId);
+
+                // Determine author name
+                let authorName = data.fromUser?.displayName || 'Session Member';
+                if (data.fromUser?.uid === user?.uid) {
+                    authorName = 'You';
+                }
+
+                scrolls.push({
+                    id: scrollId,
+                    title: data.resourceTitle || 'Bible Study Session',
+                    description: data.message || (data.fromUser?.uid === user?.uid ? 'Shared and collaborative session' : 'Participating in shared session'),
+                    authorName,
+                    participantCount: 0, // Removing misleading random count
+                });
+            }
         });
 
-        return () => unsubscribe();
-    }, [user, currentScrollId]);
+        return scrolls.slice(0, 5);
+    }, [invitations, sentInvitations, currentScrollId, user?.uid]);
 
     const handleViewMore = () => {
         router.push('/fellowship');
@@ -944,7 +950,7 @@ function LiveScrollItem({ scroll, onClick }: { scroll: ActiveScroll, onClick: ()
                             </div>
                         ))}
                     </div>
-                    <span className="text-[10px] text-slate-400 font-medium">{scroll.participantCount} active</span>
+                    <span className="text-[10px] text-slate-400 font-medium">Active Session</span>
                 </div>
             </div>
 

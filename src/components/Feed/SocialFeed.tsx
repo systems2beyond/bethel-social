@@ -217,7 +217,11 @@ export const SocialFeed: React.FC = () => {
         <div className="max-w-2xl mx-auto py-8 px-4">
             <div className="mb-8 text-center">
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Community Feed</h1>
-                <p className="text-gray-500 dark:text-gray-400">Stay connected with Bethel Metropolitan</p>
+                {!userData?.churchId ? (
+                    <p className="text-blue-600 dark:text-blue-400 font-medium animate-pulse">Please sign in or select your home church to see the feed</p>
+                ) : (
+                    <p className="text-gray-500 dark:text-gray-400">Stay connected with Bethel Metropolitan</p>
+                )}
             </div>
 
             {livePost && <LiveStreamBanner post={livePost} onDismiss={() => setLivePost(null)} />}
@@ -267,7 +271,7 @@ export const SocialFeed: React.FC = () => {
 
                 {/* Loading State & Infinite Scroll Target */}
                 <div ref={observerTarget} className="h-10 flex justify-center items-center mt-4">
-                    {(loading || loadingMore) && (
+                    {(loading || loadingMore) && userData?.churchId && (
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                     )}
                 </div>

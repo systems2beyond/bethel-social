@@ -229,7 +229,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }, [user]);
 
     // Helper for timing out promises (fail fast for AdBlock)
-    const withTimeout = async <T,>(promise: Promise<T>, ms: number = 5000): Promise<T> => {
+    const withTimeout = async <T,>(promise: Promise<T>, ms: number = 10000): Promise<T> => {
         return new Promise((resolve, reject) => {
             const timer = setTimeout(() => reject(new Error('Timeout')), ms);
             promise
@@ -401,7 +401,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 userName,
                 userPhone,
                 intent
-            }), 10000); // 10s generous timeout for AI generation, but fails fast if network blocked
+            }), 30000); // Increased to 30s for Cold Starts
             const data = result.data as { response: string };
 
             // Save bot response
@@ -449,7 +449,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                     localStorage.setItem(storageKey, JSON.stringify(updatedMessagesWithUser));
 
                     const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+                    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
 
                     const response = await fetch('/api/chat/send', {
                         method: 'POST',

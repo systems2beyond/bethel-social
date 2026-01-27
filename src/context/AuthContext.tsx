@@ -10,7 +10,7 @@ import {
     signOut as firebaseSignOut,
     onAuthStateChanged
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { useTheme } from 'next-themes';
 import { FirestoreUser } from '@/types';
@@ -36,58 +36,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { setTheme } = useTheme();
 
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+        let unsubscribeUserData: (() => void) | undefined;
+
+        const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
             setUser(currentUser);
 
             if (currentUser) {
-                // Sync user to Firestore
+                // [MULTI-CHURCH] Real-time User Data Sync
                 const userRef = doc(db, 'users', currentUser.uid);
-                const userSnap = await getDoc(userRef);
 
+                // Initial check to create doc if missing
+                const userSnap = await getDoc(userRef);
                 if (!userSnap.exists()) {
-                    // [MULTI-CHURCH] Dynamic Resolution
-                    // We must resolve the churchId from the current subdomain to ensure they join the correct instance.
                     const { resolveChurchIdFromHostname } = await import('@/lib/tenant');
                     const resolvedChurchId = await resolveChurchIdFromHostname(window.location.hostname);
 
-                    if (!resolvedChurchId) {
-                        console.error('CRITICAL: Could not resolve church ID from hostname during signup. User created as orphan (or signup blocked).');
-                        // Ideally we throw an error here or redirect to error page.
-                        // For now, we allow creation but they will see empty feed. 
-                        // Or we can default to a "waiting room" status?
-                    }
-
-                    // Create new user doc
                     const newUserData = {
                         uid: currentUser.uid,
                         email: currentUser.email || '',
                         displayName: currentUser.displayName || 'User',
                         photoURL: currentUser.photoURL || undefined,
                         createdAt: serverTimestamp(),
-                        theme: 'system', // Default theme
-                        role: 'member' as const, // Default role
-                        churchId: resolvedChurchId || undefined // Allow undefined if resolution fails (will be caught by app logic later)
+                        theme: 'system',
+                        role: 'member' as const,
+                        churchId: resolvedChurchId || null // FIXED: Using null instead of undefined
                     };
                     await setDoc(userRef, newUserData);
-                    setUserData(newUserData as FirestoreUser);
-                } else {
-                    // Update existing user doc (if needed) and load theme
-                    const data = userSnap.data() as FirestoreUser;
-                    setUserData(data);
-                    // FIXED: Do not sync theme from Firestore. Let next-themes manage it locally.
-                    // if (data.theme) {
-                    //    setTheme(data.theme);
-                    // }
                 }
+
+                // Listen for changes (important for onboarding completion)
+                unsubscribeUserData = onSnapshot(userRef, (doc) => {
+                    if (doc.exists()) {
+                        setUserData(doc.data() as FirestoreUser);
+                    }
+                    setLoading(false);
+                }, (error) => {
+                    console.error("AuthContext: Error listening to userData:", error);
+                    setLoading(false);
+                });
             } else {
                 setUserData(null);
+                setLoading(false);
             }
-
-            setLoading(false);
         });
 
-        return () => unsubscribe();
-    }, [setTheme]);
+        return () => {
+            unsubscribeAuth();
+            if (unsubscribeUserData) unsubscribeUserData();
+        };
+    }, []);
 
     // Filter console noise
     useEffect(() => {

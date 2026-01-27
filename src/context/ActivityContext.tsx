@@ -17,6 +17,7 @@ interface ActivityContextType {
     setActivityPanelOpen: (isOpen: boolean) => void;
     notifications: any[];
     invitations: any[];
+    sentInvitations: any[];
     usersMap: Record<string, any>;
     selectedResource: any | null;
     setSelectedResource: (resource: any | null) => void;
@@ -30,6 +31,7 @@ export function ActivityProvider({ children }: { children: ReactNode }) {
     const [isActivityPanelOpen, setActivityPanelOpen] = useState(false);
     const [notifications, setNotifications] = useState<any[]>([]);
     const [invitations, setInvitations] = useState<any[]>([]);
+    const [sentInvitations, setSentInvitations] = useState<any[]>([]);
     const [usersMap, setUsersMap] = useState<Record<string, any>>({});
     const [selectedResource, setSelectedResource] = useState<any | null>(null);
 
@@ -78,6 +80,22 @@ export function ActivityProvider({ children }: { children: ReactNode }) {
         return () => unsub();
     }, [user?.uid]);
 
+    // Fetch Sent Invitations
+    useEffect(() => {
+        if (!user?.uid) return;
+        const qSent = query(
+            collection(db, 'invitations'),
+            where('fromUser.uid', '==', user.uid),
+            orderBy('createdAt', 'desc')
+        );
+        const unsub = onSnapshot(qSent, (snap) => {
+            setSentInvitations(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        }, (err) => {
+            console.error('[ActivityContext] Sent Invitations listener error:', err);
+        });
+        return () => unsub();
+    }, [user?.uid]);
+
     // Fetch user details for names in activity feed
     useEffect(() => {
         const fetchUsers = async () => {
@@ -120,6 +138,7 @@ export function ActivityProvider({ children }: { children: ReactNode }) {
             setActivityPanelOpen,
             notifications,
             invitations,
+            sentInvitations,
             usersMap,
             selectedResource,
             setSelectedResource,
