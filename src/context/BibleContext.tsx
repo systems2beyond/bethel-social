@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from './AuthContext';
@@ -75,6 +75,7 @@ export interface BibleContextType {
     setCollaborationInitialContent: (content: string | null) => void;
     noteTitle: string;
     openNote: (noteId: string, title?: string) => void;
+    closeNote: () => void;
     openCollaboration: (collabId: string, title?: string, initialContent?: string) => void;
     // Deep Linking
     initialSearchQuery: string | null;
@@ -85,6 +86,7 @@ const BibleContext = createContext<BibleContextType | undefined>(undefined);
 
 export function BibleProvider({ children }: { children: ReactNode }) {
     const [isOpen, setIsOpen] = useState(false);
+    const hasRestoredSession = useRef(false);
     const { user, userData } = useAuth();
 
     // Sync Custom Sources from User Data
@@ -323,7 +325,10 @@ export function BibleProvider({ children }: { children: ReactNode }) {
 
     // Load tabs from Firestore
     useEffect(() => {
-        if (!user) return;
+        if (!user) {
+            hasRestoredSession.current = false; // Reset on logout
+            return;
+        }
         const unsubscribe = onSnapshot(doc(db, 'users', user.uid, 'settings', 'bible-tabs'), (doc) => {
             if (doc.exists()) {
                 const data = doc.data();
@@ -332,6 +337,26 @@ export function BibleProvider({ children }: { children: ReactNode }) {
                 if (data.groups) setGroups(data.groups);
                 // Also restore search version if saved
                 if (data.searchVersion) setSearchVersion(data.searchVersion);
+                // Restore collaboration ID if it exists
+                if (data.activeCollaborationId) {
+                    _setCollaborationId(data.activeCollaborationId);
+                    // Only auto-open on first load, not every snapshot
+                    if (!hasRestoredSession.current) {
+                        setIsOpen(true);
+                        setIsStudyOpen(true);
+                    }
+                }
+                if (data.activeNoteId) {
+                    setActiveNoteId(data.activeNoteId);
+                    if (data.noteTitle) setNoteTitle(data.noteTitle);
+                    // Only auto-open on first load, not every snapshot
+                    if (!hasRestoredSession.current) {
+                        setIsOpen(true);
+                        setIsStudyOpen(true);
+                    }
+                }
+                // Mark session as restored after first snapshot
+                hasRestoredSession.current = true;
             }
         }, (err) => {
             console.error('[BibleContext] Bible tabs listener error:', err);
@@ -368,12 +393,20 @@ export function BibleProvider({ children }: { children: ReactNode }) {
                 tabs: sanitizedTabs,
                 groups: sanitizedGroups,
                 activeTabId: activeTabId || '1', // Ensure activeTabId is never undefined
-                searchVersion: safeSearchVersion
+                searchVersion: safeSearchVersion,
+                activeCollaborationId: collaborationId || null,
+                activeNoteId: activeNoteId || null,
+                noteTitle: noteTitle || 'General Bible Study'
             }, { merge: true }).catch(err => console.error('Error saving bible tabs:', err));
         }, 1000);
         return () => clearTimeout(saveState);
     }, [tabs, activeTabId, user, searchVersion]);
 
+
+    const closeNote = useCallback(() => {
+        setActiveNoteId(null);
+        setNoteTitle('General Bible Study');
+    }, []);
 
     const value = React.useMemo(() => ({
         isOpen,
@@ -405,6 +438,7 @@ export function BibleProvider({ children }: { children: ReactNode }) {
         setCollaborationInitialContent,
         noteTitle,
         openNote,
+        closeNote,
         openCollaboration,
         groups,
         createTabGroup,
@@ -418,7 +452,7 @@ export function BibleProvider({ children }: { children: ReactNode }) {
         setReference, setVersion, onInsertNote, registerInsertHandler, tabs, activeTabId,
         addTab, closeTab, setActiveTab, searchVersion, setSearchVersion, activeNoteId,
         collaborationId, setCollaborationId, collaborationInitialContent, setCollaborationInitialContent,
-        noteTitle, openNote, openCollaboration, groups, createTabGroup, toggleGroupCollapse, closeGroup,
+        noteTitle, openNote, closeNote, openCollaboration, groups, createTabGroup, toggleGroupCollapse, closeGroup,
         openMultipleTabs, activeVideo, openVideo, closeVideo, initialSearchQuery, openStudyWithSearch
     ]);
 

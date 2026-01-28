@@ -677,7 +677,7 @@ export default function BibleAiChatModal({ isOpen, onClose, contextId, contextTi
                                 <div className="space-y-3">
                                     <button
                                         onClick={() => {
-                                            if (onInsertToNotes && pendingInsertContent) {
+                                            if (pendingInsertContent) {
                                                 // "Insert Note" usually targets personal notes, but in Study Mode
                                                 // the parent might route it differently. 
                                                 // HOWEVER, `onInsertToNotes` passed to this modal likely targets 
@@ -726,7 +726,7 @@ export default function BibleAiChatModal({ isOpen, onClose, contextId, contextTi
 
                                     <button
                                         onClick={() => {
-                                            if (onInsertToNotes && pendingInsertContent) {
+                                            if (pendingInsertContent) {
                                                 // Convention: Prefix with [COLLAB] to tell parent handler to route to Collab?
                                                 // Or better, just insert it and let the user copy/paste? 
                                                 // NO, automation is key.

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronLeft, ChevronRight, ChevronDown, Loader2, Copy, Edit3, Check, BookOpen, PenLine, X, Plus, Sparkles, Folder } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, Loader2, Copy, Edit3, Check, BookOpen, PenLine, X, Plus, Sparkles, Folder, Users } from 'lucide-react';
 import { useBible, TabGroup, Tab } from '@/context/BibleContext';
 import { cn } from '@/lib/utils';
 
@@ -93,14 +93,19 @@ const BIBLE_VERSIONS = [
 interface BibleReaderProps {
     onInsertNote?: (text: string) => void;
     onAskAi?: (query: string) => void;
+    onShareTabClick?: () => void;
 }
 
-export default function BibleReader({ onInsertNote, onAskAi }: BibleReaderProps) {
+export default function BibleReader({ onInsertNote, onAskAi, onShareTabClick }: BibleReaderProps) {
     const {
         reference, setReference, version, setVersion,
         openStudy, isStudyOpen, openBible,
         tabs, activeTabId, setActiveTab, addTab, closeTab,
-        groups, toggleGroupCollapse, closeGroup
+        groups, toggleGroupCollapse, closeGroup,
+        collaborationId,
+        activeNoteId,
+        noteTitle,
+        closeNote
     } = useBible();
 
     const [text, setText] = useState<{ verse: number, text: string }[]>([]);
@@ -276,7 +281,7 @@ export default function BibleReader({ onInsertNote, onAskAi }: BibleReaderProps)
                                     e.stopPropagation();
                                     closeTab(tab.id);
                                 }}
-                                className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-gray-200 dark:hover:bg-zinc-700 rounded-full transition-all text-gray-400 dark:text-gray-500 dark:hover:text-red-400"
+                                className="p-0.5 hover:bg-gray-200 dark:hover:bg-zinc-700 rounded-full transition-all text-gray-400 dark:text-gray-500 hover:text-red-400 dark:hover:text-red-400 opacity-60 hover:opacity-100"
                             >
                                 <X className="w-3 h-3" />
                             </span>
@@ -291,11 +296,63 @@ export default function BibleReader({ onInsertNote, onAskAi }: BibleReaderProps)
                             tabs={tabs.filter(t => t.groupId === group.id)}
                             activeTabId={activeTabId}
                             setActiveTab={setActiveTab}
-                            toggleGroupCollapse={toggleGroupCollapse}
                             closeGroup={closeGroup}
                             closeTab={closeTab}
+                            activeNoteId={activeNoteId}
+                            noteTitle={noteTitle}
+                            onOpenNote={onShareTabClick}
                         />
                     ))}
+
+                    {/* Persistent Share/Fellowship/Note Tab */}
+                    {/* logic: if there is an active note, but it's ALREADY represented by a group, hide this tab */}
+                    {(collaborationId || (activeNoteId && !groups.some(g => g.name === noteTitle || noteTitle === `Note: ${g.name}`))) && onShareTabClick && (
+                        <div
+                            className={cn(
+                                "flex items-center h-[36px] mt-auto rounded-t-lg mx-1 transition-all border-b-0 cursor-pointer group select-none relative",
+                                activeNoteId ? "bg-amber-500/10 hover:bg-amber-500/20" : "bg-sky-500/10 hover:bg-sky-500/20"
+                            )}
+                            style={{
+                                borderTop: collaborationId ? '1px solid rgb(14, 165, 233)' : '1px solid rgb(245, 158, 11)',
+                                borderRight: collaborationId ? '1px solid rgb(14, 165, 233)' : '1px solid rgb(245, 158, 11)',
+                                borderLeft: collaborationId ? '1px solid rgb(14, 165, 233)' : '1px solid rgb(245, 158, 11)',
+                            }}
+                            onClick={() => onShareTabClick()}
+                        >
+                            <div className="flex items-center gap-1.5 px-3 py-1.5">
+                                {collaborationId ? (
+                                    <Users className="w-3.5 h-3.5 text-sky-500" />
+                                ) : (
+                                    <PenLine className="w-3.5 h-3.5 text-amber-500" />
+                                )}
+                                <span className={cn(
+                                    "text-[11px] font-bold uppercase tracking-wider truncate max-w-[100px]",
+                                    collaborationId ? "text-sky-700 dark:text-sky-300" : "text-amber-700 dark:text-amber-300"
+                                )}>
+                                    {collaborationId ? 'Fellowship' : (noteTitle || 'My Note')}
+                                </span>
+                            </div>
+                            {/* Bottom colored bar */}
+                            <div
+                                className={cn(
+                                    "absolute bottom-[-1px] left-0 right-0 h-[3px] z-20",
+                                    collaborationId ? "bg-sky-500" : "bg-amber-500"
+                                )}
+                            />
+                            {/* Close Button for Personal Notes only */}
+                            {!collaborationId && activeNoteId && (
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        closeNote();
+                                    }}
+                                    className="ml-auto mr-1 p-0.5 rounded-full hover:bg-amber-200/50 dark:hover:bg-amber-900/50 text-amber-600 dark:text-amber-400 opacity-60 hover:opacity-100 transition-opacity"
+                                >
+                                    <X className="w-3 h-3" />
+                                </button>
+                            )}
+                        </div>
+                    )}
 
                     <button
                         onClick={() => openBible(undefined, true)}
@@ -485,16 +542,21 @@ interface GroupDropdownProps {
     toggleGroupCollapse: (id: string) => void;
     closeGroup: (id: string) => void;
     closeTab: (id: string) => void;
+    activeNoteId?: string | null;
+    noteTitle?: string;
+    onOpenNote?: () => void;
 }
 
-function GroupDropdown({ group, tabs, activeTabId, setActiveTab, toggleGroupCollapse, closeGroup, closeTab }: GroupDropdownProps) {
+function GroupDropdown({ group, tabs, activeTabId, setActiveTab, closeGroup, closeTab, activeNoteId, noteTitle, onOpenNote }: Omit<GroupDropdownProps, 'toggleGroupCollapse'>) {
     const buttonRef = useRef<HTMLDivElement>(null);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+    const [isOpen, setIsOpen] = useState(false);
     const [coords, setCoords] = useState({ top: 0, left: 0, width: 200 });
     const isHex = group.color.startsWith('#');
 
     // Update coordinates when opening
     useLayoutEffect(() => {
-        if (!group.isCollapsed && buttonRef.current) {
+        if (isOpen && buttonRef.current) {
             const rect = buttonRef.current.getBoundingClientRect();
             // Align dropdown logic
             setCoords({
@@ -503,7 +565,27 @@ function GroupDropdown({ group, tabs, activeTabId, setActiveTab, toggleGroupColl
                 width: Math.max(200, rect.width)
             });
         }
-    }, [group.isCollapsed]);
+    }, [isOpen]);
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        if (!isOpen) return;
+        const handleClickOutside = (e: MouseEvent) => {
+            // If click is on the button OR inside the dropdown content, ignore
+            if (
+                (buttonRef.current && buttonRef.current.contains(e.target as Node)) ||
+                (dropdownRef.current && dropdownRef.current.contains(e.target as Node))
+            ) {
+                return;
+            }
+            // Otherwise close
+            setIsOpen(false);
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [isOpen]);
+
+    const isNoteGroup = activeNoteId && (noteTitle === group.name || noteTitle === `Note: ${group.name}`) && onOpenNote;
 
     return (
         <>
@@ -511,19 +593,41 @@ function GroupDropdown({ group, tabs, activeTabId, setActiveTab, toggleGroupColl
                 ref={buttonRef}
                 className={cn(
                     "flex items-center h-[36px] mt-auto rounded-t-lg mx-1 transition-all border-b-0 cursor-pointer group select-none",
-                    !group.isCollapsed ? "bg-white dark:bg-zinc-800 z-20 relative" : "bg-transparent hover:bg-gray-100 dark:hover:bg-zinc-800/50"
+                    isOpen ? "bg-white dark:bg-zinc-800 z-20 relative" : "bg-transparent hover:bg-gray-100 dark:hover:bg-zinc-800/50",
+                    isNoteGroup && "bg-amber-500/10 hover:bg-amber-500/20"
                 )}
                 style={{
-                    border: `1px solid ${group.color}`,
-                    borderBottom: !group.isCollapsed ? 'none' : undefined,
-                    backgroundColor: group.isCollapsed ? (isHex ? `${group.color}15` : undefined) : undefined
+                    border: isNoteGroup ? '1px solid rgb(245, 158, 11)' : `1px solid ${group.color}`,
+                    borderBottom: isOpen ? 'none' : undefined,
+                    backgroundColor: !isOpen ? (isNoteGroup ? 'rgba(245, 158, 11, 0.1)' : (isHex ? `${group.color}15` : undefined)) : undefined
                 }}
-                onClick={() => toggleGroupCollapse(group.id)}
+                onClick={() => {
+                    if (isNoteGroup && onOpenNote) {
+                        onOpenNote();
+                    } else {
+                        setIsOpen(!isOpen);
+                    }
+                }}
             >
                 <div className="flex items-center gap-1.5 px-3 py-1.5">
-                    {group.isCollapsed ? <ChevronRight className="w-3.5 h-3.5 text-gray-400" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-400" />}
-                    <Folder className="w-3.5 h-3.5" style={{ color: group.color }} />
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-gray-600 dark:text-gray-300 truncate max-w-[100px]">
+                    <div
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setIsOpen(!isOpen);
+                        }}
+                        className="p-0.5 -ml-1 rounded-sm hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer"
+                    >
+                        {isOpen ? <ChevronDown className="w-3.5 h-3.5 text-gray-400" /> : <ChevronRight className="w-3.5 h-3.5 text-gray-400" />}
+                    </div>
+                    {isNoteGroup ? (
+                        <PenLine className="w-3.5 h-3.5 text-amber-500" />
+                    ) : (
+                        <Folder className="w-3.5 h-3.5" style={{ color: group.color }} />
+                    )}
+                    <span className={cn(
+                        "text-[11px] font-bold uppercase tracking-wider truncate max-w-[100px]",
+                        isNoteGroup ? "text-amber-600 dark:text-amber-500" : "text-gray-600 dark:text-gray-300"
+                    )}>
                         {group.name}
                     </span>
                     <button
@@ -531,26 +635,26 @@ function GroupDropdown({ group, tabs, activeTabId, setActiveTab, toggleGroupColl
                             e.stopPropagation();
                             closeGroup(group.id);
                         }}
-                        className="ml-1 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-opacity"
+                        className="ml-1 opacity-60 hover:opacity-100 text-gray-400 hover:text-red-400 transition-opacity"
                     >
                         <X className="w-3 h-3" />
                     </button>
                 </div>
 
                 {/* Active Indicator Line if Collapsed but Child Active */}
-                {group.isCollapsed && tabs.some(t => t.id === activeTabId) && (
+                {!isOpen && tabs.some(t => t.id === activeTabId) && (
                     <div className="absolute bottom-[-1px] left-0 right-0 h-[3px] z-20" style={{ backgroundColor: group.color }} />
                 )}
             </div>
 
             {/* Portal Dropdown */}
-            {!group.isCollapsed && createPortal(
+            {isOpen && createPortal(
                 <div className="fixed inset-0 z-[99999] isolate pointer-events-none">
-                    {/* Backdrop for click-outside */}
-                    <div className="absolute inset-0 pointer-events-auto" onClick={() => toggleGroupCollapse(group.id)} />
+                    {/* Simplified Backdrop - handled by useEffect now but keeping for safety */}
 
                     {/* Dropdown Content */}
                     <div
+                        ref={dropdownRef}
                         className="absolute pointer-events-auto bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 shadow-xl rounded-b-lg rounded-r-lg max-h-[300px] overflow-y-auto custom-scrollbar flex flex-col p-1 animate-in fade-in zoom-in-95 duration-100 origin-top-left"
                         style={{
                             top: coords.top,
@@ -566,10 +670,7 @@ function GroupDropdown({ group, tabs, activeTabId, setActiveTab, toggleGroupColl
                                 key={tab.id}
                                 onClick={() => {
                                     setActiveTab(tab.id);
-                                    // Optional: Close dropdown on selection? User said "drop down so they can see everything". 
-                                    // Usually users want to switch tabs. I'll keep it open for "Workbook" feel, or close? 
-                                    // Standard tabs don't close container. But this is a "Dropdown".
-                                    // Let's Keep it Open for now as it acts like a "Folder". User can click outside to close.
+                                    // Optional: Keep open or close. User feedback implies "see everything". Keeping open.
                                 }}
                                 className={cn(
                                     "flex items-center justify-between w-full px-3 py-2 text-left rounded-md transition-colors text-xs mb-0.5",

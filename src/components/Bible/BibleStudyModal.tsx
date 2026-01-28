@@ -387,7 +387,10 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
     const clearSearch = () => {
         setSearchQuery('');
         setSearchResults([]);
-        if (rightPaneView === 'search') setRightPaneView('notes');
+        if (rightPaneView === 'search') {
+            // BUG FIX: Return to Fellowship if in a session, otherwise Notes
+            setRightPaneView(collaborationId ? 'fellowship' : 'notes');
+        }
     };
 
     const handleNoteChange = (content: string) => {
@@ -833,7 +836,15 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                 splitRatio === 0 && "invisible border-none" // Completely hide if ratio is 0
                             )}
                     >
-                        <BibleReader key={activeTabId} onInsertNote={onInsertNote || undefined} onAskAi={handleAskAi} />
+                        <BibleReader
+                            key={activeTabId}
+                            onInsertNote={onInsertNote || undefined}
+                            onAskAi={handleAskAi}
+                            onShareTabClick={() => {
+                                setRightPaneView(activeNoteId ? 'notes' : 'fellowship');
+                                if (splitRatio > 0.9) setSplitRatio(0.5);
+                            }}
+                        />
 
                         {/* Visual Cue for Search Results when Reader is dominant */}
                         <AnimatePresence>
@@ -954,7 +965,10 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                             >
                                                 {isNotesMaximized ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
                                             </button>
-                                            <button onClick={() => setRightPaneView('notes')} className="text-xs text-blue-600 hover:underline font-medium">
+                                            <button
+                                                onClick={() => setRightPaneView(collaborationId ? 'fellowship' : 'notes')}
+                                                className="text-xs text-blue-600 hover:underline font-medium"
+                                            >
                                                 Close Search
                                             </button>
                                         </div>

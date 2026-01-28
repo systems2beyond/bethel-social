@@ -17,7 +17,7 @@ export default function BibleSearch() {
     const [results, setResults] = useState<SearchResult[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const { openBible, isStudyOpen, addTab } = useBible();
+    const { openBible, isStudyOpen, openMultipleTabs } = useBible();
 
     const handleSearch = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -86,11 +86,11 @@ export default function BibleSearch() {
 
                                 if (isStudyOpen) {
                                     // Preserve Fellowship/Study view by adding a tab
-                                    addTab({
+                                    openMultipleTabs([{
                                         book: ref.book,
-                                        chapter: ref.chapter
-                                    });
-                                    // Optional: If we want to auto-switch to it, addTab usually handles it or we can setActiveTab
+                                        chapter: ref.chapter,
+                                        verse: ref.verse
+                                    }]);
                                 } else {
                                     openBible(ref);
                                 }
