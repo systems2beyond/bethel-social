@@ -276,9 +276,9 @@ export default function BibleReader({ onInsertNote, onAskAi }: BibleReaderProps)
                                     e.stopPropagation();
                                     closeTab(tab.id);
                                 }}
-                                className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-gray-200 dark:hover:bg-zinc-700 rounded-full transition-all"
+                                className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-gray-200 dark:hover:bg-zinc-700 rounded-full transition-all text-gray-400 dark:text-gray-500 dark:hover:text-red-400"
                             >
-                                <X className="w-3 h-3 text-gray-400" />
+                                <X className="w-3 h-3" />
                             </span>
                         </button>
                     ))}
@@ -584,7 +584,7 @@ function GroupDropdown({ group, tabs, activeTabId, setActiveTab, toggleGroupColl
                                         e.stopPropagation();
                                         closeTab(tab.id);
                                     }}
-                                    className="p-1 hover:bg-gray-200 dark:hover:bg-zinc-700 rounded-full text-gray-400 hover:text-red-400 opacity-60 hover:opacity-100"
+                                    className="p-1 hover:bg-gray-200 dark:hover:bg-zinc-700 rounded-full text-gray-400 dark:text-gray-500 hover:text-red-400 dark:hover:text-red-400 opacity-60 hover:opacity-100"
                                 >
                                     <X className="w-3 h-3" />
                                 </span>

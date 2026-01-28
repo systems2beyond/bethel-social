@@ -17,7 +17,7 @@ export default function BibleSearch() {
     const [results, setResults] = useState<SearchResult[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const { openBible } = useBible();
+    const { openBible, isStudyOpen, addTab } = useBible();
 
     const handleSearch = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -78,11 +78,22 @@ export default function BibleSearch() {
                         <div
                             key={idx}
                             onClick={() => {
-                                openBible({
+                                const ref = {
                                     book: verse.book_name || verse.book_id,
                                     chapter: verse.chapter,
                                     verse: verse.verse
-                                });
+                                };
+
+                                if (isStudyOpen) {
+                                    // Preserve Fellowship/Study view by adding a tab
+                                    addTab({
+                                        book: ref.book,
+                                        chapter: ref.chapter
+                                    });
+                                    // Optional: If we want to auto-switch to it, addTab usually handles it or we can setActiveTab
+                                } else {
+                                    openBible(ref);
+                                }
                             }}
                             className="p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-zinc-800/50 cursor-pointer transition-colors group border border-transparent hover:border-gray-100 dark:hover:border-zinc-800"
                         >

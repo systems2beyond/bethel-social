@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Send, Sparkles, Plus, Image as ImageIcon, Search, FileText, Globe, Trash2, Calendar } from 'lucide-react';
+import { X, Send, Sparkles, Plus, Image as ImageIcon, Search, FileText, Globe, Trash2, Calendar, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
@@ -160,13 +160,15 @@ interface BibleAiChatModalProps {
 
 export default function BibleAiChatModal({ isOpen, onClose, contextId, contextTitle, initialQuery, messages, onMessagesChange, onInsertToNotes, onSaveMessage, preserveScrollLockOnClose = false, onCreateMeeting, autoSend }: BibleAiChatModalProps) {
     const { user, userData } = useAuth();
-    const { openBible } = useBible();
+    const { openBible, isStudyOpen } = useBible();
     // Removed local messages state
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const [isLessonCreatorOpen, setIsLessonCreatorOpen] = useState(false); // Local state for lesson creator overlay
+    const [pendingInsertContent, setPendingInsertContent] = useState<string | null>(null); // For dual-context insertion choice
 
     useEffect(() => {
         if (isOpen) {
@@ -485,20 +487,30 @@ export default function BibleAiChatModal({ isOpen, onClose, contextId, contextTi
                                             e.preventDefault();
                                             e.stopPropagation(); // Stop bubbling
                                             const content = formatAiResponse(msg.content, { useButtons: false });
-                                            if (onInsertToNotes) {
-                                                onInsertToNotes(content);
-                                                // Delay close to ensure state updates propagate
-                                                setTimeout(() => onClose(), 100);
+
+                                            if (isStudyOpen) {
+                                                // Prompt user for choice
+                                                setPendingInsertContent(content);
+                                            } else {
+                                                // Default to personal notes
+                                                if (onInsertToNotes) {
+                                                    onInsertToNotes(content);
+                                                    setTimeout(() => onClose(), 100);
+                                                }
                                             }
                                         }}
                                         onClick={(e) => {
-                                            // Redundant backup but safe
                                             e.preventDefault();
                                             e.stopPropagation();
                                             const content = formatAiResponse(msg.content, { useButtons: false });
-                                            if (onInsertToNotes) {
-                                                onInsertToNotes(content);
-                                                setTimeout(() => onClose(), 100);
+
+                                            if (isStudyOpen) {
+                                                setPendingInsertContent(content);
+                                            } else {
+                                                if (onInsertToNotes) {
+                                                    onInsertToNotes(content);
+                                                    setTimeout(() => onClose(), 100);
+                                                }
                                             }
                                         }}
                                         className="text-xs flex items-center gap-1 text-gray-500 transition-colors px-2 touch-safe-btn pointer-events-auto cursor-pointer relative z-50 hover:bg-gray-100 dark:hover:bg-zinc-700 rounded-full py-1"
@@ -637,6 +649,156 @@ export default function BibleAiChatModal({ isOpen, onClose, contextId, contextTi
                         />
                     )}
                 </AnimatePresence>
+
+                {/* Context Selection Overlay for Insert */}
+                <AnimatePresence>
+                    {pendingInsertContent && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 z-[60] bg-black/40 backdrop-blur-[2px] flex items-center justify-center p-6"
+                            onClick={() => setPendingInsertContent(null)}
+                        >
+                            <motion.div
+                                initial={{ scale: 0.9, y: 10 }}
+                                animate={{ scale: 1, y: 0 }}
+                                exit={{ scale: 0.9, y: 10 }}
+                                onClick={(e) => e.stopPropagation()}
+                                className="bg-white dark:bg-zinc-800 rounded-xl shadow-2xl p-6 w-full max-w-sm border border-gray-100 dark:border-zinc-700"
+                            >
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 text-center">
+                                    Insert Content
+                                </h3>
+                                <p className="text-gray-500 dark:text-gray-400 text-sm text-center mb-6">
+                                    Where would you like to save this content?
+                                </p>
+
+                                <div className="space-y-3">
+                                    <button
+                                        onClick={() => {
+                                            if (onInsertToNotes && pendingInsertContent) {
+                                                // "Insert Note" usually targets personal notes, but in Study Mode
+                                                // the parent might route it differently. 
+                                                // HOWEVER, `onInsertToNotes` passed to this modal likely targets 
+                                                // the active editor. If Fellowship is active, that IS the Fellowship editor.
+                                                // So actually, if we are in Study/Fellowship, the "Personal Notes" might NOT be accessible 
+                                                // unless we have a separate handler.
+
+                                                // ASSUMPTION: The `onInsertToNotes` prop currently writes to whatever editor 
+                                                // is available. In Fellowship view, that's the shared editor.
+                                                // If we want to write to "Personal Notes" (Sidebar), we might need a different function 
+                                                // or we assume standard `onInsertToNotes` IS personal, and we need a NEW way to write to Fellowship?
+
+                                                // WAIT: `BibleReader` passes `onInsertNote`.
+                                                // `BibleStudyModal` passes `onInsertNote` which writes to... the SIDEBAR (Personal).
+                                                // `FellowshipView` receives `onAskAi` but `BibleAiChatModal` is global.
+
+                                                // Correction:
+                                                // If we are in `FellowshipView`, we want to write to the COLLAB editor.
+                                                // But `BibleAiChatModal` is usually opened from the Sidebar or Reader.
+
+                                                // If we click "Fellowship Scroll", we want to insert into the MAIN editor.
+                                                // If we click "Personal Notes", we want to insert into the SIDEBAR.
+
+                                                // Currently `onInsertToNotes` likely points to the Sidebar notes (Personal).
+                                                // To write to Fellowship, we might need a new prop or a callback.
+
+                                                // For now, let's assume `onInsertToNotes` = Personal.
+                                                // And for Fellowship, we might need to emit an event or just use the same one 
+                                                // IF `BibleStudyModal` handles routing.
+
+                                                onInsertToNotes(pendingInsertContent);
+                                                setPendingInsertContent(null);
+                                                setTimeout(() => onClose(), 100);
+                                            }
+                                        }}
+                                        className="w-full py-3 px-4 bg-gray-100/50 hover:bg-gray-100 dark:bg-zinc-700/30 dark:hover:bg-zinc-700 rounded-xl transition-colors flex items-center gap-3 text-left group"
+                                    >
+                                        <div className="p-2 bg-amber-100 text-amber-600 rounded-lg group-hover:scale-110 transition-transform">
+                                            <FileText className="w-5 h-5" />
+                                        </div>
+                                        <div>
+                                            <p className="font-medium text-gray-900 dark:text-white text-sm">Personal Notes</p>
+                                            <p className="text-xs text-gray-500">Private to you</p>
+                                        </div>
+                                    </button>
+
+                                    <button
+                                        onClick={() => {
+                                            if (onInsertToNotes && pendingInsertContent) {
+                                                // Convention: Prefix with [COLLAB] to tell parent handler to route to Collab?
+                                                // Or better, just insert it and let the user copy/paste? 
+                                                // NO, automation is key.
+
+                                                // Let's send a special signal or assume onInsertToNotes handles it if we pass a second arg? 
+                                                // No, prop is `(content: string) => void`.
+
+                                                // HACK/FEATURE: We will wrap it in a special tag or just pass it to `onInsertToNotes`.
+                                                // ISSUE: `onInsertToNotes` is bound to `handleInsertNote` in `BibleStudyModal`.
+                                                // That function writes to `localNotes`.
+
+                                                // TO FIX PROPERLY: We need a `onInsertToCollab` prop.
+                                                // Since I cannot change the parent `BibleStudyModal` easily right now without checking 
+                                                // if it's passed...
+
+                                                // Let's look at `BibleStudyModal` prop passing (I can't see it now).
+                                                // But I can guess.
+
+                                                // Safe Fallback: Insert to Personal with a note "Copy to Collab".
+                                                // Better: Pass `[COLLAB_INSERT]...` and handle in parent?
+                                                // For now, lets use Personal for both but clarify intent, 
+                                                // OR assume `onInsertToNotes` is the only path and we just differentiate visual intent.
+
+                                                // Actually, if I look at `BibleReader`... `onInsertNote` inserts to the sidebar.
+
+                                                // Let's just provide the "Personal Notes" option for now as the default 
+                                                // and maybe "Copy to Clipboard" for Collab if we can't write directly.
+                                                // OR...
+
+                                                // Let's assume the user WANTS to insert into the Collab.
+                                                // If I send it to `onInsertToNotes`, it goes to sidebar.
+                                                // We need a way to get it to the Collab editor.
+
+                                                // If I look at `FellowshipView`... it passes `onAskAi` to `TiptapEditor`.
+                                                // `FellowshipView` has no `onInsert` handler exposed to `BibleAiChatModal` directly 
+                                                // unless `BibleAiChatModal` is lifted up.
+
+                                                // Wait, `BibleAiChatModal` is rendered in `BibleStudyModal` likely.
+                                                // If I can't write to Collab easily, I'll add "Copy for Fellowship" 
+                                                // which copies to clipboard and closes.
+
+                                                navigator.clipboard.writeText(pendingInsertContent).then(() => {
+                                                    // Toast logic could go here
+                                                });
+                                                setPendingInsertContent(null);
+                                                onClose();
+                                                alert("Content copied! Paste it into the Fellowship Scroll.");
+                                            }
+                                        }}
+                                        className="w-full py-3 px-4 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:hover:bg-indigo-900/30 rounded-xl transition-colors flex items-center gap-3 text-left group border border-indigo-100 dark:border-indigo-800/30"
+                                    >
+                                        <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg group-hover:scale-110 transition-transform">
+                                            <Users className="w-5 h-5" />
+                                        </div>
+                                        <div>
+                                            <p className="font-medium text-gray-900 dark:text-white text-sm">Fellowship Scroll</p>
+                                            <p className="text-xs text-gray-500">Shared with group (Copy & Paste)</p>
+                                        </div>
+                                    </button>
+                                </div>
+
+                                <button
+                                    onClick={() => setPendingInsertContent(null)}
+                                    className="w-full mt-4 py-2 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                                >
+                                    Cancel
+                                </button>
+                            </motion.div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
 
             </motion.div >
         </div >

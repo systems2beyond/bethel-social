@@ -12,6 +12,7 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
+    "@firebase/firestore": "^4.10.0",
     "@google-cloud/vertexai": "^1.10.0",
     "@hocuspocus/provider": "^3.4.3",
     "@orama/orama": "^3.1.16",

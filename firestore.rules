@@ -176,6 +176,20 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------
+    // 5. Enterprise Monitoring (System Logs & Stats)
+    // ---------------------------------------------------------
+    match /system_logs/{logId} {
+        allow create: if isAuthenticated(); // Any user can log an error
+        allow read: if isSuperAdmin(); // Only admins can view logs
+        allow update, delete: if false; // Logs are immutable
+    }
+
+    match /analytics_stats/{statId} {
+        allow read: if isSuperAdmin();
+        allow write: if isAuthenticated(); // Allow users to increment counters via client SDK (AnalyticsService)
+    }
+
+    // ---------------------------------------------------------
     // Global & Legacy
     // ---------------------------------------------------------
     

@@ -35,6 +35,7 @@ import BibleStudyModalWrapper from "@/components/Bible/BibleStudyModalWrapper";
 import { GlobalLayoutComponents } from "@/components/Layout/GlobalLayoutComponents";
 import { Toaster } from 'sonner';
 import { AuthModal } from "@/components/Auth/AuthModal";
+import { GlobalErrorHandler } from "@/components/GlobalErrorHandler";
 
 
 export default function RootLayout({
@@ -48,29 +49,31 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} ${caveat.variable} antialiased`}
       >
         <Providers>
-          <div className="flex h-screen overflow-hidden">
-            {/* Sidebar - Responsive */}
-            <Sidebar />
+          <GlobalErrorHandler>
+            <div className="flex h-screen overflow-hidden">
+              {/* Sidebar - Responsive */}
+              <Sidebar />
 
-            {/* Main Content Area */}
-            <main className="flex-1 flex flex-col relative min-w-0 transition-colors duration-300">
-              {/* Scrollable Feed Area */}
-              <div className="flex-1 overflow-y-auto scroll-smooth pb-24">
-                <div className="max-w-4xl mx-auto w-full">
-                  {children}
+              {/* Main Content Area */}
+              <main className="flex-1 flex flex-col relative min-w-0 transition-colors duration-300">
+                {/* Scrollable Feed Area */}
+                <div className="flex-1 overflow-y-auto scroll-smooth pb-24">
+                  <div className="max-w-4xl mx-auto w-full">
+                    {children}
+                  </div>
                 </div>
-              </div>
 
-              {/* Fixed Bottom Input Bar */}
-              <BottomBar />
-            </main>
-          </div>
-          <OnboardingModal />
-          <AuthModal />
-          <BibleModal />
-          <BibleStudyModalWrapper />
-          <GlobalLayoutComponents />
-          <Toaster />
+                {/* Fixed Bottom Input Bar */}
+                <BottomBar />
+              </main>
+            </div>
+            <OnboardingModal />
+            <AuthModal />
+            <BibleModal />
+            <BibleStudyModalWrapper />
+            <GlobalLayoutComponents />
+            <Toaster />
+          </GlobalErrorHandler>
         </Providers>
       </body>
     </html>
