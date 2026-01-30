@@ -14,6 +14,7 @@ import { ViewResourceModal } from '@/components/Meeting/ViewResourceModal';
 import { cn } from '@/lib/utils';
 import { useActivity } from '@/context/ActivityContext';
 import { EmptyState } from '@/components/Fellowship/EmptyState';
+import { DirectMessages } from '@/components/Fellowship/DirectMessages';
 
 export default function FellowshipPage() {
     const { user } = useAuth();
@@ -150,7 +151,7 @@ export default function FellowshipPage() {
                             active={activeTab === 'community'}
                             onClick={() => setActiveTab('community')}
                             icon={<MessageSquare className="w-4 h-4" />}
-                            label="Community"
+                            label="Inbox"
                         />
                     </motion.div>
                 </div>
@@ -337,17 +338,13 @@ export default function FellowshipPage() {
                         {activeTab === 'community' && (
                             <motion.div
                                 key="community"
-                                initial={{ opacity: 0, y: 20, filter: 'blur(10px)' }}
-                                animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-                                exit={{ opacity: 0, y: -20, filter: 'blur(10px)' }}
+                                initial={{ opacity: 0, scale: 0.95 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.95 }}
                                 transition={{ duration: 0.4 }}
+                                className="h-full"
                             >
-                                <EmptyState
-                                    icon={<MessageSquare className="w-10 h-10 text-green-500" />}
-                                    title="Community Board"
-                                    description="A place to share prayer requests, praise reports, and general discussion."
-                                    color="green"
-                                />
+                                <DirectMessages />
                             </motion.div>
                         )}
                     </AnimatePresence>

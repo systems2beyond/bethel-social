@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode, useCallback } from 'react';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from './AuthContext';
@@ -75,6 +75,10 @@ export interface BibleContextType {
     setCollaborationInitialContent: (content: string | null) => void;
     noteTitle: string;
     openNote: (noteId: string, title?: string) => void;
+    pendingNoteContent: string | null;
+    setPendingNoteContent: (content: string | null) => void;
+    pendingNoteTitle?: string | null;
+    setPendingNoteTitle: (title: string | null) => void;
     closeNote: () => void;
     openCollaboration: (collabId: string, title?: string, initialContent?: string) => void;
     // Deep Linking
@@ -86,7 +90,6 @@ const BibleContext = createContext<BibleContextType | undefined>(undefined);
 
 export function BibleProvider({ children }: { children: ReactNode }) {
     const [isOpen, setIsOpen] = useState(false);
-    const hasRestoredSession = useRef(false);
     const { user, userData } = useAuth();
 
     // Sync Custom Sources from User Data
@@ -104,6 +107,9 @@ export function BibleProvider({ children }: { children: ReactNode }) {
     ]);
     const [groups, setGroups] = useState<TabGroup[]>([]);
     const [activeTabId, setActiveTabId] = useState<string>('1');
+
+    // Track if initial Firestore load is complete to avoid reopening study on every save
+    const initialLoadDoneRef = useRef(false);
 
     const [version, setVersion] = useState('kjv');
     const [searchVersion, setSearchVersion] = useState('kjv'); // Default to KJV
@@ -313,6 +319,8 @@ export function BibleProvider({ children }: { children: ReactNode }) {
     }, [setCollaborationId]);
 
     const [initialSearchQuery, setInitialSearchQuery] = useState<string | null>(null);
+    const [pendingNoteContent, setPendingNoteContent] = useState<string | null>(null);
+    const [pendingNoteTitle, setPendingNoteTitle] = useState<string | null>(null);
 
     const openStudyWithSearch = useCallback((query: string) => {
         setInitialSearchQuery(query);
@@ -325,10 +333,7 @@ export function BibleProvider({ children }: { children: ReactNode }) {
 
     // Load tabs from Firestore
     useEffect(() => {
-        if (!user) {
-            hasRestoredSession.current = false; // Reset on logout
-            return;
-        }
+        if (!user) return;
         const unsubscribe = onSnapshot(doc(db, 'users', user.uid, 'settings', 'bible-tabs'), (doc) => {
             if (doc.exists()) {
                 const data = doc.data();
@@ -337,26 +342,16 @@ export function BibleProvider({ children }: { children: ReactNode }) {
                 if (data.groups) setGroups(data.groups);
                 // Also restore search version if saved
                 if (data.searchVersion) setSearchVersion(data.searchVersion);
-                // Restore collaboration ID if it exists
+                // Resore collaboration ID if it exists
                 if (data.activeCollaborationId) {
                     _setCollaborationId(data.activeCollaborationId);
-                    // Only auto-open on first load, not every snapshot
-                    if (!hasRestoredSession.current) {
-                        setIsOpen(true);
-                        setIsStudyOpen(true);
-                    }
+                    // State is restored but study modal stays closed - user opens it explicitly
                 }
                 if (data.activeNoteId) {
                     setActiveNoteId(data.activeNoteId);
                     if (data.noteTitle) setNoteTitle(data.noteTitle);
-                    // Only auto-open on first load, not every snapshot
-                    if (!hasRestoredSession.current) {
-                        setIsOpen(true);
-                        setIsStudyOpen(true);
-                    }
+                    // State is restored but study modal stays closed - user opens it explicitly
                 }
-                // Mark session as restored after first snapshot
-                hasRestoredSession.current = true;
             }
         }, (err) => {
             console.error('[BibleContext] Bible tabs listener error:', err);
@@ -438,6 +433,10 @@ export function BibleProvider({ children }: { children: ReactNode }) {
         setCollaborationInitialContent,
         noteTitle,
         openNote,
+        pendingNoteContent,
+        setPendingNoteContent,
+        pendingNoteTitle,
+        setPendingNoteTitle,
         closeNote,
         openCollaboration,
         groups,
@@ -453,6 +452,7 @@ export function BibleProvider({ children }: { children: ReactNode }) {
         addTab, closeTab, setActiveTab, searchVersion, setSearchVersion, activeNoteId,
         collaborationId, setCollaborationId, collaborationInitialContent, setCollaborationInitialContent,
         noteTitle, openNote, closeNote, openCollaboration, groups, createTabGroup, toggleGroupCollapse, closeGroup,
+        pendingNoteContent, setPendingNoteContent, pendingNoteTitle, setPendingNoteTitle,
         openMultipleTabs, activeVideo, openVideo, closeVideo, initialSearchQuery, openStudyWithSearch
     ]);
 

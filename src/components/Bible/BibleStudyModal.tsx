@@ -54,6 +54,8 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
         activeVideo,
         openVideo,
         closeVideo,
+        pendingNoteContent,
+        setPendingNoteContent,
     } = useBible();
     const [personalEditor, setPersonalEditor] = useState<any>(null);
     const [fellowshipEditor, setFellowshipEditor] = useState<any>(null);
@@ -140,6 +142,28 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
             setRightPaneView('fellowship');
         }
     }, [collaborationId]);
+    // Consume pending content from Bible Popup
+    useEffect(() => {
+        if (pendingNoteContent && personalEditor && !personalEditor.isDestroyed) {
+            console.log('[BibleStudyModal] Consuming pendingNoteContent:', pendingNoteContent.slice(0, 50) + '...');
+
+            // Insert content. Tiptap chain() handles the focus and insertion.
+            personalEditor.chain().focus().insertContent(pendingNoteContent).run();
+
+            // Clear the pending buffer
+            setPendingNoteContent(null);
+        }
+    }, [pendingNoteContent, personalEditor, setPendingNoteContent]);
+
+    // Register the insert handler for BibleReader
+    useEffect(() => {
+        if (personalEditor && !personalEditor.isDestroyed) {
+            const cleanup = registerInsertHandler((content: string) => {
+                personalEditor.chain().focus().insertContent(content).run();
+            });
+            return cleanup;
+        }
+    }, [personalEditor, registerInsertHandler]);
 
     // Search State
     const [searchQuery, setSearchQuery] = useState('');

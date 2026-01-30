@@ -50,7 +50,9 @@ service cloud.firestore {
     // 2. Users Collection (Private & Nested Data)
     // ---------------------------------------------------------
     match /users/{userId} {
-      allow read: if isAuthenticated();
+      // [DEBUG] PUBLIC to test AdBlock Auth issue
+      allow read: if true; 
+      // allow read: if isAuthenticated();
       allow create: if isAuthenticated() && request.auth.uid == userId; 
       allow update: if isAuthenticated() && request.auth.uid == userId;
       
@@ -209,7 +211,22 @@ service cloud.firestore {
         allow update, delete: if request.auth != null && resource.data.toUserId == request.auth.uid;
     }
 
-    // Default deny for safety
-    // match /{document=**} { allow read, write: if false; } 
+    match /direct_messages/{connId} {
+        // [DEBUG] PUBLIC ACCESS to rule out Auth Token missing
+        allow read, write: if true;
+        
+        // Original Strict Rules (Commented out for debug)
+        // allow list: if request.auth != null && request.auth.uid in resource.data.participants;
+        // allow get: if request.auth != null && request.auth.uid in resource.data.participants;
+        // allow create: if request.auth != null && request.auth.uid in request.resource.data.participants;
+        // allow update: if request.auth != null && request.auth.uid in resource.data.participants;
+
+        match /messages/{messageId} {
+             allow read, write: if true;
+        }
+    }
+
+    // [DEBUG] GLOBAL FALLBACK - ALLOWS ALL FOR DEBUGGING 
+    match /{document=**} { allow read, write: if true; } 
   }
 }

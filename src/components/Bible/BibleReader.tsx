@@ -102,7 +102,7 @@ export default function BibleReader({ onInsertNote, onAskAi, onShareTabClick }: 
         openStudy, isStudyOpen, openBible,
         tabs, activeTabId, setActiveTab, addTab, closeTab,
         groups, toggleGroupCollapse, closeGroup,
-        collaborationId,
+        collaborationId, setCollaborationId,
         activeNoteId,
         noteTitle,
         closeNote
@@ -305,52 +305,65 @@ export default function BibleReader({ onInsertNote, onAskAi, onShareTabClick }: 
                     ))}
 
                     {/* Persistent Share/Fellowship/Note Tab */}
-                    {/* logic: if there is an active note, but it's ALREADY represented by a group, hide this tab */}
-                    {(collaborationId || (activeNoteId && !groups.some(g => g.name === noteTitle || noteTitle === `Note: ${g.name}`))) && onShareTabClick && (
+                    {/* Show Fellowship Tab if collaborationId is active */}
+                    {collaborationId && onShareTabClick && (
                         <div
-                            className={cn(
-                                "flex items-center h-[36px] mt-auto rounded-t-lg mx-1 transition-all border-b-0 cursor-pointer group select-none relative",
-                                activeNoteId ? "bg-amber-500/10 hover:bg-amber-500/20" : "bg-sky-500/10 hover:bg-sky-500/20"
-                            )}
+                            className="flex items-center h-[36px] mt-auto rounded-t-lg mx-1 transition-all border-b-0 cursor-pointer group select-none relative bg-sky-500/10 hover:bg-sky-500/20"
                             style={{
-                                borderTop: collaborationId ? '1px solid rgb(14, 165, 233)' : '1px solid rgb(245, 158, 11)',
-                                borderRight: collaborationId ? '1px solid rgb(14, 165, 233)' : '1px solid rgb(245, 158, 11)',
-                                borderLeft: collaborationId ? '1px solid rgb(14, 165, 233)' : '1px solid rgb(245, 158, 11)',
+                                borderTop: '1px solid rgb(14, 165, 233)',
+                                borderRight: '1px solid rgb(14, 165, 233)',
+                                borderLeft: '1px solid rgb(14, 165, 233)',
                             }}
                             onClick={() => onShareTabClick()}
                         >
                             <div className="flex items-center gap-1.5 px-3 py-1.5">
-                                {collaborationId ? (
-                                    <Users className="w-3.5 h-3.5 text-sky-500" />
-                                ) : (
-                                    <PenLine className="w-3.5 h-3.5 text-amber-500" />
-                                )}
-                                <span className={cn(
-                                    "text-[11px] font-bold uppercase tracking-wider truncate max-w-[100px]",
-                                    collaborationId ? "text-sky-700 dark:text-sky-300" : "text-amber-700 dark:text-amber-300"
-                                )}>
-                                    {collaborationId ? 'Fellowship' : (noteTitle || 'My Note')}
+                                <Users className="w-3.5 h-3.5 text-sky-500" />
+                                <span className="text-[11px] font-bold uppercase tracking-wider truncate max-w-[100px] text-sky-700 dark:text-sky-300">
+                                    Fellowship
                                 </span>
                             </div>
-                            {/* Bottom colored bar */}
-                            <div
-                                className={cn(
-                                    "absolute bottom-[-1px] left-0 right-0 h-[3px] z-20",
-                                    collaborationId ? "bg-sky-500" : "bg-amber-500"
-                                )}
-                            />
-                            {/* Close Button for Personal Notes only */}
-                            {!collaborationId && activeNoteId && (
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        closeNote();
-                                    }}
-                                    className="ml-auto mr-1 p-0.5 rounded-full hover:bg-amber-200/50 dark:hover:bg-amber-900/50 text-amber-600 dark:text-amber-400 opacity-60 hover:opacity-100 transition-opacity"
-                                >
-                                    <X className="w-3 h-3" />
-                                </button>
-                            )}
+                            <div className="absolute bottom-[-1px] left-0 right-0 h-[3px] z-20 bg-sky-500" />
+                            {/* Close Button for Fellowship Tab */}
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setCollaborationId(null);
+                                }}
+                                className="ml-auto mr-1 p-0.5 rounded-full hover:bg-sky-200/50 dark:hover:bg-sky-900/50 text-sky-600 dark:text-sky-400 opacity-60 hover:opacity-100 transition-opacity"
+                            >
+                                <X className="w-3 h-3" />
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Show Note Tab if activeNoteId is set and NOT already represented by a group */}
+                    {activeNoteId && !groups.some(g => g.name === noteTitle || noteTitle === `Note: ${g.name}`) && onShareTabClick && (
+                        <div
+                            className="flex items-center h-[36px] mt-auto rounded-t-lg mx-1 transition-all border-b-0 cursor-pointer group select-none relative bg-amber-500/10 hover:bg-amber-500/20"
+                            style={{
+                                borderTop: '1px solid rgb(245, 158, 11)',
+                                borderRight: '1px solid rgb(245, 158, 11)',
+                                borderLeft: '1px solid rgb(245, 158, 11)',
+                            }}
+                            onClick={() => onShareTabClick()}
+                        >
+                            <div className="flex items-center gap-1.5 px-3 py-1.5">
+                                <PenLine className="w-3.5 h-3.5 text-amber-500" />
+                                <span className="text-[11px] font-bold uppercase tracking-wider truncate max-w-[100px] text-amber-700 dark:text-amber-300">
+                                    {noteTitle || 'My Note'}
+                                </span>
+                            </div>
+                            <div className="absolute bottom-[-1px] left-0 right-0 h-[3px] z-20 bg-amber-500" />
+                            {/* Close Button for Personal Notes */}
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    closeNote();
+                                }}
+                                className="ml-auto mr-1 p-0.5 rounded-full hover:bg-amber-200/50 dark:hover:bg-amber-900/50 text-amber-600 dark:text-amber-400 opacity-60 hover:opacity-100 transition-opacity"
+                            >
+                                <X className="w-3 h-3" />
+                            </button>
                         </div>
                     )}
 
@@ -483,14 +496,23 @@ export default function BibleReader({ onInsertNote, onAskAi, onShareTabClick }: 
                     </span>
                     <div className="h-4 w-px bg-white/20 dark:bg-black/10" />
 
+                    {/* Debug log for prop - will help confirm if BibleModal is passing it */}
+                    {(() => {
+                        // console.log('[BibleReader] Render Toolbar. onInsertNote:', !!onInsertNote);
+                        return null;
+                    })()}
+
                     {onInsertNote && (
-                        <button
-                            onClick={handleAddToNotes}
-                            className="flex items-center gap-2 text-sm font-medium hover:text-amber-400 dark:hover:text-amber-600 transition-colors"
-                        >
-                            <PenLine className="w-4 h-4" />
-                            Add to Notes
-                        </button>
+                        <>
+                            <button
+                                onClick={handleAddToNotes}
+                                className="flex items-center gap-1.5 text-xs font-medium whitespace-nowrap hover:text-amber-400 dark:hover:text-amber-600 transition-colors"
+                            >
+                                <PenLine className="w-3.5 h-3.5" />
+                                Add to Notes
+                            </button>
+                            <div className="h-4 w-px bg-white/20 dark:bg-black/10" />
+                        </>
                     )}
 
                     <button
@@ -505,9 +527,9 @@ export default function BibleReader({ onInsertNote, onAskAi, onShareTabClick }: 
                                 onAskAi(`"${selectedText}"\n\n`);
                             }
                         }}
-                        className="flex items-center gap-2 text-sm font-medium hover:text-purple-400 dark:hover:text-purple-300 transition-colors"
+                        className="flex items-center gap-1.5 text-xs font-medium whitespace-nowrap hover:text-purple-400 dark:hover:text-purple-300 transition-colors"
                     >
-                        <Sparkles className="w-4 h-4" />
+                        <Sparkles className="w-3.5 h-3.5" />
                         Ask AI
                     </button>
 
@@ -523,9 +545,9 @@ export default function BibleReader({ onInsertNote, onAskAi, onShareTabClick }: 
                             navigator.clipboard.writeText(`${reference.book} ${reference.chapter}:${selectedVerses.join(',')}\n${selectedText}`);
                             setSelectedVerses([]);
                         }}
-                        className="flex items-center gap-2 text-sm font-medium hover:text-amber-400 dark:hover:text-amber-600 transition-colors"
+                        className="flex items-center gap-1.5 text-xs font-medium whitespace-nowrap hover:text-amber-400 dark:hover:text-amber-600 transition-colors"
                     >
-                        <Copy className="w-4 h-4" />
+                        <Copy className="w-3.5 h-3.5" />
                         Copy
                     </button>
                 </div>

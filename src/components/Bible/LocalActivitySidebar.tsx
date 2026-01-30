@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Users, Wifi, ChevronRight, ChevronDown, MessageSquare, Plus, ArrowRight, ExternalLink, Edit3, ScrollText, Bell, Inbox, Sparkles, Clock, Search, BookOpen, Pin, Trash2, Video, Globe, PlayCircle, Loader2 } from 'lucide-react';
-import { collection, query, where, onSnapshot, limit, doc, setDoc, updateDoc, arrayUnion, arrayRemove, getDoc, getDocs } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, limit, doc, setDoc, updateDoc, arrayUnion, arrayRemove, getDoc, getDocs, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
 import { useActivity } from '@/context/ActivityContext';
@@ -37,7 +37,7 @@ interface PinnedVerse {
 // interface QuickSearchResults ... removed
 
 
-type TabType = 'activity' | 'live' | 'quick-note';
+type TabType = 'activity' | 'live' | 'quick-note' | 'inbox';
 
 const MAX_ITEMS_SHOWN = 5;
 const MAX_RECENT_ITEMS = 6;
@@ -57,6 +57,24 @@ export function LocalActivitySidebar({ className }: { className?: string }) {
     const [isExpanded, setIsExpanded] = useState(false);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<TabType>('activity');
+
+
+    const [recentDMs, setRecentDMs] = useState<any[]>([]);
+
+    useEffect(() => {
+        if (!user) return;
+        const q = query(
+            collection(db, 'direct_messages'),
+            where('participants', 'array-contains', user.uid),
+            orderBy('lastMessageTimestamp', 'desc'),
+            limit(5)
+        );
+        const unsub = onSnapshot(q, (snapshot) => {
+            const dms = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            setRecentDMs(dms);
+        });
+        return () => unsub();
+    }, [user]);
 
     // Handle loading state
     useEffect(() => {
@@ -425,6 +443,14 @@ export function LocalActivitySidebar({ className }: { className?: string }) {
                                 count={localScrolls.length}
                                 onClick={() => setActiveTab('live')}
                             />
+                            <TabButton
+                                id="inbox"
+                                active={activeTab === 'inbox'}
+                                label="Inbox"
+                                icon={<Inbox className="w-4 h-4" />}
+                                count={recentDMs.length}
+                                onClick={() => setActiveTab('inbox')}
+                            />
                         </div>
                     </div>
 
@@ -740,6 +766,47 @@ export function LocalActivitySidebar({ className }: { className?: string }) {
                                             icon={<Wifi className="w-8 h-8" />}
                                             message="No active sessions nearby."
                                         />
+                                    )}
+                                </motion.div>
+                            )}
+
+                            {activeTab === 'inbox' && (
+                                <motion.div
+                                    key="inbox"
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -10 }}
+                                    className="p-3 space-y-3"
+                                >
+                                    {recentDMs.length === 0 ? (
+                                        <EmptyState
+                                            icon={<MessageSquare className="w-8 h-8" />}
+                                            message="No recent messages."
+                                        />
+                                    ) : (
+                                        <div className="space-y-2">
+                                            {recentDMs.map((dm) => (
+                                                <div key={dm.id} className="p-3 rounded-lg bg-slate-50 dark:bg-zinc-800/50 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer border border-slate-100 dark:border-zinc-700/50" onClick={() => {
+                                                    router.push('/fellowship?tab=community');
+                                                    setIsExpanded(false);
+                                                }}>
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+                                                            <MessageSquare className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">Conversation</p>
+                                                            <p className="text-[10px] text-slate-500 truncate">{dm.lastMessageAuthorId === user?.uid && "You: "}{dm.lastMessage}</p>
+                                                        </div>
+                                                        {dm.lastMessageTimestamp && (
+                                                            <span className="text-[9px] text-slate-400 whitespace-nowrap">
+                                                                msg
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
                                     )}
                                 </motion.div>
                             )}

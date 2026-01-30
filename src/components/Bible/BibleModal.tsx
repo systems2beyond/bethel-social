@@ -9,7 +9,10 @@ import { cn } from '@/lib/utils';
 import BibleReader from './BibleReader';
 
 export default function BibleModal() {
-    const { isOpen, closeBible, reference, version } = useBible();
+    const {
+        isOpen, closeBible, reference, version,
+        openStudy, setPendingNoteContent, setPendingNoteTitle
+    } = useBible();
     const pathname = usePathname();
     const prevPathname = React.useRef(pathname);
 
@@ -86,7 +89,14 @@ export default function BibleModal() {
 
                             {/* Content Area */}
                             <div className="flex-1 overflow-hidden relative bg-amber-50/30 dark:bg-zinc-950/50 overscroll-contain">
-                                <BibleReader />
+                                <BibleReader
+                                    onInsertNote={(content) => {
+                                        setPendingNoteContent(content);
+                                        setPendingNoteTitle(`${reference.book} ${reference.chapter}`);
+                                        openStudy();
+                                        closeBible();
+                                    }}
+                                />
                             </div>
                         </motion.div>
                     </div>
