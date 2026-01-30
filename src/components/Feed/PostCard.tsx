@@ -106,11 +106,15 @@ const YouTubeFeedPlayer = React.forwardRef<VideoPlayerRef, { url: string }>(({ u
         },
         pause: () => {
             if (iframeRef.current?.contentWindow) {
-                iframeRef.current.contentWindow.postMessage(JSON.stringify({
-                    event: 'command',
-                    func: 'pauseVideo',
-                    args: []
-                }), '*');
+                try {
+                    iframeRef.current.contentWindow.postMessage(JSON.stringify({
+                        event: 'command',
+                        func: 'pauseVideo',
+                        args: []
+                    }), '*');
+                } catch (e) {
+                    console.error('[YouTubePlayer] Failed to send pause command', e);
+                }
             }
         }
     }));
@@ -155,13 +159,14 @@ const YouTubeFeedPlayer = React.forwardRef<VideoPlayerRef, { url: string }>(({ u
     if (!origin) return <div className="w-full h-full bg-black/10 animate-pulse" />;
 
     return (
-        <div className="aspect-video bg-black">
+        <div className="aspect-video bg-black relative">
             <iframe
                 ref={iframeRef}
-                src={`https://www.youtube.com/embed/${videoId}?enablejsapi=1&autoplay=0&mute=1&controls=1&playsinline=1&rel=0&origin=${origin}`}
+                src={`https://www.youtube.com/embed/${videoId}?enablejsapi=1&autoplay=0&mute=1&controls=1&playsinline=1&rel=0&origin=${encodeURIComponent(origin)}&widget_referrer=${encodeURIComponent(origin)}`}
                 className="w-full h-full"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
+                onLoad={() => console.log(`[YouTubePlayer] Iframe loaded for ${videoId}`)}
             />
         </div>
     );

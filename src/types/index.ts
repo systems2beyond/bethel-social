@@ -204,6 +204,8 @@ export interface Comment {
     isAi?: boolean;
     parentId?: string; // For nested replies
     likes?: number;
+    type?: string;
+    metadata?: any;
 }
 
 export interface Sermon {

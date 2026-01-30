@@ -5,7 +5,7 @@ import { Sermon } from '@/types';
 
 export interface SearchResult {
     id: string;
-    type: 'bible' | 'sermon' | 'note';
+    type: 'bible' | 'sermon' | 'note' | 'message';
     title: string;
     subtitle?: string;
     description?: string; // snippets
@@ -18,12 +18,14 @@ export interface SearchResult {
     date?: string | number | Date;
     content?: string;
     timestamp?: number | Date;
+    conversationId?: string; // Added for messages
 }
 
 export interface UnifiedSearchResults {
     bible: SearchResult[];
     sermons: SearchResult[];
     notes: SearchResult[];
+    messages: SearchResult[]; // Added
     web?: any[];
     topics?: any[];
     videos?: any[];
@@ -78,7 +80,7 @@ export class UnifiedSearchService {
 
     private async searchNotes(term: string, userId: string): Promise<SearchResult[]> {
         if (!userId) return [];
-        // Searching Firestore strings startsWith is easy, 'includes' is hard/impossible without full text search like Algolia.
+        // Searching Firestore strings startsWith is easy, 'includes' is hard/impossible without full text search.
         // For "Raycast feel" on small datasets, we can fetch user's recent notes.
         // Assuming user has < 100 notes, we can fetch all metadata and filter client-side.
 
@@ -114,8 +116,30 @@ export class UnifiedSearchService {
         }
     }
 
+    private async searchMessages(term: string, userId: string): Promise<SearchResult[]> {
+        if (!userId) return [];
+        try {
+            const { messageIndex } = await import('./message-index');
+            const hits = await messageIndex.search(term);
+
+            return hits.map(h => ({
+                id: h.id as string,
+                type: 'message' as const,
+                title: h.authorName as string || 'User',
+                subtitle: h.content as string,
+                description: h.content as string, // Orama highlighting can be added later if needed
+                timestamp: h.timestamp as number,
+                conversationId: h.conversationId as string,
+                metadata: h
+            }));
+        } catch (e) {
+            console.error("Failed to search messages via Orama", e);
+            return [];
+        }
+    }
+
     async search(term: string, userId?: string, version: string = 'kjv'): Promise<UnifiedSearchResults> {
-        if (!term.trim()) return { bible: [], sermons: [], notes: [] };
+        if (!term.trim()) return { bible: [], sermons: [], notes: [], messages: [] };
 
         // 1. Bible Search (Orama) - Increase limit to 50 for better context
         const biblePromise = bibleSearch.search(term, version, { limit: 50 }).then(hits =>
@@ -185,12 +209,23 @@ export class UnifiedSearchService {
             }
         })();
 
-        const [bible, sermons, notes, webData, videos] = await Promise.all([biblePromise, sermonsPromise, notesPromise, webPromise, videoPromise]);
+        // 6. Messages (Phase 3: Orama)
+        const messagesPromise = userId ? this.searchMessages(term, userId) : Promise.resolve([]);
+
+        const [bible, sermons, notes, webData, videos, messages] = await Promise.all([
+            biblePromise,
+            sermonsPromise,
+            notesPromise,
+            webPromise,
+            videoPromise,
+            messagesPromise
+        ]);
 
         return {
             bible,
             sermons,
             notes,
+            messages,
             web: webData.web,
             topics: webData.topics,
             videos

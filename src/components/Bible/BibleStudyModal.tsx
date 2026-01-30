@@ -168,7 +168,7 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
     // Search State
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]); // Deprecated, but keeping for compatibility if needed? No, let's switch.
-    const [detailedResults, setDetailedResults] = useState<UnifiedSearchResults & { web?: any[], topics?: any[], videos?: any[] }>({ bible: [], sermons: [], notes: [], web: [], topics: [], videos: [] });
+    const [detailedResults, setDetailedResults] = useState<UnifiedSearchResults & { web?: any[], topics?: any[], videos?: any[] }>({ bible: [], sermons: [], notes: [], messages: [], web: [], topics: [], videos: [] });
     // Video Focus State - utilize context now
     const [quickNoteContent, setQuickNoteContent] = useState('');
     const [isBibleExpanded, setIsBibleExpanded] = useState(false);
@@ -192,7 +192,7 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
     const [searchHistory, setSearchHistory] = useState<string[]>([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
     // Unified Suggestions State
-    const [unifiedSuggestions, setUnifiedSuggestions] = useState<UnifiedSearchResults>({ bible: [], sermons: [], notes: [] });
+    const [unifiedSuggestions, setUnifiedSuggestions] = useState<UnifiedSearchResults>({ bible: [], sermons: [], notes: [], messages: [] });
 
     const searchInputRef = useRef<HTMLInputElement>(null);
     const searchResultsContainerRef = useRef<HTMLDivElement>(null);
@@ -210,7 +210,7 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                 const results = await unifiedSearch.search(searchQuery, user?.uid, searchVersion);
                 setUnifiedSuggestions(results);
             } else {
-                setUnifiedSuggestions({ bible: [], sermons: [], notes: [] });
+                setUnifiedSuggestions({ bible: [], sermons: [], notes: [], messages: [] });
             }
         }, 200); // Fast debounce for type-ahead
         return () => clearTimeout(timer);
