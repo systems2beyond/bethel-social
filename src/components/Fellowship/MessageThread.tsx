@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { useSearchParams } from 'next/navigation';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, deleteDoc, setDoc, increment, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { Comment } from '@/types'; // Using Comment type for Messages as structure is similar
@@ -85,7 +86,29 @@ export const MessageThread: React.FC<MessageThreadProps> = ({ conversationId, on
         });
 
         return () => unsubscribe();
+        return () => unsubscribe();
     }, [conversationId]);
+
+    const searchParams = useSearchParams();
+
+    // Auto-scroll to message from URL
+    useEffect(() => {
+        const messageId = searchParams.get('messageId');
+        if (messageId && messages.length > 0) {
+            // Slight delay to ensure rendering
+            setTimeout(() => {
+                const element = document.getElementById(`message-${messageId}`);
+                if (element) {
+                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    // Highlight effect
+                    element.classList.add('ring-2', 'ring-indigo-500', 'ring-offset-2', 'dark:ring-offset-zinc-900', 'transition-all', 'duration-1000');
+                    setTimeout(() => {
+                        element.classList.remove('ring-2', 'ring-indigo-500', 'ring-offset-2', 'dark:ring-offset-zinc-900');
+                    }, 3000);
+                }
+            }, 500);
+        }
+    }, [messages, searchParams]);
 
     const handleEmojiClick = (emojiData: EmojiClickData) => {
         setNewMessage(prev => prev + emojiData.emoji);
@@ -111,14 +134,15 @@ export const MessageThread: React.FC<MessageThreadProps> = ({ conversationId, on
                 parentId: replyingTo ? replyingTo.id : (focusedMessageId || null)
             };
 
-            await addDoc(getMessagesCollection(), messageData);
+            const newMsgRef = await addDoc(getMessagesCollection(), messageData);
 
             // Update conversation last message
             await updateDoc(getConversationRef(), {
                 lastMessage: newMessage,
                 lastMessageTimestamp: Date.now(),
                 lastMessageAuthorId: user.uid,
-                readBy: [user.uid] // Only sender has read the new message
+                readBy: [user.uid], // Only sender has read the new message
+                lastMessageId: newMsgRef.id
             });
 
             if (onMessageSent) {
@@ -213,7 +237,7 @@ export const MessageThread: React.FC<MessageThreadProps> = ({ conversationId, on
         }
 
         return (
-            <div className={`relative ${depth > 0 ? 'mt-3' : 'mt-4'}`}>
+            <div id={`message-${message.id}`} className={`relative ${depth > 0 ? 'mt-3' : 'mt-4'}`}>
                 {/* Visual Connector for thread context (only if displaying ancestors) */}
                 {depth === 0 && !isFocused && focusedMessageId && (
                     <div className="absolute left-[1.35rem] top-10 bottom-[-1rem] w-0.5 bg-slate-200 dark:bg-zinc-800" />

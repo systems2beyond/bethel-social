@@ -196,17 +196,32 @@ export function LocalActivitySidebar({ className }: { className?: string }) {
     const recentItems = useMemo(() => {
         const allItems = [
             ...invitations.map(i => ({ ...i, itemType: 'invite' as const })),
-            ...notifications.map(n => ({ ...n, itemType: 'notification' as const }))
+            ...notifications.map(n => ({ ...n, itemType: 'notification' as const })),
+            ...recentDMs.map(dm => ({
+                ...dm,
+                itemType: 'message' as const,
+                createdAt: dm.lastMessageTimestamp,
+                fromUserId: dm.lastMessageAuthorId,
+                message: dm.lastMessage,
+                viewed: dm.readBy && user ? dm.readBy.includes(user.uid) : false
+            }))
         ];
 
         allItems.sort((a, b) => {
-            const dateA = a.createdAt?.toDate?.() || new Date(0);
-            const dateB = b.createdAt?.toDate?.() || new Date(0);
+            const getDate = (d: any) => {
+                if (!d) return new Date(0);
+                if (typeof d === 'number') return new Date(d);
+                if (d?.toDate) return d.toDate();
+                if (d instanceof Date) return d;
+                return new Date(0);
+            };
+            const dateA = getDate(a.createdAt);
+            const dateB = getDate(b.createdAt);
             return dateB.getTime() - dateA.getTime();
         });
 
         return allItems.slice(0, MAX_RECENT_ITEMS);
-    }, [invitations, notifications]);
+    }, [invitations, notifications, recentDMs, user]);
 
     // Live Note Sessions (Filtered for user)
     const localScrolls = useMemo(() => {
@@ -217,8 +232,14 @@ export function LocalActivitySidebar({ className }: { className?: string }) {
         const allPotentialScrolls = [...invitations, ...sentInvitations]
             .filter(item => item.type === 'scroll')
             .sort((a, b) => {
-                const dateA = a.createdAt?.toDate?.() || new Date(0);
-                const dateB = b.createdAt?.toDate?.() || new Date(0);
+                const getDate = (d: any) => {
+                    if (!d) return new Date(0);
+                    if (typeof d === 'number') return new Date(d);
+                    if (d?.toDate) return d.toDate();
+                    return new Date(0);
+                };
+                const dateA = getDate(a.createdAt);
+                const dateB = getDate(b.createdAt);
                 return dateB.getTime() - dateA.getTime();
             });
 
@@ -251,9 +272,15 @@ export function LocalActivitySidebar({ className }: { className?: string }) {
         setIsExpanded(false);
     };
 
-    const handleItemClick = async (item: any, type: 'invite' | 'notification') => {
+    const handleItemClick = async (item: any, type: 'invite' | 'notification' | 'message') => {
         console.log('handleItemClick called:', { item, type });
         markAsViewed(item.id, type);
+
+        if (type === 'message') {
+            router.push(`/fellowship?tab=community&conversationId=${item.id}&messageId=${item.lastMessageId || ''}`);
+            setIsExpanded(false);
+            return;
+        }
 
         // For Group Invites and Mentions
         if (item.type === 'group_invite' || item.type === 'mention' || item.groupId) {
@@ -913,6 +940,7 @@ function RecentActivityItem({ item, usersMap, onClick }: { item: any; usersMap: 
     const fromUid = item.fromUserId || item.fromUser?.uid;
     const fromUser = usersMap[fromUid] || item.fromUser || { displayName: 'User' };
     const isInvite = item.itemType === 'invite';
+    const isMessage = item.itemType === 'message';
 
     return (
         <div
@@ -946,7 +974,9 @@ function RecentActivityItem({ item, usersMap, onClick }: { item: any; usersMap: 
                         ? (item.type === 'group_invite'
                             ? ` invited you to join "${item.groupName || 'a group'}"`
                             : ` shared "${(item.noteTitle || item.title || 'Untitled').slice(0, 20)}${(item.noteTitle || item.title || '').length > 20 ? '...' : ''}"`)
-                        : `: ${(item.message || item.text || 'Update').slice(0, 25)}...`
+                        : isMessage
+                            ? `: ${item.message}`
+                            : `: ${(item.message || item.text || 'Update').slice(0, 25)}...`
                     }
                 </p>
                 <span className="text-[8px] text-slate-400 flex items-center gap-1 mt-0.5">
@@ -962,7 +992,7 @@ function RecentActivityItem({ item, usersMap, onClick }: { item: any; usersMap: 
                     ? "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400"
                     : "bg-slate-100 dark:bg-slate-800 text-slate-500"
             )}>
-                {item.type === 'group_invite' ? <Users className="w-3 h-3" /> : (isInvite ? <ScrollText className="w-3 h-3" /> : <Bell className="w-3 h-3" />)}
+                {item.type === 'group_invite' ? <Users className="w-3 h-3" /> : (isInvite ? <ScrollText className="w-3 h-3" /> : (isMessage ? <MessageSquare className="w-3 h-3" /> : <Bell className="w-3 h-3" />))}
             </div>
         </div>
     );

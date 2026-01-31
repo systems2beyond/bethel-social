@@ -16,7 +16,7 @@ import { useActivity } from '@/context/ActivityContext';
 import { EmptyState } from '@/components/Fellowship/EmptyState';
 import { DirectMessages } from '@/components/Fellowship/DirectMessages';
 
-export default function FellowshipPage() {
+function FellowshipContent() {
     const { user } = useAuth();
     const {
         invitations,
@@ -39,10 +39,20 @@ export default function FellowshipPage() {
         }
     };
 
+    const searchParams = useSearchParams();
+
+    React.useEffect(() => {
+        const tab = searchParams.get('tab');
+        if (tab === 'gatherings' || tab === 'studies' || tab === 'community') {
+            setActiveTab(tab);
+        }
+    }, [searchParams]);
+
+    // Sent Invitations (Index: fromUser.uid + createdAt)
     React.useEffect(() => {
         if (!user) return;
 
-        // Sent Invitations (Index: fromUser.uid + createdAt)
+        // Sent Invitations logic...
         const qSent = query(
             collection(db, 'invitations'),
             where('fromUser.uid', '==', user.uid),
@@ -365,6 +375,18 @@ export default function FellowshipPage() {
                 )}
             </main>
         </div>
+    );
+}
+
+export default function FellowshipPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex items-center justify-center h-screen bg-gray-50 dark:bg-black">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500" />
+            </div>
+        }>
+            <FellowshipContent />
+        </Suspense>
     );
 }
 

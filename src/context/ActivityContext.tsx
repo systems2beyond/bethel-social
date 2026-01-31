@@ -21,7 +21,7 @@ interface ActivityContextType {
     usersMap: Record<string, any>;
     selectedResource: any | null;
     setSelectedResource: (resource: any | null) => void;
-    markAsViewed: (id: string, type: 'invite' | 'notification') => Promise<void>;
+    markAsViewed: (id: string, type: 'invite' | 'notification' | 'message') => Promise<void>;
 }
 
 const ActivityContext = createContext<ActivityContextType | undefined>(undefined);
@@ -35,14 +35,21 @@ export function ActivityProvider({ children }: { children: ReactNode }) {
     const [usersMap, setUsersMap] = useState<Record<string, any>>({});
     const [selectedResource, setSelectedResource] = useState<any | null>(null);
 
-    const markAsViewed = useCallback(async (id: string, type: 'invite' | 'notification') => {
+    const markAsViewed = useCallback(async (id: string, type: 'invite' | 'notification' | 'message') => {
         if (!user?.uid) return;
         try {
-            const collectionName = type === 'invite' ? 'invitations' : 'notifications';
-            const { updateDoc } = await import('firebase/firestore');
-            await updateDoc(doc(db, collectionName, id), {
-                viewed: true
-            });
+            if (type === 'message') {
+                const { updateDoc, arrayUnion } = await import('firebase/firestore');
+                await updateDoc(doc(db, 'direct_messages', id), {
+                    readBy: arrayUnion(user.uid)
+                });
+            } else {
+                const collectionName = type === 'invite' ? 'invitations' : 'notifications';
+                const { updateDoc } = await import('firebase/firestore');
+                await updateDoc(doc(db, collectionName, id), {
+                    viewed: true
+                });
+            }
         } catch (e) {
             console.error(`Error marking ${type} as viewed:`, e);
         }

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { useSearchParams } from 'next/navigation';
 import { db } from '@/lib/firebase';
 import { collection, query, where, orderBy, onSnapshot, getDoc, doc, serverTimestamp, setDoc, limit, getDocs, addDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { User, Search, Plus, MessageSquare, MoreHorizontal, Phone, Video, Info, UserPlus, X, Loader2, MessageCircle } from 'lucide-react';
@@ -39,6 +40,15 @@ export function DirectMessages() {
     const [isSearchingMessages, setIsSearchingMessages] = useState(false);
     const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
     const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
+
+    // Sync with URL params
+    const searchParams = useSearchParams();
+    useEffect(() => {
+        const conversationIdParam = searchParams.get('conversationId');
+        if (conversationIdParam) {
+            setSelectedConversationId(conversationIdParam);
+        }
+    }, [searchParams]);
 
     // Recent users stats (derived from conversations)
     const [recentUsers, setRecentUsers] = useState<any[]>([]);
@@ -243,7 +253,7 @@ export function DirectMessages() {
 
             // 1. Send to the current conversation if exists
             if (selectedConversationId) {
-                await addDoc(collection(db, 'direct_messages', selectedConversationId, 'messages'), {
+                const inviteRef = await addDoc(collection(db, 'direct_messages', selectedConversationId, 'messages'), {
                     conversationId: selectedConversationId,
                     author: {
                         id: user.uid,
@@ -262,7 +272,8 @@ export function DirectMessages() {
                 await updateDoc(doc(db, 'direct_messages', selectedConversationId), {
                     lastMessage: "Sent a video call invitation",
                     lastMessageTimestamp: Date.now(),
-                    lastMessageAuthorId: user.uid
+                    lastMessageAuthorId: user.uid,
+                    lastMessageId: inviteRef.id
                 });
             }
 
@@ -592,10 +603,6 @@ export function DirectMessages() {
                                     <h3 className="font-bold text-gray-900 dark:text-white text-sm">
                                         {getConversationDisplay(selectedConversation).name}
                                     </h3>
-                                    <span className="flex items-center gap-1.5 text-[10px] text-green-600 dark:text-green-400 font-medium">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                                        Active now
-                                    </span>
                                 </div>
                             </div>
 
