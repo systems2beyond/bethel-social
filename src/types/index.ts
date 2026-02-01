@@ -326,4 +326,147 @@ export interface Visitor {
     isFirstTime?: boolean;
     source?: 'qr-code' | 'manual' | 'website';
     auditLog?: { timestamp: any; action: string; note?: string }[];
+
+    // CRM Extensions (reusable for congregation management)
+    pipelineStage?: 'new_guest' | 'contacted' | 'second_visit' | 'ready_for_membership' | 'converted' | string;
+    boardId?: string; // Links visitor to a specific pipeline board
+    tags?: string[]; // Tag IDs or names
+    customFields?: Record<string, any>; // Flexible data storage
+    lastActivityAt?: any; // Firestore Timestamp
+    assignedTo?: string; // Admin/pastor user ID
+}
+
+// CRM System Types (reusable across visitors and members)
+export interface PersonTag {
+    id: string;
+    name: string;
+    color: string; // Hex color for visual grouping
+    category?: 'visitor' | 'member' | 'volunteer' | 'custom';
+    createdAt: any;
+    createdBy: string;
+}
+
+export interface PersonActivity {
+    id: string;
+    personId: string; // Can be visitor ID or user ID
+    personType: 'visitor' | 'member'; // Determines which collection
+    activityType: 'status_change' | 'tag_added' | 'tag_removed' | 'note_added' | 'contacted' | 'form_submitted' | 'workflow_enrolled' | 'custom';
+    description: string; // Human-readable description
+    metadata?: Record<string, any>; // Extra data (e.g., old/new status, tag name, etc.)
+    createdAt: any; // Firestore Timestamp
+    createdBy?: string; // User ID who performed the action (null for automated)
+    automated?: boolean; // True if triggered by workflow
+}
+
+export interface WorkflowTrigger {
+    type: 'form_submitted' | 'tag_applied' | 'status_changed' | 'time_based' | 'custom_event';
+    config: Record<string, any>; // Flexible config based on trigger type
+}
+
+export interface WorkflowAction {
+    type: 'send_email' | 'send_message' | 'apply_tag' | 'change_status' | 'create_task' | 'wait';
+    config: Record<string, any>; // Flexible config based on action type
+    delayMinutes?: number; // Optional delay before executing
+}
+
+export interface Workflow {
+    id: string;
+    name: string;
+    description?: string;
+    status: 'draft' | 'active' | 'paused';
+    trigger: WorkflowTrigger;
+    actions: WorkflowAction[];
+    targetType: 'visitor' | 'member' | 'both'; // Who this workflow applies to
+    createdAt: any;
+    createdBy: string;
+    updatedAt: any;
+}
+
+export interface WorkflowEnrollment {
+    id: string;
+    workflowId: string;
+    personId: string;
+    personType: 'visitor' | 'member';
+    status: 'active' | 'completed' | 'failed';
+    currentActionIndex: number;
+    enrolledAt: any;
+    completedAt?: any;
+    nextActionAt?: any; // When the next action should run
+}
+
+// Multi-Board Pipeline System
+export interface PipelineBoard {
+    id: string;
+    name: string;
+    type: 'sunday_service' | 'event' | 'custom';
+    linkedEventId?: string; // If type === 'event'
+    stages: PipelineStage[];
+    createdBy: string;
+    createdAt: any;
+    updatedAt: any;
+    archived: boolean;
+}
+
+export interface PipelineStage {
+    id: string;
+    name: string; // Editable by admin
+    order: number;
+    color: string; // Hex color for visual distinction
+    icon?: string; // Lucide icon name
+}
+
+export interface StageAutomation {
+    id: string;
+    stageId: string; // Which stage triggers this
+    boardId: string; // Which board this belongs to
+    type: 'send_email' | 'send_dm' | 'apply_tag' | 'create_task' | 'wait';
+    config: EmailAutomationConfig | DMAutomationConfig | TagAutomationConfig;
+    enabled: boolean;
+    createdBy: string;
+    createdAt: any;
+}
+
+export interface EmailAutomationConfig {
+    templateId?: string; // References email template
+    sendDelay: number; // Minutes to wait before sending (0 = immediate)
+    subject: string;
+    fromName: string;
+    fromEmail: string;
+    body: string; // HTML content
+}
+
+export interface DMAutomationConfig {
+    messageTemplate: string;
+    sendDelay: number; // Minutes to wait
+}
+
+export interface TagAutomationConfig {
+    tagName: string;
+    action: 'add' | 'remove';
+}
+
+export interface AutomationExecution {
+    id: string;
+    automationId: string;
+    boardId: string;
+    stageId: string;
+    personId: string;
+    personType: 'visitor' | 'member';
+    executionType: 'email' | 'dm' | 'tag' | 'task';
+    status: 'scheduled' | 'sending' | 'sent' | 'delivered' | 'opened' | 'clicked' | 'failed';
+    scheduledFor?: any; // Firestore Timestamp
+    sentAt?: any;
+    deliveredAt?: any;
+    openedAt?: any;
+    clickedAt?: any;
+    failedAt?: any;
+    failureReason?: string;
+    metadata: {
+        emailId?: string;
+        subject?: string;
+        clicks?: { url: string; clickedAt: any }[];
+        dmId?: string;
+        tagName?: string;
+    };
+    createdAt: any;
 }

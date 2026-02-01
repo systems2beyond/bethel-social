@@ -226,7 +226,53 @@ service cloud.firestore {
         }
     }
 
-    // [DEBUG] GLOBAL FALLBACK - ALLOWS ALL FOR DEBUGGING 
-    match /{document=**} { allow read, write: if true; } 
+    // ---------------------------------------------------------
+    // 6. CRM & Visitor Management (Phase 1: Gap Closure)
+    // ---------------------------------------------------------
+
+    // Visitors Collection - Staff/Admin can manage, public can create (via /connect form)
+    match /visitors/{visitorId} {
+      allow read: if isAuthenticated() && (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'staff']);
+      allow create: if true; // Public can submit via connection card
+      allow update, delete: if isAuthenticated() && (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'staff']);
+    }
+
+    // Tags Collection - Staff/Admin can manage
+    match /tags/{tagId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAuthenticated() && (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'staff']);
+    }
+
+    // Activities Collection - Staff/Admin can read, system can write
+    match /activities/{activityId} {
+      allow read: if isAuthenticated() && (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'staff']);
+      allow create: if isAuthenticated(); // Any authenticated user can log activities
+      allow update, delete: if isSuperAdmin(); // Only super admin can modify/delete activity logs
+    }
+
+    // Workflows Collection - Staff/Admin only
+    match /workflows/{workflowId} {
+      allow read: if isAuthenticated() && (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'staff']);
+      allow create, update, delete: if isAuthenticated() && (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'staff']);
+    }
+
+    // Workflow Enrollments - Staff/Admin can read, system can write
+    match /workflow_enrollments/{enrollmentId} {
+      allow read: if isAuthenticated() && (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'staff']);
+      allow create: if isAuthenticated(); // System/automated workflows can enroll people
+      allow update: if isAuthenticated(); // Allow workflow progress updates
+      allow delete: if isSuperAdmin();
+    }
+
+    // Pipeline Boards - Staff/Admin can manage
+    match /pipeline_boards/{boardId} {
+      allow read: if isAuthenticated() && (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'staff']);
+      allow create, update, delete: if isAuthenticated() && (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'staff']);
+    }
+
+    // ---------------------------------------------------------
+    // [DEBUG] GLOBAL FALLBACK - ALLOWS ALL FOR DEBUGGING
+    // ---------------------------------------------------------
+    match /{document=**} { allow read, write: if true; }
   }
 }
