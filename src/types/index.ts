@@ -38,6 +38,15 @@ export interface FirestoreUser {
     customBibleSources?: any[]; // For custom bible versions
     theme?: string;
     createdAt?: any;
+
+    // Phase 1: Member Lifecycle Extensions
+    lifecycleStage?: 'visitor' | 'regular' | 'member' | 'leader';
+    familyId?: string;
+    customFields?: Record<string, any>; // e.g. { allergies: "peanuts" }
+    sacraments?: {
+        baptism?: { date: any; officiant: string; location: string };
+        confirmation?: { date: any };
+    };
 }
 
 export interface Post {
@@ -301,4 +310,20 @@ export interface Campaign {
     name: string;
     description?: string;
     createdAt?: any;
+}
+
+// Phase 1: Visitor Pipeline
+export interface Visitor {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email?: string;
+    phone?: string;
+    status: 'new' | 'contacted' | 'merged' | 'archived';
+    createdAt: any; // Firestore Timestamp
+    notes?: string;
+    prayerRequests?: string;
+    isFirstTime?: boolean;
+    source?: 'qr-code' | 'manual' | 'website';
+    auditLog?: { timestamp: any; action: string; note?: string }[];
 }

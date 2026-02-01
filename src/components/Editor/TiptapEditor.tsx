@@ -204,6 +204,44 @@ const CustomLink = Link.extend({
                 renderHTML: attributes => ({
                     'data-verse': attributes['data-verse'],
                 }),
+            },
+            target: {
+                default: null,
+                // Strip target attribute from verse links when parsing existing HTML
+                parseHTML: element => {
+                    const href = element.getAttribute('href');
+                    if (href && href.startsWith('verse://')) {
+                        return null; // Don't preserve target for verse links
+                    }
+                    return element.getAttribute('target');
+                },
+                renderHTML: attributes => {
+                    // Don't render target attribute for verse links
+                    const href = attributes.href || '';
+                    if (href.startsWith('verse://')) {
+                        return {};
+                    }
+                    return attributes.target ? { target: attributes.target } : {};
+                },
+            },
+            rel: {
+                default: null,
+                // Strip rel attribute from verse links when parsing existing HTML
+                parseHTML: element => {
+                    const href = element.getAttribute('href');
+                    if (href && href.startsWith('verse://')) {
+                        return null; // Don't preserve rel for verse links
+                    }
+                    return element.getAttribute('rel');
+                },
+                renderHTML: attributes => {
+                    // Don't render rel attribute for verse links
+                    const href = attributes.href || '';
+                    if (href.startsWith('verse://')) {
+                        return {};
+                    }
+                    return attributes.rel ? { rel: attributes.rel } : {};
+                },
             }
         };
     },
@@ -214,6 +252,9 @@ const CustomLink = Link.extend({
             autolink: true,
             protocols: ['http', 'https', 'mailto', 'verse'],
             validate: (href: string) => /^https?:\/\//.test(href) || href.startsWith('verse://'),
+            HTMLAttributes: {
+                class: 'verse-link text-blue-600 dark:text-blue-400 hover:underline cursor-pointer font-medium hover:text-blue-800 dark:hover:text-blue-300 transition-colors',
+            },
         } as any;
     },
 });
@@ -574,8 +615,8 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
             },
             handleClick: (view, pos, event) => {
                 const attrs = view.state.doc.resolve(pos).marks().find(m => m.type.name === 'link')?.attrs;
-                if (attrs && onLinkClick) {
-                    onLinkClick(attrs.href);
+                if (attrs && onLinkClickRef.current) {
+                    onLinkClickRef.current(attrs.href);
                     return true;
                 }
                 return false;
@@ -779,11 +820,14 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
                 const dataVerse = link.getAttribute('data-verse');
                 const isVerseLink = (href && href.startsWith('verse://')) || !!dataVerse;
 
-                if (isVerseLink && onLinkClickRef.current) {
-                    const uri = (href && href.startsWith('verse://')) ? href : `verse://${dataVerse}`;
-                    onLinkClickRef.current(uri);
+                if (isVerseLink) {
                     e.preventDefault();
                     e.stopPropagation();
+
+                    if (onLinkClickRef.current) {
+                        const uri = (href && href.startsWith('verse://')) ? href : `verse://${dataVerse}`;
+                        onLinkClickRef.current(uri);
+                    }
                     return false;
                 }
             }

@@ -54,7 +54,7 @@ export function FellowshipView({ content, collaborationId, userName, userColor, 
 
     const [editor, setEditor] = useState<Editor | null>(null);
     const { setActivityPanelOpen, notifications, invitations } = useActivity();
-    const { openCollaboration } = useBible();
+    const { openBible } = useBible();
 
     // Auto-open Activity panel if ?activity=open in URL
     const searchParams = useSearchParams();
@@ -71,14 +71,33 @@ export function FellowshipView({ content, collaborationId, userName, userColor, 
     // Derived: Current Scroll Title (mock or from invite) - MOVED UP for access in callbacks
     const activeInvite = invitations.find(i => i.resourceId === scrollId);
     const activeScrollTitle = activeInvite?.title || "Fellowship Scroll";
+
+    // Handle verse link clicks
+    const handleLinkClick = useCallback((href: string) => {
+        if (href.startsWith('verse://')) {
+            const ref = decodeURIComponent((href || '').replace('verse://', ''));
+            const match = ref.match(/((?:[123]\s)?[A-Z][a-z]+\.?)\s(\d+):(\d+)(?:-(\d+))?/);
+            if (match) {
+                const book = match[1].trim();
+                const chapter = parseInt(match[2]);
+                const startVerse = parseInt(match[3]);
+                const endVerse = match[4] ? parseInt(match[4]) : undefined;
+                openBible({ book, chapter, verse: startVerse, endVerse }, true);
+            }
+        } else {
+            window.open(href, '_blank');
+        }
+    }, [openBible]);
+
     // This isolates Tiptap configuration from parent re-renders unless primitives change
     const editorProps = React.useMemo(() => ({
         content: content,
         onChange: (html: string) => { }, // Read-only from this level in theory, but Tiptap handles real-time
         collaborationId: collaborationId,
         user: { name: userName, color: userColor, uid: user?.uid },
-        onAskAi: onAskAi
-    }), [content, collaborationId, userName, userColor, onAskAi]);
+        onAskAi: onAskAi,
+        onLinkClick: handleLinkClick
+    }), [content, collaborationId, userName, userColor, onAskAi, handleLinkClick]);
 
 
     // ============== COLLABORATION HANDLERS ==============
@@ -290,7 +309,6 @@ export function FellowshipView({ content, collaborationId, userName, userColor, 
     const handleRejectSuggestion = useCallback((suggestionId: string) => {
         setSuggestions(s => s.filter(x => x.id !== suggestionId));
     }, []);
-
 
     // --- DEBUG LOGGING ---
     const renderLogs = {

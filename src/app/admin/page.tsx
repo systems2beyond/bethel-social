@@ -406,10 +406,10 @@ export default function AdminPage() {
                                                 <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 mb-4 group-hover:bg-blue-600 group-hover:text-white transition-colors">
                                                     <Users className="w-6 h-6" />
                                                 </div>
-                                                <h3 className="text-lg font-bold text-gray-900 mb-1">User Directory</h3>
-                                                <p className="text-sm text-gray-600 mb-4 h-10">Manage permissions, roles, and user accounts.</p>
+                                                <h3 className="text-lg font-bold text-gray-900 mb-1">People Hub</h3>
+                                                <p className="text-sm text-gray-600 mb-4 h-10">Manage members, visitors, and pipeline.</p>
                                                 <div className="flex items-center text-blue-600 text-sm font-medium group-hover:translate-x-1 transition-transform">
-                                                    Manage Users <ArrowUpRight className="w-4 h-4 ml-1" />
+                                                    Manage People <ArrowUpRight className="w-4 h-4 ml-1" />
                                                 </div>
                                             </div>
                                         </Link>

@@ -11,6 +11,34 @@ import { formatAiResponse } from '@/lib/utils/ai-formatting';
 import { useBible } from '@/context/BibleContext';
 import AiLessonCreator from './AiLessonCreator';
 
+// Helper function to copy HTML content with both HTML and plain text formats
+async function copyHtmlToClipboard(html: string): Promise<void> {
+    try {
+        // Create plain text version (strip all HTML tags for compatibility)
+        const temp = document.createElement('div');
+        temp.innerHTML = html;
+        const plainText = temp.textContent || '';
+
+        // Use the new Clipboard API to write both formats
+        const blob = new Blob([html], { type: 'text/html' });
+        const textBlob = new Blob([plainText], { type: 'text/plain' });
+
+        await navigator.clipboard.write([
+            new ClipboardItem({
+                'text/html': blob,
+                'text/plain': textBlob
+            })
+        ]);
+    } catch (err) {
+        // Fallback to plain text only if the HTML clipboard fails
+        console.error('Failed to copy HTML to clipboard, using plain text fallback', err);
+        const temp = document.createElement('div');
+        temp.innerHTML = html;
+        const plainText = temp.textContent || '';
+        await navigator.clipboard.writeText(plainText);
+    }
+}
+
 // Helper component to handle native DOM events for AI messages
 function AiMessageContent({ content, openBible, onClose, onAction, isLast }: { content: string, openBible: any, onClose: () => void, onAction?: (action: string, data: string) => void, isLast?: boolean }) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -678,36 +706,6 @@ export default function BibleAiChatModal({ isOpen, onClose, contextId, contextTi
                                     <button
                                         onClick={() => {
                                             if (pendingInsertContent) {
-                                                // "Insert Note" usually targets personal notes, but in Study Mode
-                                                // the parent might route it differently. 
-                                                // HOWEVER, `onInsertToNotes` passed to this modal likely targets 
-                                                // the active editor. If Fellowship is active, that IS the Fellowship editor.
-                                                // So actually, if we are in Study/Fellowship, the "Personal Notes" might NOT be accessible 
-                                                // unless we have a separate handler.
-
-                                                // ASSUMPTION: The `onInsertToNotes` prop currently writes to whatever editor 
-                                                // is available. In Fellowship view, that's the shared editor.
-                                                // If we want to write to "Personal Notes" (Sidebar), we might need a different function 
-                                                // or we assume standard `onInsertToNotes` IS personal, and we need a NEW way to write to Fellowship?
-
-                                                // WAIT: `BibleReader` passes `onInsertNote`.
-                                                // `BibleStudyModal` passes `onInsertNote` which writes to... the SIDEBAR (Personal).
-                                                // `FellowshipView` receives `onAskAi` but `BibleAiChatModal` is global.
-
-                                                // Correction:
-                                                // If we are in `FellowshipView`, we want to write to the COLLAB editor.
-                                                // But `BibleAiChatModal` is usually opened from the Sidebar or Reader.
-
-                                                // If we click "Fellowship Scroll", we want to insert into the MAIN editor.
-                                                // If we click "Personal Notes", we want to insert into the SIDEBAR.
-
-                                                // Currently `onInsertToNotes` likely points to the Sidebar notes (Personal).
-                                                // To write to Fellowship, we might need a new prop or a callback.
-
-                                                // For now, let's assume `onInsertToNotes` = Personal.
-                                                // And for Fellowship, we might need to emit an event or just use the same one 
-                                                // IF `BibleStudyModal` handles routing.
-
                                                 onInsertToNotes(pendingInsertContent);
                                                 setPendingInsertContent(null);
                                                 setTimeout(() => onClose(), 100);
@@ -719,61 +717,19 @@ export default function BibleAiChatModal({ isOpen, onClose, contextId, contextTi
                                             <FileText className="w-5 h-5" />
                                         </div>
                                         <div>
-                                            <p className="font-medium text-gray-900 dark:text-white text-sm">Personal Notes</p>
-                                            <p className="text-xs text-gray-500">Private to you</p>
+                                            <p className="font-medium text-gray-900 dark:text-white text-sm">Insert to Active Note</p>
+                                            <p className="text-xs text-gray-500">Adds to currently open note</p>
                                         </div>
                                     </button>
 
                                     <button
-                                        onClick={() => {
+                                        onClick={async () => {
                                             if (pendingInsertContent) {
-                                                // Convention: Prefix with [COLLAB] to tell parent handler to route to Collab?
-                                                // Or better, just insert it and let the user copy/paste? 
-                                                // NO, automation is key.
-
-                                                // Let's send a special signal or assume onInsertToNotes handles it if we pass a second arg? 
-                                                // No, prop is `(content: string) => void`.
-
-                                                // HACK/FEATURE: We will wrap it in a special tag or just pass it to `onInsertToNotes`.
-                                                // ISSUE: `onInsertToNotes` is bound to `handleInsertNote` in `BibleStudyModal`.
-                                                // That function writes to `localNotes`.
-
-                                                // TO FIX PROPERLY: We need a `onInsertToCollab` prop.
-                                                // Since I cannot change the parent `BibleStudyModal` easily right now without checking 
-                                                // if it's passed...
-
-                                                // Let's look at `BibleStudyModal` prop passing (I can't see it now).
-                                                // But I can guess.
-
-                                                // Safe Fallback: Insert to Personal with a note "Copy to Collab".
-                                                // Better: Pass `[COLLAB_INSERT]...` and handle in parent?
-                                                // For now, lets use Personal for both but clarify intent, 
-                                                // OR assume `onInsertToNotes` is the only path and we just differentiate visual intent.
-
-                                                // Actually, if I look at `BibleReader`... `onInsertNote` inserts to the sidebar.
-
-                                                // Let's just provide the "Personal Notes" option for now as the default 
-                                                // and maybe "Copy to Clipboard" for Collab if we can't write directly.
-                                                // OR...
-
-                                                // Let's assume the user WANTS to insert into the Collab.
-                                                // If I send it to `onInsertToNotes`, it goes to sidebar.
-                                                // We need a way to get it to the Collab editor.
-
-                                                // If I look at `FellowshipView`... it passes `onAskAi` to `TiptapEditor`.
-                                                // `FellowshipView` has no `onInsert` handler exposed to `BibleAiChatModal` directly 
-                                                // unless `BibleAiChatModal` is lifted up.
-
-                                                // Wait, `BibleAiChatModal` is rendered in `BibleStudyModal` likely.
-                                                // If I can't write to Collab easily, I'll add "Copy for Fellowship" 
-                                                // which copies to clipboard and closes.
-
-                                                navigator.clipboard.writeText(pendingInsertContent).then(() => {
-                                                    // Toast logic could go here
-                                                });
+                                                // Copy HTML content to clipboard (preserves verse links and formatting)
+                                                await copyHtmlToClipboard(pendingInsertContent);
                                                 setPendingInsertContent(null);
                                                 onClose();
-                                                alert("Content copied! Paste it into the Fellowship Scroll.");
+                                                alert("Content copied! Paste it anywhere you like.");
                                             }
                                         }}
                                         className="w-full py-3 px-4 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:hover:bg-indigo-900/30 rounded-xl transition-colors flex items-center gap-3 text-left group border border-indigo-100 dark:border-indigo-800/30"
@@ -782,8 +738,8 @@ export default function BibleAiChatModal({ isOpen, onClose, contextId, contextTi
                                             <Users className="w-5 h-5" />
                                         </div>
                                         <div>
-                                            <p className="font-medium text-gray-900 dark:text-white text-sm">Fellowship Scroll</p>
-                                            <p className="text-xs text-gray-500">Shared with group (Copy & Paste)</p>
+                                            <p className="font-medium text-gray-900 dark:text-white text-sm">Copy to Clipboard</p>
+                                            <p className="text-xs text-gray-500">Paste anywhere you like</p>
                                         </div>
                                     </button>
                                 </div>
