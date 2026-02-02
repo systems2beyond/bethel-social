@@ -37,45 +37,56 @@ export default function PeopleHubPage() {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 p-8">
-            <div className="max-w-6xl mx-auto">
-                <div className="mb-8">
-                    <Link href="/admin" className="text-sm text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200 mb-2 inline-block">
-                        ← Back to Dashboard
-                    </Link>
-                    <div className="flex items-center justify-between">
-                        <h1 className="text-3xl font-bold text-gray-900">People Hub</h1>
+        <div className="min-h-screen bg-zinc-950">
+            {/* Header */}
+            <div className="px-4 py-3 bg-zinc-900 border-b border-zinc-800">
+                <Link
+                    href="/admin"
+                    className="text-sm mb-2 inline-block text-zinc-500 hover:text-zinc-300"
+                >
+                    ← Back to Dashboard
+                </Link>
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h1 className="text-xl font-bold text-zinc-100">People Hub</h1>
+                        <p className="text-zinc-500 mt-0.5 text-sm">Manage your community member database and outreach pipeline.</p>
                     </div>
-                    <p className="text-gray-500 mt-1">Manage your community member database and visitor pipeline.</p>
-                </div>
 
-                {/* Tabs */}
-                <div className="bg-white p-1 rounded-xl border border-gray-200 w-fit mb-6 flex space-x-1">
-                    <button
-                        onClick={() => setActiveTab('directory')}
-                        className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'directory' ? 'bg-blue-50 text-blue-700 shadow-sm' : 'text-gray-600 hover:bg-gray-50'
+                    {/* Tabs */}
+                    <div className="bg-zinc-800 p-1 rounded-lg flex space-x-1">
+                        <button
+                            onClick={() => setActiveTab('directory')}
+                            className={`flex items-center space-x-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                                activeTab === 'directory'
+                                    ? 'bg-blue-500/20 text-blue-400'
+                                    : 'text-zinc-400 hover:text-zinc-200'
                             }`}
-                    >
-                        <Users className="w-4 h-4" />
-                        <span>Member Directory</span>
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('visitors')}
-                        className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'visitors' ? 'bg-yellow-50 text-yellow-700 shadow-sm' : 'text-gray-600 hover:bg-gray-50'
+                        >
+                            <Users className="w-4 h-4" />
+                            <span>Member Directory</span>
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('visitors')}
+                            className={`flex items-center space-x-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                                activeTab === 'visitors'
+                                    ? 'bg-amber-500/20 text-amber-400'
+                                    : 'text-zinc-400 hover:text-zinc-200'
                             }`}
-                    >
-                        <Milestone className="w-4 h-4" />
-                        <span>Visitor Pipeline</span>
-                    </button>
+                        >
+                            <Milestone className="w-4 h-4" />
+                            <span>Outreach Pipeline</span>
+                        </button>
+                    </div>
                 </div>
+            </div>
 
-                {/* Tab Content */}
+            {/* Tab Content */}
+            <div className={activeTab === 'directory' ? 'p-4 max-w-6xl mx-auto' : ''}>
                 {activeTab === 'directory' ? (
                     <DirectoryTab />
                 ) : (
                     <VisitorPipeline />
                 )}
-
             </div>
         </div>
     );
@@ -123,39 +134,39 @@ function DirectoryTab() {
     }
 
     return (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
             {/* Header / Filter placeholder */}
-            <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
-                <h3 className="font-semibold text-gray-700">Registered Users</h3>
-                <div className="text-xs text-gray-500">Total: {users.length}</div>
+            <div className="p-4 border-b border-zinc-800 flex justify-between items-center">
+                <h3 className="font-semibold text-zinc-200">Registered Users</h3>
+                <div className="text-xs text-zinc-500">Total: {users.length}</div>
             </div>
 
             <div className="overflow-x-auto">
                 <table className="w-full text-left">
-                    <thead className="bg-gray-50 border-b border-gray-200">
+                    <thead className="bg-zinc-800/50 border-b border-zinc-800">
                         <tr>
-                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">User</th>
-                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Email</th>
-                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Role</th>
-                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                            <th className="px-6 py-4 text-xs font-semibold text-zinc-400 uppercase tracking-wider">User</th>
+                            <th className="px-6 py-4 text-xs font-semibold text-zinc-400 uppercase tracking-wider">Email</th>
+                            <th className="px-6 py-4 text-xs font-semibold text-zinc-400 uppercase tracking-wider">Role</th>
+                            <th className="px-6 py-4 text-xs font-semibold text-zinc-400 uppercase tracking-wider">Actions</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100">
+                    <tbody className="divide-y divide-zinc-800">
                         {users.map((user) => (
-                            <tr key={user.uid} className="hover:bg-gray-50 transition-colors">
+                            <tr key={user.uid} className="hover:bg-zinc-800/50 transition-colors">
                                 <td className="px-6 py-4">
                                     <div className="flex items-center space-x-3">
-                                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                                        <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-400">
                                             <User className="w-4 h-4" />
                                         </div>
-                                        <span className="font-medium text-gray-900">{user.displayName || 'No Name'}</span>
+                                        <span className="font-medium text-zinc-100">{user.displayName || 'No Name'}</span>
                                     </div>
                                 </td>
-                                <td className="px-6 py-4 text-gray-600">{user.email}</td>
+                                <td className="px-6 py-4 text-zinc-400">{user.email}</td>
                                 <td className="px-6 py-4">
-                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${user.role === 'admin' ? 'bg-purple-100 text-purple-800' :
-                                        user.role === 'staff' ? 'bg-blue-100 text-blue-800' :
-                                            'bg-gray-100 text-gray-800'
+                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${user.role === 'admin' ? 'bg-purple-500/20 text-purple-400' :
+                                        user.role === 'staff' ? 'bg-blue-500/20 text-blue-400' :
+                                            'bg-zinc-700 text-zinc-300'
                                         }`}>
                                         {user.role === 'admin' && <Shield className="w-3 h-3 mr-1" />}
                                         {user.role || 'member'}
@@ -166,14 +177,14 @@ function DirectoryTab() {
                                         disabled={updating === user.uid || user.uid === userData?.uid}
                                         value={user.role || 'member'}
                                         onChange={(e) => handleRoleChange(user.uid, e.target.value)}
-                                        className="text-sm border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:opacity-50"
+                                        className="text-sm bg-zinc-800 border-zinc-700 text-zinc-200 rounded-md focus:border-blue-500 focus:ring-blue-500 disabled:opacity-50"
                                     >
                                         <option value="member">Member</option>
                                         <option value="staff">Staff</option>
                                         <option value="admin">Admin</option>
                                     </select>
                                     {updating === user.uid && (
-                                        <Loader2 className="w-4 h-4 animate-spin inline-ml-2 text-blue-600" />
+                                        <Loader2 className="w-4 h-4 animate-spin inline-ml-2 text-blue-400" />
                                     )}
                                 </td>
                             </tr>

@@ -19,7 +19,7 @@ export default function EventsListPage() {
     const router = useRouter();
 
     useEffect(() => {
-        if (!authLoading && userData?.churchId) {
+        if (!authLoading && userData) {
             loadEvents();
         } else if (!authLoading && !userData) {
             // Handle not logged in or no user data

@@ -26,12 +26,14 @@ export default function EventsPage() {
                 // 1. Fetch Events - REMOVED orderBy to ensure we get mixed types (Strings & Timestamps)
                 // 1. Fetch Events
                 // Query all events and filter client-side to handle potential data type mismatches (Strings vs Timestamps)
-                // [FIX] Must filter by churchId to satisfy Firestore rules
-                if (!userData?.churchId) {
-                    logs.push('No churchId found in userData, skipping fetch.');
-                    setLoading(false);
-                    return;
+                // [FIX] Resolve churchId: use userData if available, otherwise resolve from hostname
+                let activeChurchId = userData?.churchId;
+                if (!activeChurchId) {
+                    logs.push('No churchId in userData, attempting hostname resolution...');
+                    const { resolveChurchIdFromHostname } = await import('@/lib/tenant');
+                    activeChurchId = await resolveChurchIdFromHostname(window.location.hostname) || 'default_church';
                 }
+                logs.push(`Active ChurchId for fetch: ${activeChurchId}`);
 
                 const eventsQuery = query(
                     collection(db, 'events')
@@ -69,9 +71,17 @@ export default function EventsPage() {
                     })
                     // Client-side filter: Only show future events and match churchId
                     .filter((event: any) => {
-                        // 1. Church Scoping (Match current church OR legacy if bethel-metro)
-                        const isLegacyVisible = userData.churchId === 'bethel-metro' || userData.role === 'super_admin';
-                        const matchesChurch = event.churchId === userData.churchId || (!event.churchId && isLegacyVisible);
+                        // 1. Church Scoping (Match current church OR legacy if default/bethel-metro)
+                        const isBethelOrDefault = (id: string) => id === 'bethel-metro' || id === 'default_church';
+
+                        let matchesChurch = false;
+                        if (event.churchId === activeChurchId) {
+                            matchesChurch = true;
+                        } else if (!event.churchId && activeChurchId && isBethelOrDefault(activeChurchId)) {
+                            matchesChurch = true;
+                        } else if (activeChurchId && isBethelOrDefault(activeChurchId) && event.churchId && isBethelOrDefault(event.churchId)) {
+                            matchesChurch = true;
+                        }
                         if (!matchesChurch) return false;
 
                         if (!event.startDate) {
@@ -119,9 +129,7 @@ export default function EventsPage() {
             }
         };
 
-        if (userData?.churchId) {
-            fetchData();
-        }
+        fetchData();
     }, [userData?.churchId]);
 
     // Categorization Helper

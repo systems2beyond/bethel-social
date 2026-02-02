@@ -270,6 +270,12 @@ service cloud.firestore {
       allow create, update, delete: if isAuthenticated() && (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'staff']);
     }
 
+    // Connect Form Config - Public read, admin write
+    match /connect_form_config/{churchId} {
+      allow read: if true; // Public can read form config (for /connect page)
+      allow write: if isAuthenticated() && (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'staff']);
+    }
+
     // ---------------------------------------------------------
     // [DEBUG] GLOBAL FALLBACK - ALLOWS ALL FOR DEBUGGING
     // ---------------------------------------------------------

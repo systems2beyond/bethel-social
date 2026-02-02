@@ -7,8 +7,7 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Play, Radio, XCircle } from 'lucide-react';
 import Image from 'next/image';
-import { useLightbox } from '@/context/LightboxContext';
-
+import { useBible } from '@/context/BibleContext';
 import { Post } from '@/types';
 
 interface LiveStreamBannerProps {
@@ -17,13 +16,13 @@ interface LiveStreamBannerProps {
 }
 
 export const LiveStreamBanner = ({ post, onDismiss }: LiveStreamBannerProps) => {
-    const { openLightbox } = useLightbox();
+    const { openVideo } = useBible();
 
     const { userData } = useAuth();
     const [isEnding, setIsEnding] = React.useState(false);
 
     const handleEndLive = async (e: React.MouseEvent) => {
-        e.stopPropagation(); // Prevent opening lightbox
+        e.stopPropagation();
         if (!confirm('Are you sure you want to end this live stream? This will remove the banner for everyone.')) return;
 
         setIsEnding(true);
@@ -42,6 +41,15 @@ export const LiveStreamBanner = ({ post, onDismiss }: LiveStreamBannerProps) => 
         }
     };
 
+    const handleWatch = (e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
+        openVideo({
+            url: post.mediaUrl!,
+            title: post.content ? post.content.substring(0, 50) + (post.content.length > 50 ? '...' : '') : 'Live Stream',
+            provider: post.type === 'youtube' ? 'youtube' : 'native'
+        });
+    };
+
     if (!post.mediaUrl) return null;
 
     return (
@@ -49,7 +57,7 @@ export const LiveStreamBanner = ({ post, onDismiss }: LiveStreamBannerProps) => 
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             className="mb-8 relative overflow-hidden rounded-2xl bg-gradient-to-r from-red-600 to-red-800 text-white shadow-xl cursor-pointer group"
-            onClick={() => openLightbox(post.mediaUrl!, 'video')}
+            onClick={() => handleWatch()}
         >
             <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors" />
 
@@ -101,6 +109,14 @@ export const LiveStreamBanner = ({ post, onDismiss }: LiveStreamBannerProps) => 
                     <p className="text-red-100 line-clamp-2 text-sm md:text-base">
                         Join us for worship and fellowship. Click to watch live.
                     </p>
+
+                    <button
+                        onClick={handleWatch}
+                        className="mt-4 flex items-center space-x-2 bg-white text-red-600 px-4 py-2 rounded-lg font-medium hover:bg-red-50 transition-colors shadow-md"
+                    >
+                        <Play className="w-5 h-5 fill-current" />
+                        <span>Watch Live</span>
+                    </button>
                 </div>
             </div>
         </motion.div>

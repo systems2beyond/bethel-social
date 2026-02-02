@@ -470,3 +470,64 @@ export interface AutomationExecution {
     };
     createdAt: any;
 }
+
+// Connect Form Configuration
+// Field types similar to Google Forms
+export type ConnectFormFieldType =
+    | 'short_answer'  // Single line text
+    | 'paragraph'     // Multi-line text
+    | 'name'          // Name field (formatted)
+    | 'email'         // Email validation
+    | 'phone'         // Phone number
+    | 'number'        // Numeric input
+    | 'date'          // Date picker
+    | 'checkbox'      // Yes/No toggle
+    | 'select'        // Dropdown
+    | 'url'           // URL input
+    // Legacy types (for backwards compatibility)
+    | 'text'          // Maps to short_answer
+    | 'textarea';     // Maps to paragraph
+
+export interface ConnectFormField {
+    id: string;
+    type: ConnectFormFieldType;
+    label: string;
+    placeholder?: string;
+    required: boolean;
+    enabled: boolean;
+    options?: string[]; // For select type
+    order: number;
+}
+
+export interface ConnectFormConfig {
+    id: string;
+    churchId: string;
+
+    // Branding
+    branding: {
+        churchName: string;
+        tagline: string;
+        logoUrl?: string;
+        primaryColor: string;
+        backgroundColor: string;
+    };
+
+    // Form Configuration
+    fields: ConnectFormField[];
+
+    // Success State
+    successMessage: {
+        title: string;
+        subtitle: string;
+    };
+
+    // Settings
+    settings: {
+        enabled: boolean;
+        notifyAdmins: boolean;
+        autoAssignBoard?: string; // Pipeline board ID to auto-assign
+    };
+
+    updatedAt: any;
+    updatedBy: string;
+}

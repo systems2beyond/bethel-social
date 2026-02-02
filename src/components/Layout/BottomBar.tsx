@@ -8,6 +8,9 @@ import { useAuth } from '@/context/AuthContext';
 import { usePathname, useRouter } from 'next/navigation';
 import { PostComposer } from '../Feed/PostComposer';
 
+// Public routes that don't need bottom bar
+const PUBLIC_ROUTES = ['/connect', '/events/', '/giving'];
+
 export function BottomBar() {
     const [input, setInput] = React.useState('');
     const [isMenuOpen, setIsMenuOpen] = React.useState(false);
@@ -19,6 +22,11 @@ export function BottomBar() {
     const menuRef = React.useRef<HTMLDivElement>(null);
     const pathname = usePathname();
     const router = useRouter();
+
+    // Don't render on public pages
+    if (PUBLIC_ROUTES.some(route => pathname?.startsWith(route))) {
+        return null;
+    }
 
     // Close menu when clicking outside
     React.useEffect(() => {

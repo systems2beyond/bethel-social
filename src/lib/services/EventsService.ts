@@ -131,8 +131,20 @@ export const EventsService = {
                 .filter(event => {
                     // Filter for churchId match OR legacy (missing churchId - only for default church)
                     if (!churchId) return true;
-                    const isLegacyVisible = churchId === 'bethel-metro';
-                    return event.churchId === churchId || (!event.churchId && isLegacyVisible);
+                    // Treat default_church and bethel-metro as aliases/compatible
+                    const isBethelOrDefault = (id: string) => id === 'bethel-metro' || id === 'default_church';
+
+                    // 1. Exact Match
+                    if (event.churchId === churchId) return true;
+
+                    // 2. Legacy / No Church ID (visible to both main tenants)
+                    const isLegacyVisible = isBethelOrDefault(churchId);
+                    if (!event.churchId && isLegacyVisible) return true;
+
+                    // 3. Cross-visibility between bethel-metro and default_church
+                    if (isBethelOrDefault(churchId) && event.churchId && isBethelOrDefault(event.churchId)) return true;
+
+                    return false;
                 });
 
             if (includeDrafts) return events;
@@ -147,6 +159,42 @@ export const EventsService = {
         try {
             const registrationsRef = collection(db, COLLECTION_NAME, registrationData.eventId, 'registrations');
             const docRef = await addDoc(registrationsRef, registrationData);
+
+            // [CRM] Auto-populate Linked Board
+            try {
+                const { findBoardByEventId, createVisitor } = await import('../crm');
+                const board = await findBoardByEventId(registrationData.eventId);
+
+                if (board) {
+                    const nameParts = registrationData.userName.trim().split(' ');
+                    const firstName = nameParts[0] || 'Guest';
+                    const lastName = nameParts.slice(1).join(' ') || '';
+                    const firstStageId = board.stages[0]?.id || 'new_guest';
+
+                    await createVisitor({
+                        firstName,
+                        lastName,
+                        email: registrationData.userEmail,
+                        status: 'new',
+                        pipelineStage: firstStageId,
+                        boardId: board.id,
+                        source: 'website',
+                        isFirstTime: true,
+                        customFields: {
+                            registrationId: docRef.id,
+                            eventId: registrationData.eventId,
+                            ...registrationData.responses
+                        },
+                        auditLog: [
+                            { timestamp: new Date(), action: 'Created from Event Registration' }
+                        ]
+                    });
+                }
+            } catch (err) {
+                console.error('CRM Auto-population failed:', err);
+                // Non-blocking error
+            }
+
             return docRef.id;
         } catch (error) {
             console.error('Error registering for event:', error);

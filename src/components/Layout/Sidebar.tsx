@@ -22,11 +22,19 @@ import { useMediaQuery } from '@/lib/hooks/useMediaQuery';
 import { Menu, GripVertical, DollarSign } from 'lucide-react';
 import { useChurchConfig } from '@/hooks/useChurchConfig';
 
+// Public routes that don't need sidebar
+const PUBLIC_ROUTES = ['/connect', '/events/', '/giving'];
+
 export function Sidebar() {
     const pathname = usePathname();
     const { theme, setTheme, resolvedTheme } = useTheme();
     const { openBible, openStudy } = useBible();
     const [mounted, setMounted] = React.useState(false);
+
+    // Don't render sidebar on public pages
+    if (PUBLIC_ROUTES.some(route => pathname?.startsWith(route))) {
+        return null;
+    }
 
     // Responsive Breakpoints
     const isDesktop = useMediaQuery('(min-width: 1024px)');

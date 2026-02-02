@@ -20,7 +20,7 @@ import {
     Timestamp
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { PersonTag, PersonActivity, Workflow, WorkflowEnrollment } from '@/types';
+import { PersonTag, PersonActivity, Workflow, WorkflowEnrollment, Visitor, PipelineBoard } from '@/types';
 
 // ============== TAG MANAGEMENT ==============
 
@@ -360,4 +360,35 @@ export async function enrollInWorkflow(
     );
 
     return enrollmentRef.id;
+}
+
+// ============== VISITOR MANAGEMENT ==============
+
+/**
+ * Create a new visitor
+ */
+export async function createVisitor(visitorData: Omit<Visitor, 'id' | 'createdAt'>): Promise<string> {
+    const visitorRef = await addDoc(collection(db, 'visitors'), {
+        ...visitorData,
+        createdAt: serverTimestamp(),
+        lastActivityAt: serverTimestamp()
+    });
+    return visitorRef.id;
+}
+
+/**
+ * Find a pipeline board linked to a specific event
+ */
+export async function findBoardByEventId(eventId: string): Promise<PipelineBoard | null> {
+    const q = query(
+        collection(db, 'pipeline_boards'),
+        where('linkedEventId', '==', eventId),
+        where('archived', '==', false)
+    );
+
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+        return { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as PipelineBoard;
+    }
+    return null;
 }

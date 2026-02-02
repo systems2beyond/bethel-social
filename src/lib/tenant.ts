@@ -10,7 +10,7 @@ import { db } from './firebase';
  * 3. Return church ID if found.
  * 
  * Fallback:
- * - If localhost, defaults to 'bethel-metro' (or env var) for dev convenience.
+ * - If localhost, defaults to 'default_church' (or env var) for dev convenience.
  * - If not found, returns null (should block signup or show error).
  */
 export async function resolveChurchIdFromHostname(hostname: string): Promise<string | null> {
@@ -33,6 +33,11 @@ export async function resolveChurchIdFromHostname(hostname: string): Promise<str
     }
 
     const subdomain = parts[0];
+
+    // [FIX] Explicit mapping for the main Netlify deployment
+    if (subdomain === 'bethel-metro-social') {
+        return 'bethel-metro';
+    }
 
     // 3. Query Firestore
     try {

@@ -27,58 +27,66 @@ export default function VisitorDetailModal({ visitor, onClose }: VisitorDetailMo
 
     return (
         <AnimatePresence>
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <div
+                className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+                onClick={onClose}
+            >
                 <motion.div
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col"
+                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                    className="bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col"
                     onClick={(e) => e.stopPropagation()}
                 >
                     {/* Header */}
-                    <div className="flex items-start justify-between p-6 border-b border-gray-200 dark:border-zinc-800">
-                        <div>
-                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                                {visitor.firstName} {visitor.lastName}
-                            </h2>
-                            <div className="flex gap-2 mt-2">
-                                {visitor.isFirstTime && (
-                                    <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-bold rounded-full">
-                                        First Time Visitor
+                    <div className="flex items-start justify-between p-4 border-b border-zinc-800">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center text-sm font-bold text-zinc-300">
+                                {visitor.firstName?.[0]}{visitor.lastName?.[0]}
+                            </div>
+                            <div>
+                                <h2 className="text-lg font-semibold text-zinc-100">
+                                    {visitor.firstName} {visitor.lastName}
+                                </h2>
+                                <div className="flex gap-1.5 mt-1">
+                                    {visitor.isFirstTime && (
+                                        <span className="px-1.5 py-0.5 bg-blue-500/20 text-blue-400 text-[10px] font-semibold rounded uppercase">
+                                            New
+                                        </span>
+                                    )}
+                                    <span className="px-1.5 py-0.5 bg-zinc-800 text-zinc-400 text-[10px] font-medium rounded">
+                                        {visitor.pipelineStage?.replace('_', ' ').toUpperCase() || 'NEW GUEST'}
                                     </span>
-                                )}
-                                <span className="px-2 py-1 bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-300 text-xs font-medium rounded-full">
-                                    {visitor.pipelineStage?.replace('_', ' ').toUpperCase() || 'NEW GUEST'}
-                                </span>
+                                </div>
                             </div>
                         </div>
                         <button
                             onClick={onClose}
-                            className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+                            className="p-1.5 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 rounded-md transition-colors"
                         >
-                            <X className="w-5 h-5 text-gray-500" />
+                            <X className="w-4 h-4" />
                         </button>
                     </div>
 
                     {/* Tabs */}
-                    <div className="flex border-b border-gray-200 dark:border-zinc-800 px-6">
+                    <div className="flex gap-1 px-4 pt-2 border-b border-zinc-800">
                         {tabs.map((tab) => {
                             const Icon = tab.icon;
                             return (
                                 <button
                                     key={tab.id}
                                     onClick={() => setActiveTab(tab.id)}
-                                    className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors relative ${activeTab === tab.id
-                                            ? 'text-purple-600 dark:text-purple-400'
-                                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                                    className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors relative rounded-t-md ${activeTab === tab.id
+                                            ? 'text-blue-400 bg-zinc-800/50'
+                                            : 'text-zinc-500 hover:text-zinc-300'
                                         }`}
                                 >
-                                    <Icon className="w-4 h-4" />
+                                    <Icon className="w-3.5 h-3.5" />
                                     <span>{tab.label}</span>
                                     {activeTab === tab.id && (
                                         <motion.div
                                             layoutId="activeTab"
-                                            className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-600 dark:bg-purple-400"
+                                            className="absolute bottom-0 left-2 right-2 h-0.5 bg-blue-500 rounded-full"
                                         />
                                     )}
                                 </button>
@@ -87,36 +95,36 @@ export default function VisitorDetailModal({ visitor, onClose }: VisitorDetailMo
                     </div>
 
                     {/* Content */}
-                    <div className="flex-1 overflow-y-auto p-6">
+                    <div className="flex-1 overflow-y-auto p-4">
                         {activeTab === 'profile' && (
-                            <div className="space-y-6">
+                            <div className="space-y-4">
                                 {/* Contact Information */}
-                                <div>
-                                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Contact Information</h3>
-                                    <div className="space-y-2 text-sm">
+                                <div className="bg-zinc-800/50 rounded-lg p-3">
+                                    <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-2">Contact</h3>
+                                    <div className="space-y-1.5 text-sm">
                                         {visitor.email && (
-                                            <div className="flex justify-between">
-                                                <span className="text-gray-600 dark:text-gray-400">Email:</span>
-                                                <a href={`mailto:${visitor.email}`} className="text-blue-600 dark:text-blue-400 hover:underline">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-zinc-500">Email</span>
+                                                <a href={`mailto:${visitor.email}`} className="text-blue-400 hover:text-blue-300 text-sm">
                                                     {visitor.email}
                                                 </a>
                                             </div>
                                         )}
                                         {visitor.phone && (
-                                            <div className="flex justify-between">
-                                                <span className="text-gray-600 dark:text-gray-400">Phone:</span>
-                                                <a href={`tel:${visitor.phone}`} className="text-blue-600 dark:text-blue-400 hover:underline">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-zinc-500">Phone</span>
+                                                <a href={`tel:${visitor.phone}`} className="text-blue-400 hover:text-blue-300 text-sm">
                                                     {visitor.phone}
                                                 </a>
                                             </div>
                                         )}
-                                        <div className="flex justify-between">
-                                            <span className="text-gray-600 dark:text-gray-400">Source:</span>
-                                            <span className="text-gray-900 dark:text-white capitalize">{visitor.source || 'Unknown'}</span>
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-zinc-500">Source</span>
+                                            <span className="text-zinc-200 capitalize text-sm">{visitor.source || 'Direct'}</span>
                                         </div>
-                                        <div className="flex justify-between">
-                                            <span className="text-gray-600 dark:text-gray-400">Created:</span>
-                                            <span className="text-gray-900 dark:text-white">
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-zinc-500">Added</span>
+                                            <span className="text-zinc-200 text-sm">
                                                 {visitor.createdAt?.toDate ? visitor.createdAt.toDate().toLocaleDateString() : 'Just now'}
                                             </span>
                                         </div>
@@ -125,33 +133,29 @@ export default function VisitorDetailModal({ visitor, onClose }: VisitorDetailMo
 
                                 {/* Prayer Requests */}
                                 {visitor.prayerRequests && (
-                                    <div>
-                                        <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Prayer Requests</h3>
-                                        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 text-sm text-gray-700 dark:text-gray-300">
-                                            {visitor.prayerRequests}
-                                        </div>
+                                    <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
+                                        <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-wide mb-2">Prayer Request</h3>
+                                        <p className="text-sm text-zinc-300">{visitor.prayerRequests}</p>
                                     </div>
                                 )}
 
                                 {/* Notes */}
                                 {visitor.notes && (
-                                    <div>
-                                        <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Notes</h3>
-                                        <div className="bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-lg p-4 text-sm text-gray-700 dark:text-gray-300">
-                                            {visitor.notes}
-                                        </div>
+                                    <div className="bg-zinc-800/50 rounded-lg p-3">
+                                        <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-2">Notes</h3>
+                                        <p className="text-sm text-zinc-300">{visitor.notes}</p>
                                     </div>
                                 )}
 
                                 {/* Custom Fields */}
                                 {visitor.customFields && Object.keys(visitor.customFields).length > 0 && (
-                                    <div>
-                                        <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Additional Information</h3>
-                                        <div className="space-y-2 text-sm">
+                                    <div className="bg-zinc-800/50 rounded-lg p-3">
+                                        <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-2">Additional Info</h3>
+                                        <div className="space-y-1.5 text-sm">
                                             {Object.entries(visitor.customFields).map(([key, value]) => (
-                                                <div key={key} className="flex justify-between">
-                                                    <span className="text-gray-600 dark:text-gray-400 capitalize">{key.replace('_', ' ')}:</span>
-                                                    <span className="text-gray-900 dark:text-white">{String(value)}</span>
+                                                <div key={key} className="flex justify-between items-center">
+                                                    <span className="text-zinc-500 capitalize">{key.replace('_', ' ')}</span>
+                                                    <span className="text-zinc-200">{String(value)}</span>
                                                 </div>
                                             ))}
                                         </div>
@@ -162,16 +166,14 @@ export default function VisitorDetailModal({ visitor, onClose }: VisitorDetailMo
 
                         {activeTab === 'activity' && (
                             <div>
-                                <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">Activity History</h3>
                                 <ActivityTimeline personId={visitor.id} personType="visitor" />
                             </div>
                         )}
 
                         {activeTab === 'tags' && (
                             <div>
-                                <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">Manage Tags</h3>
-                                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                                    Add or remove tags to categorize and organize this visitor.
+                                <p className="text-xs text-zinc-500 mb-3">
+                                    Add tags to categorize this visitor
                                 </p>
                                 <TagManager
                                     personId={visitor.id}
