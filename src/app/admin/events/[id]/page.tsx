@@ -14,6 +14,7 @@ import { RegistrationBuilder } from '@/components/Admin/RegistrationBuilder';
 import { uploadMedia } from '@/lib/storage';
 import QRCodeGenerator from '@/components/Admin/Events/QRCodeGenerator';
 import { db } from '@/lib/firebase';
+import { safeTimestamp } from '@/lib/utils';
 
 export default function EventEditorPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
@@ -105,11 +106,14 @@ export default function EventEditorPage({ params }: { params: Promise<{ id: stri
                 if (event.geo) setGeo(event.geo);
 
                 // Date handling
-                const start = event.startDate.toDate();
+                const start = safeTimestamp(event.startDate) || new Date();
                 setStartDate(start.toISOString().split('T')[0]);
                 setStartTime(start.toTimeString().slice(0, 5));
                 if (event.endDate) {
-                    setEndDate(event.endDate.toDate().toISOString().split('T')[0]);
+                    const end = safeTimestamp(event.endDate);
+                    if (end) {
+                        setEndDate(end.toISOString().split('T')[0]);
+                    }
                 }
 
                 setFeaturedGuests(event.featuredGuests || []);

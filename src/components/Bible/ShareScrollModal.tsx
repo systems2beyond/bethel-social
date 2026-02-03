@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState } from 'react';
 import { Share2, X, Loader2, MessageSquare } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';

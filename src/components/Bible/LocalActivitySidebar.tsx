@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Users, Wifi, ChevronRight, ChevronDown, MessageSquare, Plus, ArrowRight, ExternalLink, Edit3, ScrollText, Bell, Inbox, Sparkles, Clock, Search, BookOpen, Pin, Trash2, Video, Globe, PlayCircle, Loader2 } from 'lucide-react';
@@ -375,6 +377,17 @@ export function LocalActivitySidebar({ className }: { className?: string }) {
     const limitedInvitations = invitations.slice(0, MAX_ITEMS_SHOWN);
     const limitedNotifications = notifications.slice(0, MAX_ITEMS_SHOWN);
 
+    // FIX: Ensure hooks are called before conditional return
+    // moved `if (!user) return null` to inside the return statement or ensure it doesn't block hooks
+    // Actually, looking at the code, `useMemo` for `recentItems` and `localScrolls` depend on `user`.
+    // And `useEffect` depends on `user`.
+    // If user is null, we can return null, BUT we must ensure all hooks run consistently.
+    // The previous code had `if (!user) return null;` at line 380, which is AFTER all hooks.
+    // Wait, let's verify if there are any hooks AFTER line 380.
+    // Lines 382+ is the return statement.
+    // So `LocalActivitySidebar` seems safe regarding `!user` check as it was at the very end.
+
+    // However, to be absolutely safe and explicit:
     if (!user) return null;
 
     return (

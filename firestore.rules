@@ -277,6 +277,44 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------
+    // 7. Pulpit Dashboard & Volunteer Management (Phase 2)
+    // ---------------------------------------------------------
+
+    // Pulpit Sessions - Staff/Admin can manage
+    match /pulpit_sessions/{sessionId} {
+      allow read: if isAuthenticated() && (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'staff']);
+      allow create, update, delete: if isAuthenticated() && (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'staff']);
+    }
+
+    // Pulpit Check-ins - Public can create (via kiosk/app), Staff/Admin can read
+    match /pulpit_checkins/{checkinId} {
+      allow read: if isAuthenticated() && (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'staff']);
+      allow create: if true; // Public can check in via kiosk
+      allow update: if isAuthenticated() && (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'staff']);
+      allow delete: if isSuperAdmin();
+    }
+
+    // Pulpit Alerts - Admin roles only (for urgent messages to Pulpit view)
+    match /pulpit_alerts/{alertId} {
+      allow read: if isAuthenticated() && (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'pastor_admin', 'media_admin', 'staff']);
+      allow create: if isAuthenticated() && (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'pastor_admin', 'media_admin']);
+      allow update: if isAuthenticated() && (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'pastor_admin', 'media_admin']);
+      allow delete: if isSuperAdmin();
+    }
+
+    // Volunteer Slots - Staff/Admin can manage
+    match /volunteer_slots/{slotId} {
+      allow read: if isAuthenticated(); // Volunteers can see open slots
+      allow create, update, delete: if isAuthenticated() && (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'staff']);
+    }
+
+    // Ministries - Public read (for volunteer portal), Staff/Admin can manage
+    match /ministries/{ministryId} {
+      allow read: if isAuthenticated(); // All members can view ministries
+      allow create, update, delete: if isAuthenticated() && (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'staff']);
+    }
+
+    // ---------------------------------------------------------
     // [DEBUG] GLOBAL FALLBACK - ALLOWS ALL FOR DEBUGGING
     // ---------------------------------------------------------
     match /{document=**} { allow read, write: if true; }

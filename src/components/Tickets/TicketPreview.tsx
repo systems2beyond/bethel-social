@@ -1,8 +1,11 @@
+'use client';
+
 import React from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { format } from 'date-fns';
 import { Timestamp } from 'firebase/firestore';
 import { Calendar, MapPin, Ticket as TicketIcon } from 'lucide-react';
+import { safeTimestamp } from '@/lib/utils';
 
 export interface TicketConfig {
     id?: string;
@@ -38,7 +41,7 @@ export const TicketPreview: React.FC<TicketPreviewProps> = ({
     const formattedDate = React.useMemo(() => {
         try {
             if (!eventDate) return 'Date TBA';
-            const date = eventDate instanceof Timestamp ? eventDate.toDate() : new Date(eventDate);
+            const date = safeTimestamp(eventDate) || new Date();
             return format(date, 'MMM d, yyyy • h:mm a');
         } catch (e) {
             return 'Invalid Date';

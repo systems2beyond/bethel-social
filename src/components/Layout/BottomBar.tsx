@@ -9,7 +9,8 @@ import { usePathname, useRouter } from 'next/navigation';
 import { PostComposer } from '../Feed/PostComposer';
 
 // Public routes that don't need bottom bar
-const PUBLIC_ROUTES = ['/connect', '/events/', '/giving'];
+// Public routes that don't need bottom bar
+const PUBLIC_ROUTES = ['/connect', '/pulpit'];
 
 export function BottomBar() {
     const [input, setInput] = React.useState('');
@@ -23,11 +24,6 @@ export function BottomBar() {
     const pathname = usePathname();
     const router = useRouter();
 
-    // Don't render on public pages
-    if (PUBLIC_ROUTES.some(route => pathname?.startsWith(route))) {
-        return null;
-    }
-
     // Close menu when clicking outside
     React.useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
@@ -38,6 +34,11 @@ export function BottomBar() {
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
+    // Don't render on public pages
+    if (PUBLIC_ROUTES.some(route => pathname?.startsWith(route))) {
+        return null;
+    }
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();

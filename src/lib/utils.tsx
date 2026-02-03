@@ -25,19 +25,45 @@ export function formatTextWithLinks(text: string) {
             }
 
             return (
-                <a 
-                    key= { i }
-            href = { part }
-            target = "_blank"
-            rel = "noopener noreferrer"
-            className = "text-blue-600 hover:underline break-all"
-            onClick = {(e) => e.stopPropagation()
-        }
+                <a
+                    key={i}
+                    href={part}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:underline break-all"
+                    onClick={(e) => e.stopPropagation()
+                    }
                 >
-            { displayUrl }
-            </a>
+                    {displayUrl}
+                </a>
             );
-}
-return <span key={ i }> { part } </span>;
+        }
+        return <span key={i}> {part} </span>;
     });
+}
+
+/**
+ * Safely converts various date formats (Firestore Timestamp, serialized Timestamp, Date, string) to a JS Date object.
+ * Returns null if the input is invalid or null/undefined.
+ */
+export function safeTimestamp(date: any): Date | null {
+    if (!date) return null;
+    // Handle Firestore Timestamp (has toDate method)
+    if (typeof date.toDate === 'function') {
+        return date.toDate();
+    }
+    // Handle serialized Timestamp (has seconds property)
+    if (date && typeof date === 'object' && typeof date.seconds === 'number') {
+        return new Date(date.seconds * 1000);
+    }
+    // Handle JS Date object
+    if (date instanceof Date) {
+        return date;
+    }
+    // Handle string or number (timestamp)
+    const d = new Date(date);
+    if (!isNaN(d.getTime())) {
+        return d;
+    }
+    return null;
 }

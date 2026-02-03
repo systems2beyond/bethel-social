@@ -7,7 +7,8 @@ description: robustly deploy to netlify by cleaning and rebuilding, handling mem
 rm -rf .next out
 
 2. Systematic Debugging Check
-View the `skills/systematic-debugging/SKILL.md` file and follow the debugging process to verify code stability before building.
+View the `.agent/skills/systematic-debugging/SKILL.md` file and follow the debugging process to verify code stability before building.
+Key principles: NO FIXES WITHOUT ROOT CAUSE INVESTIGATION. Complete Phase 1 (Root Cause) before any fixes.
 
 3. Build the project locally (verification step)
 npm run build

@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState } from 'react';
 import { X, Calendar, MapPin, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';

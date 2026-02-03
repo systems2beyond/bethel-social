@@ -15,16 +15,15 @@ import {
     DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { cn, safeTimestamp, formatTextWithLinks } from '@/lib/utils';
 import { Event } from '@/types';
-import { formatTextWithLinks } from '@/lib/utils';
 import { RegistrationModal } from './RegistrationModal';
 
 export const EventCard = ({ event }: { event: Event }) => {
     const { openLightbox } = useLightbox();
     const [isRegistrationOpen, setIsRegistrationOpen] = useState(false);
 
-    const eventDate = event.startDate.toDate();
+    const eventDate = safeTimestamp(event.startDate) || new Date();
     // Format date parts separately for the "Date Tile"
     const month = eventDate.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
     const day = eventDate.getDate();

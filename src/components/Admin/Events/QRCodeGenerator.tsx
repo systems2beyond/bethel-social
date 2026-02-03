@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState } from 'react';
 import { QRCodeSVG, QRCodeCanvas } from 'qrcode.react';
 import { Download, RefreshCcw } from 'lucide-react';

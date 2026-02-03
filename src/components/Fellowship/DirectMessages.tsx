@@ -8,7 +8,7 @@ import { collection, query, where, orderBy, onSnapshot, getDoc, doc, serverTimes
 import { User, Search, Plus, MessageSquare, MoreHorizontal, Phone, Video, Info, UserPlus, X, Loader2, MessageCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageThread } from './MessageThread';
-import { cn } from '@/lib/utils';
+import { cn, safeTimestamp } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { unifiedSearch, SearchResult } from '@/lib/search/unified-search';
 import { messageIndex } from '@/lib/search/message-index';
@@ -550,7 +550,10 @@ export function DirectMessages() {
                                                     </span>
                                                     {conv.lastMessageTimestamp && (
                                                         <span className="text-[10px] text-gray-400 shrink-0">
-                                                            {conv.lastMessageTimestamp?.toDate ? formatDistanceToNow(conv.lastMessageTimestamp.toDate(), { addSuffix: false }) : ''}
+                                                            {(() => {
+                                                                const date = safeTimestamp(conv.lastMessageTimestamp);
+                                                                return date ? formatDistanceToNow(date, { addSuffix: false }) : '';
+                                                            })()}
                                                         </span>
                                                     )}
                                                 </div>

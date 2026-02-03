@@ -7,7 +7,7 @@ import { Event, LandingPageBlock } from '@/types';
 import { Loader2, Calendar, MapPin, Share2, Download, ExternalLink, Play, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { formatTextWithLinks } from '@/lib/utils';
+import { formatTextWithLinks, safeTimestamp } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { RegistrationModal } from '@/components/Events/RegistrationModal';
 import DonationWidget from '@/components/Giving/DonationForm';
@@ -192,7 +192,7 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
     // --- STANDARD LAYOUT ---
     const StandardLayout = () => {
         const imageUrl = event.media?.find(m => m.type === 'image' || m.type === 'video')?.url || event.imageUrl; // Priority to media
-        const eventDate = event.startDate.toDate();
+        const eventDate = safeTimestamp(event.startDate) || new Date();
 
         return (
             <div className="max-w-4xl mx-auto pb-12">
@@ -435,7 +435,10 @@ export default function EventDetailsPage({ params }: { params: Promise<{ id: str
                     <div className="flex justify-center flex-wrap gap-4 text-white/90 font-medium mb-6">
                         <span className="flex items-center gap-1 bg-black/30 px-3 py-1 rounded-full backdrop-blur-md">
                             <Calendar className="w-4 h-4" />
-                            {event.startDate.toDate().toLocaleDateString()}
+                            {(() => {
+                                const d = safeTimestamp(event.startDate);
+                                return d ? d.toLocaleDateString() : 'Date TBD';
+                            })()}
                         </span>
                         {event.location && event.location.trim().length > 0 && (
                             <span className="flex items-center gap-1 bg-black/30 px-3 py-1 rounded-full backdrop-blur-md">

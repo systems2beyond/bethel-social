@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Home, Compass, Calendar, Users, MessageSquare, Bell, User, LogOut, Settings, PlayCircle, Sun, Moon, Book, BookOpen, Heart, HardDrive } from 'lucide-react';
 import { useTheme } from 'next-themes';
-import { cn } from '@/lib/utils';
+import { cn, safeTimestamp } from '@/lib/utils';
 import { useBible } from '@/context/BibleContext';
 import { useAuth } from '@/context/AuthContext';
 import { useActivity } from '@/context/ActivityContext';
@@ -23,18 +23,15 @@ import { Menu, GripVertical, DollarSign } from 'lucide-react';
 import { useChurchConfig } from '@/hooks/useChurchConfig';
 
 // Public routes that don't need sidebar
-const PUBLIC_ROUTES = ['/connect', '/events/', '/giving'];
+// Public routes that don't need sidebar
+const PUBLIC_ROUTES = ['/connect'];
 
 export function Sidebar() {
     const pathname = usePathname();
     const { theme, setTheme, resolvedTheme } = useTheme();
     const { openBible, openStudy } = useBible();
+    const { userData } = useAuth();
     const [mounted, setMounted] = React.useState(false);
-
-    // Don't render sidebar on public pages
-    if (PUBLIC_ROUTES.some(route => pathname?.startsWith(route))) {
-        return null;
-    }
 
     // Responsive Breakpoints
     const isDesktop = useMediaQuery('(min-width: 1024px)');
@@ -52,15 +49,13 @@ export function Sidebar() {
         }
     }, [isMobileOrTabletPortrait]);
 
-    // Debug initial state - v10 Clean Slate
+    // Debug initial state
     React.useEffect(() => {
         setMounted(true);
-        console.log('[Sidebar] Mounted. Theme:', theme, 'Resolved:', resolvedTheme);
-        console.log('[Sidebar] Mounted. Theme:', theme, 'Resolved:', resolvedTheme);
-        console.log('APP_VERSION: Event-Landing-Page-v1.3 (AdBlock Proxy)');
-    }, [theme, resolvedTheme]);
+    }, []);
 
     const { config } = useChurchConfig();
+    const isAdmin = userData?.role === 'admin' || userData?.role === 'super_admin' || userData?.role === 'pastor_admin' || userData?.role === 'media_admin';
 
     const navItems = [
         { icon: Home, label: 'Home', href: '/' },
@@ -76,6 +71,14 @@ export function Sidebar() {
     if (config?.features?.giving) {
         navItems.splice(2, 0, { icon: DollarSign, label: 'Giving', href: '/giving' });
     }
+
+    // Don't render sidebar on public pages
+    if (PUBLIC_ROUTES.some(route => pathname?.startsWith(route))) {
+        return null;
+    }
+
+
+    // Add Admin link for authorized users
 
 
 
@@ -261,7 +264,7 @@ function UserSection() {
         );
     }
 
-    const isAdmin = userData?.role === 'admin' || userData?.role === 'super_admin';
+
 
     // Notification count from context
     const notificationCount = notifications.filter(n => !n.viewed).length + invitations.filter(i => !i.viewed).length;
@@ -378,7 +381,10 @@ function RecentChats() {
                             {chat.title || 'New Chat'}
                         </p>
                         <p className="text-xs text-gray-400">
-                            {chat.updatedAt?.toDate ? chat.updatedAt.toDate().toLocaleDateString() : 'Recently'}
+                            {(() => {
+                                const date = safeTimestamp(chat.updatedAt);
+                                return date ? date.toLocaleDateString() : 'Recently';
+                            })()}
                         </p>
                     </button>
                 ))}

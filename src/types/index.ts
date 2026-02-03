@@ -33,7 +33,7 @@ export interface FirestoreUser {
         sermons?: boolean;
     };
     churchId?: string; // Mandatory eventually
-    role?: 'super_admin' | 'admin' | 'staff' | 'member';
+    role?: 'super_admin' | 'admin' | 'pastor_admin' | 'media_admin' | 'staff' | 'member';
     connectedChurchIds?: string[];
     customBibleSources?: any[]; // For custom bible versions
     theme?: string;
@@ -47,6 +47,31 @@ export interface FirestoreUser {
         baptism?: { date: any; officiant: string; location: string };
         confirmation?: { date: any };
     };
+
+    // Phase 2: Volunteer Management Extensions
+    volunteerProfile?: VolunteerProfile;
+}
+
+// Phase 2: Volunteer Profile
+export interface VolunteerProfile {
+    isVolunteer: boolean;
+    ministries: string[]; // e.g., ['worship', 'children', 'parking', 'hospitality']
+    skills: string[]; // e.g., ['audio', 'video', 'cooking', 'teaching']
+    availability: {
+        sunday: boolean;
+        wednesday: boolean;
+        saturday: boolean;
+        custom?: string[]; // e.g., ['First Sunday', 'Youth Events']
+    };
+    backgroundCheckStatus?: 'not_started' | 'pending' | 'approved' | 'expired';
+    backgroundCheckDate?: any; // Firestore Timestamp
+    trainingCompleted?: string[]; // e.g., ['child_safety', 'first_aid']
+    emergencyContact?: {
+        name: string;
+        phone: string;
+        relationship: string;
+    };
+    notes?: string;
 }
 
 export interface Post {
@@ -530,4 +555,135 @@ export interface ConnectFormConfig {
 
     updatedAt: any;
     updatedBy: string;
+}
+
+// =========================================
+// Phase 2: Pulpit Dashboard Types
+// =========================================
+
+// Pulpit Session - A service/event with teleprompter and live feed
+export interface PulpitSession {
+    id: string;
+    churchId: string;
+    date: any; // Firestore Timestamp - service date
+    status: 'scheduled' | 'live' | 'completed';
+
+    // Sermon content for teleprompter
+    sermonTitle: string;
+    sermonNotes: string; // Markdown content for teleprompter display
+    bibleReferences: string[]; // e.g., ["John 3:16", "Romans 8:28"]
+    outline?: string[]; // Bullet points for quick reference
+
+    // Settings
+    teleprompterSettings?: {
+        fontSize: number; // px
+        scrollSpeed: number; // 1-10 scale
+        backgroundColor: string; // hex
+        textColor: string; // hex
+        mirrorMode: boolean; // For physical teleprompters
+    };
+
+    // Real-time data (subcollections or embedded)
+    visitorFeedEnabled: boolean;
+    alertsEnabled: boolean;
+
+    // Stats
+    attendance?: number;
+    visitorCount?: number;
+    firstTimeVisitorCount?: number;
+
+    createdBy: string;
+    createdAt: any;
+    updatedAt: any;
+}
+
+// Real-time visitor check-in for Pulpit Dashboard
+export interface PulpitCheckIn {
+    id: string;
+    sessionId: string; // Links to PulpitSession
+    churchId: string;
+
+    // Visitor info
+    visitorId?: string; // Links to /visitors collection if exists
+    userId?: string; // Links to /users if registered member
+    name: string;
+    isFirstTime: boolean;
+    photoUrl?: string;
+
+    // Check-in details
+    checkInTime: any; // Firestore Timestamp
+    source: 'qr-code' | 'manual' | 'kiosk' | 'app';
+    notes?: string; // e.g., "Has kids in children's ministry"
+    prayerRequest?: string;
+
+    // Status
+    acknowledged: boolean; // Pastor has seen this
+    acknowledgedBy?: string;
+    acknowledgedAt?: any;
+}
+
+// Real-time alerts for pastor/media team
+export interface PulpitAlert {
+    id: string;
+    sessionId: string;
+    churchId: string;
+
+    type: 'security' | 'media' | 'children' | 'parking' | 'general' | 'urgent';
+    priority: 'low' | 'medium' | 'high' | 'critical';
+    message: string;
+
+    // Sender
+    fromUserId: string;
+    fromName: string;
+    fromRole?: string; // e.g., "Security Team"
+
+    // Status
+    acknowledged: boolean;
+    acknowledgedBy?: string;
+    acknowledgedAt?: any;
+    resolved: boolean;
+    resolvedAt?: any;
+
+    createdAt: any;
+}
+
+// Volunteer scheduling for services
+export interface ServiceVolunteerSlot {
+    id: string;
+    sessionId: string; // Links to PulpitSession
+    churchId: string;
+
+    ministry: string; // e.g., 'worship', 'children', 'parking'
+    role: string; // e.g., 'Lead Usher', 'Sound Tech', 'Greeter'
+    assignedUserId?: string;
+    assignedUserName?: string;
+    status: 'open' | 'filled' | 'confirmed' | 'no_show';
+
+    notes?: string;
+    createdAt: any;
+    updatedAt: any;
+}
+
+// Ministry definition for volunteer management
+export interface Ministry {
+    id: string;
+    churchId: string;
+    name: string; // e.g., "Worship Team", "Children's Ministry"
+    description?: string;
+    icon?: string; // Lucide icon name
+    color: string; // Hex color
+    leaderId?: string; // User ID of ministry leader
+    leaderName?: string;
+    roles: MinistryRole[];
+    active: boolean;
+    createdAt: any;
+    updatedAt: any;
+}
+
+export interface MinistryRole {
+    id: string;
+    name: string; // e.g., "Vocalist", "Sound Tech", "Teacher"
+    description?: string;
+    requiresBackgroundCheck: boolean;
+    requiredTraining?: string[]; // Training IDs
 }

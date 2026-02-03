@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState } from 'react';
 import { LandingPageBlock } from '@/types';
 import { Plus, Trash2, ArrowUp, ArrowDown, Image as ImageIcon, Type, Video, FileText, Link as LinkIcon, Loader2, Upload } from 'lucide-react';

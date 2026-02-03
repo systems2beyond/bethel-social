@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
 import { ChevronDown, Trash2, Save, Maximize2, Minimize2, MessageSquare, FileText } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, safeTimestamp } from '@/lib/utils';
 import TiptapEditor, { TiptapEditorRef } from '@/components/Editor/TiptapEditor';
 import { useBible } from '@/context/BibleContext';
 
@@ -100,9 +100,8 @@ export function NoteAccordionItem({
 
     // Date Formatting Helper
     const getDateLabel = (date: any) => {
-        if (!date) return '';
-        const d = date.toDate ? date.toDate() : new Date(date);
-        return format(d, 'MMM d, yyyy');
+        const d = safeTimestamp(date);
+        return d ? format(d, 'MMM d, yyyy') : '';
     };
 
     // Strip HTML for preview

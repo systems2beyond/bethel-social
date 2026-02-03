@@ -13,7 +13,7 @@ interface UserData {
     uid: string;
     email: string;
     displayName?: string;
-    role: 'admin' | 'staff' | 'member';
+    role: 'admin' | 'staff' | 'member' | 'pastor_admin' | 'media_admin' | 'super_admin';
     createdAt?: any;
 }
 
@@ -56,22 +56,20 @@ export default function PeopleHubPage() {
                     <div className="bg-zinc-800 p-1 rounded-lg flex space-x-1">
                         <button
                             onClick={() => setActiveTab('directory')}
-                            className={`flex items-center space-x-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                                activeTab === 'directory'
-                                    ? 'bg-blue-500/20 text-blue-400'
-                                    : 'text-zinc-400 hover:text-zinc-200'
-                            }`}
+                            className={`flex items-center space-x-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'directory'
+                                ? 'bg-blue-500/20 text-blue-400'
+                                : 'text-zinc-400 hover:text-zinc-200'
+                                }`}
                         >
                             <Users className="w-4 h-4" />
                             <span>Member Directory</span>
                         </button>
                         <button
                             onClick={() => setActiveTab('visitors')}
-                            className={`flex items-center space-x-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                                activeTab === 'visitors'
-                                    ? 'bg-amber-500/20 text-amber-400'
-                                    : 'text-zinc-400 hover:text-zinc-200'
-                            }`}
+                            className={`flex items-center space-x-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === 'visitors'
+                                ? 'bg-amber-500/20 text-amber-400'
+                                : 'text-zinc-400 hover:text-zinc-200'
+                                }`}
                         >
                             <Milestone className="w-4 h-4" />
                             <span>Outreach Pipeline</span>
@@ -181,6 +179,8 @@ function DirectoryTab() {
                                     >
                                         <option value="member">Member</option>
                                         <option value="staff">Staff</option>
+                                        <option value="pastor_admin">Pastor Admin</option>
+                                        <option value="media_admin">Media Admin</option>
                                         <option value="admin">Admin</option>
                                     </select>
                                     {updating === user.uid && (

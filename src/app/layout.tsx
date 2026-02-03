@@ -27,8 +27,7 @@ export const metadata: Metadata = {
 
 import { Providers } from "@/components/Providers";
 import { AppShell } from "@/components/Layout/AppShell";
-import { GlobalErrorHandler } from "@/components/GlobalErrorHandler";
-
+import { GlobalErrorBoundary } from "@/components/Debug/GlobalErrorBoundary";
 
 export default function RootLayout({
   children,
@@ -41,11 +40,11 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} ${caveat.variable} antialiased`}
       >
         <Providers>
-          <GlobalErrorHandler>
+          <GlobalErrorBoundary>
             <AppShell>
               {children}
             </AppShell>
-          </GlobalErrorHandler>
+          </GlobalErrorBoundary>
         </Providers>
       </body>
     </html>

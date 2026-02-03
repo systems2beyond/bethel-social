@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { VisitorsService } from '@/lib/visitors';
 import { ConnectFormService, getDefaultConfig } from '@/lib/connect-form';
+import { PulpitService } from '@/lib/services/PulpitService';
 import { ConnectFormConfig, ConnectFormField } from '@/types';
 import { Loader2 } from 'lucide-react';
 
@@ -87,7 +88,31 @@ export default function ConnectPage() {
                 )
             };
 
-            await VisitorsService.createVisitor(visitorData);
+            // Create visitor record
+            const visitorId = await VisitorsService.createVisitor(visitorData);
+
+            // Also create a pulpit_checkin if there's an active session
+            // This makes the check-in appear on the Pulpit Dashboard in real-time
+            try {
+                const activeSession = await PulpitService.getActiveSession(churchId);
+                if (activeSession) {
+                    const fullName = `${visitorData.firstName} ${visitorData.lastName}`.trim() || 'Guest';
+                    await PulpitService.createCheckin({
+                        sessionId: activeSession.id,
+                        churchId: churchId,
+                        visitorId: visitorId,
+                        name: fullName,
+                        isFirstTime: visitorData.isFirstTime || false,
+                        source: 'qr-code',
+                        notes: visitorData.prayerRequests || undefined,
+                        prayerRequest: visitorData.prayerRequests || undefined
+                    });
+                }
+            } catch (sessionError) {
+                // Non-critical: If pulpit check-in fails, visitor is still saved
+                console.warn('Could not create pulpit check-in:', sessionError);
+            }
+
             setSuccess(true);
         } catch (error) {
             console.error('Error submitting form:', error);

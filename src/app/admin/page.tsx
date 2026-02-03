@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc, setDoc, limit, getCountFromServer, getDocs } from 'firebase/firestore';
 import { db, functions } from '@/lib/firebase';
 import { httpsCallable } from 'firebase/functions';
-import { Loader2, Send, Users, Flag, Pin, LayoutDashboard, AlertCircle, CheckCircle, Trash2, ExternalLink, Settings, DollarSign, Plus, CreditCard, ArrowUpRight, Search, Calendar, ChevronDown, Download, Ticket, PlayCircle } from 'lucide-react';
+import { Loader2, Send, Users, Flag, Pin, LayoutDashboard, AlertCircle, AlertTriangle, CheckCircle, Trash2, ExternalLink, Settings, DollarSign, Plus, CreditCard, ArrowUpRight, Search, Calendar, ChevronDown, Download, Ticket, PlayCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import Image from 'next/image';
@@ -16,6 +16,7 @@ import CampaignManager from './giving/CampaignManager';
 import { Timestamp } from 'firebase/firestore';
 import AnnouncementWidget from '@/components/Admin/AnnouncementWidget';
 import SermonManager from '@/components/Admin/SermonManager';
+import { PulpitService } from '@/lib/services/PulpitService';
 
 interface Donation {
     id: string;
@@ -56,6 +57,9 @@ interface PinnedPost {
 export default function AdminPage() {
     const { userData, loading: authLoading } = useAuth();
     const [activeTab, setActiveTab] = useState<'overview' | 'reports' | 'pinned' | 'groups' | 'giving' | 'config' | 'sermons'>('overview');
+
+    // Urgent Messages popup state
+    const [loadingSession, setLoadingSession] = useState(false);
 
     // Overview State
     // Overview State
@@ -269,7 +273,40 @@ export default function AdminPage() {
         }
     };
 
-    if (userData?.role !== 'admin' && userData?.role !== 'super_admin') {
+    // Handle opening the pop-out alerts window
+    const handlePopOutAlerts = async () => {
+        if (!userData?.churchId) {
+            alert('Church ID not found. Please refresh and try again.');
+            return;
+        }
+
+        setLoadingSession(true);
+        try {
+            const session = await PulpitService.getActiveSession(userData.churchId);
+            if (session) {
+                // Open popup window
+                const width = 400;
+                const height = 650;
+                const left = window.screen.width - width - 20;
+                const top = 100;
+
+                window.open(
+                    '/pulpit/alerts',
+                    'AlertsPopup',
+                    `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+                );
+            } else {
+                alert('No active service session. Start a session from Pastor Care to view alerts.');
+            }
+        } catch (error) {
+            console.error('Error checking for active session:', error);
+            alert('Failed to check for active session.');
+        } finally {
+            setLoadingSession(false);
+        }
+    };
+
+    if (userData?.role !== 'admin' && userData?.role !== 'super_admin' && userData?.role !== 'pastor_admin' && userData?.role !== 'media_admin') {
         return (
             <div className="min-h-screen flex flex-col items-center justify-center p-4">
                 <AlertCircle className="w-16 h-16 text-red-500 mb-4" />
@@ -441,6 +478,41 @@ export default function AdminPage() {
                                                 </div>
                                             </div>
                                         </Link>
+
+                                        <Link href="/admin/pastor-care" className="group relative overflow-hidden bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all">
+                                            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-bl-full -mr-10 -mt-10 transition-transform group-hover:scale-110"></div>
+                                            <div className="relative">
+                                                <div className="w-12 h-12 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 mb-4 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                                                    <PlayCircle className="w-6 h-6" />
+                                                </div>
+                                                <h3 className="text-lg font-bold text-gray-900 mb-1">Pastor Care</h3>
+                                                <p className="text-sm text-gray-600 mb-4 h-10">Sermon preparation, pulpit mode, and service tools.</p>
+                                                <div className="flex items-center text-indigo-600 text-sm font-medium group-hover:translate-x-1 transition-transform">
+                                                    Open Dashboard <ArrowUpRight className="w-4 h-4 ml-1" />
+                                                </div>
+                                            </div>
+                                        </Link>
+
+                                        <div
+                                            onClick={handlePopOutAlerts}
+                                            className="group relative overflow-hidden bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all cursor-pointer"
+                                        >
+                                            <div className="absolute top-0 right-0 w-32 h-32 bg-red-50 rounded-bl-full -mr-10 -mt-10 transition-transform group-hover:scale-110"></div>
+                                            <div className="relative">
+                                                <div className="w-12 h-12 rounded-xl bg-red-100 flex items-center justify-center text-red-600 mb-4 group-hover:bg-red-600 group-hover:text-white transition-colors">
+                                                    {loadingSession ? (
+                                                        <Loader2 className="w-6 h-6 animate-spin" />
+                                                    ) : (
+                                                        <AlertTriangle className="w-6 h-6" />
+                                                    )}
+                                                </div>
+                                                <h3 className="text-lg font-bold text-gray-900 mb-1">Urgent Messages</h3>
+                                                <p className="text-sm text-gray-600 mb-4 h-10">Send and receive urgent alerts during service.</p>
+                                                <div className="flex items-center text-red-600 text-sm font-medium group-hover:translate-x-1 transition-transform">
+                                                    Open Urgent Messages <ArrowUpRight className="w-4 h-4 ml-1" />
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -639,6 +711,7 @@ export default function AdminPage() {
                     )}
                 </div>
             </div>
+
         </div>
     );
 }

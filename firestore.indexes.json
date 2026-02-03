@@ -310,11 +310,11 @@
       ]
     },
     {
-      "collectionGroup": "workflow_enrollments",
+      "collectionGroup": "pulpit_sessions",
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "personId",
+          "fieldPath": "churchId",
           "order": "ASCENDING"
         },
         {
@@ -322,7 +322,61 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "enrolledAt",
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "pulpit_sessions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "churchId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "date",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "pulpit_alerts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "churchId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "resolved",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "pulpit_checkins",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "churchId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sessionId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "checkInTime",
           "order": "DESCENDING"
         }
       ]

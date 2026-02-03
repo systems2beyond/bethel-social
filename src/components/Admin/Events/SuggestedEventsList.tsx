@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useEffect, useState } from 'react';
 import { EventsService } from '@/lib/services/EventsService';
 import { SuggestedEvent } from '@/types';

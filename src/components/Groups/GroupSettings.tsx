@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState } from 'react';
 import { Group } from '@/types';
 import { GroupsService } from '@/lib/groups';

@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useEffect, useState } from 'react';
 import { Calendar, Plus } from 'lucide-react';
 import { Group, GroupEvent } from '@/types'; // You'll need to export GroupEvent

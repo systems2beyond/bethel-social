@@ -1,11 +1,15 @@
 import { Event } from "@/types";
+import { safeTimestamp } from "@/lib/utils";
 
 export const generateGoogleCalendarUrl = (event: Event): string => {
-    const startDate = event.startDate.toDate().toISOString().replace(/-|:|\.\d\d\d/g, "");
+    const sDate = safeTimestamp(event.startDate) || new Date();
+    const startDate = sDate.toISOString().replace(/-|:|\.\d\d\d/g, "");
+
     // Default 1 hour if no end date
-    const endDate = event.endDate
-        ? event.endDate.toDate().toISOString().replace(/-|:|\.\d\d\d/g, "")
-        : new Date(event.startDate.toDate().getTime() + 60 * 60 * 1000).toISOString().replace(/-|:|\.\d\d\d/g, "");
+    const eDate = safeTimestamp(event.endDate);
+    const endDate = eDate
+        ? eDate.toISOString().replace(/-|:|\.\d\d\d/g, "")
+        : new Date(sDate.getTime() + 60 * 60 * 1000).toISOString().replace(/-|:|\.\d\d\d/g, "");
 
     const params = new URLSearchParams({
         action: 'TEMPLATE',
@@ -19,10 +23,8 @@ export const generateGoogleCalendarUrl = (event: Event): string => {
 };
 
 export const downloadIcsFile = (event: Event) => {
-    const startDate = event.startDate.toDate();
-    const endDate = event.endDate
-        ? event.endDate.toDate()
-        : new Date(startDate.getTime() + 60 * 60 * 1000);
+    const startDate = safeTimestamp(event.startDate) || new Date();
+    const endDate = safeTimestamp(event.endDate) || new Date(startDate.getTime() + 60 * 60 * 1000);
 
     const formatDate = (date: Date) => date.toISOString().replace(/-|:|\.\d\d\d/g, "");
 
