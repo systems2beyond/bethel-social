@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc, setDoc, limit, getCountFromServer, getDocs } from 'firebase/firestore';
 import { db, functions } from '@/lib/firebase';
 import { httpsCallable } from 'firebase/functions';
-import { Loader2, Send, Users, Flag, Pin, LayoutDashboard, AlertCircle, AlertTriangle, CheckCircle, Trash2, ExternalLink, Settings, DollarSign, Plus, CreditCard, ArrowUpRight, Search, Calendar, ChevronDown, Download, Ticket, PlayCircle } from 'lucide-react';
+import { Loader2, Send, Users, Flag, Pin, LayoutDashboard, AlertCircle, AlertTriangle, CheckCircle, Trash2, ExternalLink, Settings, DollarSign, Plus, CreditCard, ArrowUpRight, Search, Calendar, ChevronDown, Download, Ticket, PlayCircle, Heart } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import Image from 'next/image';
@@ -544,6 +544,20 @@ export default function AdminPage() {
                                                 <p className="text-sm text-gray-600 mb-4 h-10">Sermon preparation, pulpit mode, and service tools.</p>
                                                 <div className="flex items-center text-indigo-600 text-sm font-medium group-hover:translate-x-1 transition-transform">
                                                     Open Dashboard <ArrowUpRight className="w-4 h-4 ml-1" />
+                                                </div>
+                                            </div>
+                                        </Link>
+
+                                        <Link href="/admin/ministries" className="group relative overflow-hidden bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all">
+                                            <div className="absolute top-0 right-0 w-32 h-32 bg-teal-50 rounded-bl-full -mr-10 -mt-10 transition-transform group-hover:scale-110"></div>
+                                            <div className="relative">
+                                                <div className="w-12 h-12 rounded-xl bg-teal-100 flex items-center justify-center text-teal-600 mb-4 group-hover:bg-teal-600 group-hover:text-white transition-colors">
+                                                    <Heart className="w-6 h-6" />
+                                                </div>
+                                                <h3 className="text-lg font-bold text-gray-900 mb-1">Volunteer Management</h3>
+                                                <p className="text-sm text-gray-600 mb-4 h-10">Manage ministries, volunteers, and scheduling.</p>
+                                                <div className="flex items-center text-teal-600 text-sm font-medium group-hover:translate-x-1 transition-transform">
+                                                    Manage Teams <ArrowUpRight className="w-4 h-4 ml-1" />
                                                 </div>
                                             </div>
                                         </Link>
