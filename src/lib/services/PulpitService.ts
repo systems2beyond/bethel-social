@@ -72,8 +72,22 @@ export const PulpitService = {
 
     async updateSessionStatus(sessionId: string, status: 'live' | 'completed' | 'scheduled') {
         const docRef = doc(db, 'pulpit_sessions', sessionId);
-        await updateDoc(docRef, {
+        const updateData: Record<string, unknown> = {
             status,
+            updatedAt: serverTimestamp()
+        };
+        // Set startedAt when going live (for timer)
+        if (status === 'live') {
+            updateData.startedAt = serverTimestamp();
+        }
+        await updateDoc(docRef, updateData);
+    },
+
+    async startSession(sessionId: string) {
+        const docRef = doc(db, 'pulpit_sessions', sessionId);
+        await updateDoc(docRef, {
+            status: 'live',
+            startedAt: serverTimestamp(),
             updatedAt: serverTimestamp()
         });
     },
@@ -148,6 +162,14 @@ export const PulpitService = {
         });
     },
 
+    async acknowledgeAlert(alertId: string, userId: string) {
+        await updateDoc(doc(db, 'pulpit_alerts', alertId), {
+            acknowledged: true,
+            acknowledgedBy: userId,
+            acknowledgedAt: serverTimestamp()
+        });
+    },
+
     async acknowledgeCheckin(checkinId: string, userId: string) {
         await updateDoc(doc(db, 'pulpit_checkins', checkinId), {
             acknowledged: true,
@@ -165,6 +187,20 @@ export const PulpitService = {
             ...checkin,
             checkInTime: serverTimestamp(),
             acknowledged: false
+        });
+        return docRef.id;
+    },
+
+    /**
+     * Creates a new sermon note for a user.
+     * Used when importing manuscripts.
+     */
+    async createNote(userId: string, title: string, content: string): Promise<string> {
+        const docRef = await addDoc(collection(db, 'users', userId, 'notes'), {
+            title,
+            content,
+            updatedAt: serverTimestamp(),
+            createdAt: serverTimestamp()
         });
         return docRef.id;
     }

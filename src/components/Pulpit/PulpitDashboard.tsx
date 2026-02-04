@@ -9,7 +9,7 @@ import PulpitControlCenter from '@/components/Pulpit/PulpitControlCenter';
 import { PulpitSession } from '@/types';
 import { Loader2, Plus, MonitorPlay } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
 function PulpitContent() {
@@ -30,35 +30,52 @@ function PulpitContent() {
             return;
         }
 
-        const fetchSession = async () => {
-            setLoading(true);
-            let activeSession = await PulpitService.getActiveSession(userData?.churchId || 'default_church');
+        setLoading(true);
 
-            // If there's a noteId and an existing session, update the session with the note content
-            if (noteId && activeSession) {
-                try {
-                    const noteDoc = await getDoc(doc(db, 'users', user.uid, 'notes', noteId));
-                    if (noteDoc.exists()) {
-                        const noteData = noteDoc.data();
-                        // Update session with new note content
-                        activeSession = {
-                            ...activeSession,
-                            sermonTitle: noteData.title || activeSession.sermonTitle,
-                            sermonNotes: noteData.content || activeSession.sermonNotes
-                        };
-                        // Also update in Firestore
-                        await PulpitService.updateTeleprompter(activeSession.id, noteData.content || '');
+        // Real-time subscription for active session
+        const churchId = userData?.churchId || 'default_church';
+        const q = query(
+            collection(db, 'pulpit_sessions'),
+            where('churchId', '==', churchId),
+            where('status', 'in', ['live', 'scheduled']),
+            orderBy('createdAt', 'desc'),
+            limit(1)
+        );
+
+        const unsubscribe = onSnapshot(q, async (snapshot) => {
+            if (!snapshot.empty) {
+                let activeSession = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as PulpitSession;
+
+                // If there's a noteId and an existing session, update the session with the note content
+                if (noteId) {
+                    try {
+                        const noteDoc = await getDoc(doc(db, 'users', user.uid, 'notes', noteId));
+                        if (noteDoc.exists()) {
+                            const noteData = noteDoc.data();
+                            activeSession = {
+                                ...activeSession,
+                                sermonTitle: noteData.title || activeSession.sermonTitle,
+                                sermonNotes: noteData.content || activeSession.sermonNotes
+                            };
+                            // Also update in Firestore
+                            await PulpitService.updateTeleprompter(activeSession.id, noteData.content || '');
+                        }
+                    } catch (error) {
+                        console.error("Error updating session with note:", error);
                     }
-                } catch (error) {
-                    console.error("Error updating session with note:", error);
                 }
+
+                setSession(activeSession);
+            } else {
+                setSession(null);
             }
-
-            setSession(activeSession);
             setLoading(false);
-        };
+        }, (err) => {
+            console.error('Session subscription error:', err);
+            setLoading(false);
+        });
 
-        fetchSession();
+        return () => unsubscribe();
     }, [user, authLoading, router, userData, noteId]);
 
     const handleCreateSession = async () => {

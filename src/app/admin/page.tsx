@@ -9,7 +9,7 @@ import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import Image from 'next/image';
 import { GroupsService } from '@/lib/groups';
-import { Group } from '@/types';
+import { Group, PulpitSession } from '@/types';
 import GivingAnalytics from './giving/GivingAnalytics';
 import AdminDonationsTable from './giving/AdminDonationsTable';
 import CampaignManager from './giving/CampaignManager';
@@ -60,6 +60,31 @@ export default function AdminPage() {
 
     // Urgent Messages popup state
     const [loadingSession, setLoadingSession] = useState(false);
+    const [activeSession, setActiveSession] = useState<PulpitSession | null>(null);
+
+    // Stream Active Pulpit Session
+    useEffect(() => {
+        if (!userData?.churchId) return;
+
+        // Simplified active session check: Status 'live' or 'scheduled' for today
+        const q = query(
+            collection(db, 'pulpit_sessions'),
+            where('churchId', '==', userData.churchId),
+            where('status', 'in', ['live', 'scheduled']),
+            orderBy('createdAt', 'desc'),
+            limit(1)
+        );
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            if (!snapshot.empty) {
+                setActiveSession({ id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as PulpitSession);
+            } else {
+                setActiveSession(null);
+            }
+        });
+
+        return () => unsubscribe();
+    }, [userData?.churchId]);
 
     // Overview State
     // Overview State
@@ -306,6 +331,36 @@ export default function AdminPage() {
         }
     };
 
+    // Handle starting a session (timer start)
+    const handleStartSession = async () => {
+        if (!activeSession) {
+            alert('No scheduled session found to start. Please create one in Pastor Care.');
+            return;
+        }
+
+        if (confirm('Start service timer? This will set the session to LIVE and reset the start time.')) {
+            try {
+                await PulpitService.startSession(activeSession.id);
+            } catch (error) {
+                console.error('Error starting session:', error);
+                alert('Failed to start session.');
+            }
+        }
+    };
+
+    // Handle toggling On Air status
+    const handleToggleOnAir = async () => {
+        if (!activeSession) return;
+
+        const newStatus = activeSession.status === 'live' ? 'scheduled' : 'live';
+        try {
+            await PulpitService.updateSessionStatus(activeSession.id, newStatus);
+        } catch (error) {
+            console.error('Error toggling On Air:', error);
+            alert('Failed to update status.');
+        }
+    };
+
     if (userData?.role !== 'admin' && userData?.role !== 'super_admin' && userData?.role !== 'pastor_admin' && userData?.role !== 'media_admin') {
         return (
             <div className="min-h-screen flex flex-col items-center justify-center p-4">
@@ -503,13 +558,13 @@ export default function AdminPage() {
                                                     {loadingSession ? (
                                                         <Loader2 className="w-6 h-6 animate-spin" />
                                                     ) : (
-                                                        <AlertTriangle className="w-6 h-6" />
+                                                        <LayoutDashboard className="w-6 h-6" />
                                                     )}
                                                 </div>
-                                                <h3 className="text-lg font-bold text-gray-900 mb-1">Urgent Messages</h3>
-                                                <p className="text-sm text-gray-600 mb-4 h-10">Send and receive urgent alerts during service.</p>
+                                                <h3 className="text-lg font-bold text-gray-900 mb-1">Control Center</h3>
+                                                <p className="text-sm text-gray-600 mb-4 h-10">Manage live service tools, start timers, and send alerts.</p>
                                                 <div className="flex items-center text-red-600 text-sm font-medium group-hover:translate-x-1 transition-transform">
-                                                    Open Urgent Messages <ArrowUpRight className="w-4 h-4 ml-1" />
+                                                    Open Control Center <ArrowUpRight className="w-4 h-4 ml-1" />
                                                 </div>
                                             </div>
                                         </div>

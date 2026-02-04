@@ -17,27 +17,56 @@ export default function PulpitControlCenter({ session }: PulpitControlCenterProp
     const [showAlertComposer, setShowAlertComposer] = useState(false);
 
     useEffect(() => {
-        const interval = setInterval(() => {
+        if (session?.status !== 'live') {
+            setElapsedTime('00:00:00');
+            return;
+        }
+
+        // Helper to parse various timestamp formats (same as alerts popout)
+        const parseTimestamp = (ts: unknown): Date | null => {
+            if (!ts) return null;
+            // Firestore Timestamp with toDate()
+            if (typeof ts === 'object' && ts !== null && 'toDate' in ts && typeof (ts as { toDate: () => Date }).toDate === 'function') {
+                return (ts as { toDate: () => Date }).toDate();
+            }
+            // Firestore Timestamp-like with seconds
+            if (typeof ts === 'object' && ts !== null && 'seconds' in ts) {
+                return new Date((ts as { seconds: number }).seconds * 1000);
+            }
+            // Already a Date
+            if (ts instanceof Date) return ts;
+            // String or number
+            if (typeof ts === 'string' || typeof ts === 'number') {
+                const d = new Date(ts);
+                if (!isNaN(d.getTime())) return d;
+            }
+            return null;
+        };
+
+        const startTime = parseTimestamp(session.startedAt) || parseTimestamp(session.date);
+
+        if (!startTime) {
+            console.warn('[Timer] No valid start time found:', { startedAt: session.startedAt, date: session.date });
+            setElapsedTime('--:--:--');
+            return;
+        }
+
+        const updateTimer = () => {
             const now = new Date();
             setCurrentTime(now);
+            const diff = Math.max(0, now.getTime() - startTime.getTime());
+            const hours = Math.floor(diff / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+            setElapsedTime(
+                `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+            );
+        };
 
-            // Calculate elapsed time if session is live
-            if (session.status === 'live' && session.date) {
-                const startTime = session.date.seconds ? new Date(session.date.seconds * 1000) : new Date(session.date);
-                const diff = Math.max(0, now.getTime() - startTime.getTime());
-
-                const hours = Math.floor(diff / (1000 * 60 * 60));
-                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-                const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-
-                setElapsedTime(
-                    `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
-                );
-            }
-        }, 1000);
-
+        updateTimer(); // Initial update
+        const interval = setInterval(updateTimer, 1000);
         return () => clearInterval(interval);
-    }, [session]);
+    }, [session?.status, session?.startedAt, session?.date]);
 
     return (
         <div className="relative">
@@ -70,9 +99,8 @@ export default function PulpitControlCenter({ session }: PulpitControlCenterProp
                                 Service Timer
                             </span>
                             <span
-                                className={`text-3xl font-mono tabular-nums font-medium tracking-tight ${
-                                    session.status === 'live' ? 'text-emerald-400' : 'text-zinc-600'
-                                }`}
+                                className={`text-3xl font-mono tabular-nums font-medium tracking-tight ${session.status === 'live' ? 'text-emerald-400' : 'text-zinc-600'
+                                    }`}
                             >
                                 {elapsedTime}
                             </span>
@@ -109,9 +137,8 @@ export default function PulpitControlCenter({ session }: PulpitControlCenterProp
                         {/* Pulsing dot for live */}
                         <div className="relative">
                             <div
-                                className={`w-2.5 h-2.5 rounded-full ${
-                                    session.status === 'live' ? 'bg-red-500' : 'bg-zinc-600'
-                                }`}
+                                className={`w-2.5 h-2.5 rounded-full ${session.status === 'live' ? 'bg-red-500' : 'bg-zinc-600'
+                                    }`}
                             />
                             {session.status === 'live' && (
                                 <div className="absolute inset-0 w-2.5 h-2.5 rounded-full bg-red-500 animate-ping opacity-75" />

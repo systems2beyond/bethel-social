@@ -91,21 +91,18 @@ export default function AlertChat({ session }: AlertChatProps) {
                                 key={alert.id}
                                 className="animate-in slide-in-from-bottom-2 duration-200"
                             >
-                                <div className={`p-3 rounded-xl max-w-[90%] ${
-                                    alert.fromUserId === user?.uid
+                                <div className={`p-3 rounded-xl max-w-[90%] ${alert.fromUserId === user?.uid
                                         ? 'ml-auto bg-red-600/90 text-white'
                                         : 'bg-zinc-800 text-zinc-100'
-                                }`}>
+                                    }`}>
                                     {/* Header */}
                                     <div className="flex items-center justify-between gap-2 mb-1">
-                                        <span className={`text-[10px] font-bold uppercase tracking-wider ${
-                                            alert.fromUserId === user?.uid ? 'text-red-200' : 'text-red-400'
-                                        }`}>
+                                        <span className={`text-[10px] font-bold uppercase tracking-wider ${alert.fromUserId === user?.uid ? 'text-red-200' : 'text-red-400'
+                                            }`}>
                                             {alert.type}
                                         </span>
-                                        <span className={`text-[10px] ${
-                                            alert.fromUserId === user?.uid ? 'text-red-200' : 'text-zinc-500'
-                                        }`}>
+                                        <span className={`text-[10px] ${alert.fromUserId === user?.uid ? 'text-red-200' : 'text-zinc-500'
+                                            }`}>
                                             {formatDistanceToNow(
                                                 alert.createdAt?.seconds
                                                     ? new Date(alert.createdAt.seconds * 1000)
@@ -119,10 +116,14 @@ export default function AlertChat({ session }: AlertChatProps) {
                                     <p className="text-sm leading-relaxed">{alert.message}</p>
 
                                     {/* Sender */}
-                                    <div className={`mt-2 text-[10px] ${
-                                        alert.fromUserId === user?.uid ? 'text-red-200' : 'text-zinc-500'
-                                    }`}>
-                                        {alert.fromUserId === user?.uid ? 'You' : alert.fromName || 'Staff'}
+                                    <div className={`mt-2 flex items-center justify-between text-[10px] ${alert.fromUserId === user?.uid ? 'text-red-200' : 'text-zinc-500'
+                                        }`}>
+                                        <span>{alert.fromUserId === user?.uid ? 'You' : alert.fromName || 'Staff'}</span>
+                                        {alert.acknowledged && (
+                                            <span className="flex items-center gap-1 text-green-400 font-bold uppercase tracking-wider">
+                                                ✓ Seen
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
                             </div>

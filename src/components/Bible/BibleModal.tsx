@@ -81,7 +81,8 @@ export default function BibleModal() {
                                 </div>
                                 <button
                                     onClick={closeBible}
-                                    className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors"
+                                    onTouchEnd={(e) => { e.preventDefault(); closeBible(); }}
+                                    className="p-2 active:bg-gray-200 dark:active:bg-zinc-700 rounded-full transition-colors select-none touch-manipulation tap-highlight-transparent"
                                 >
                                     <X className="w-5 h-5 text-gray-500" />
                                 </button>

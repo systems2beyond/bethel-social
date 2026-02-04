@@ -66,6 +66,17 @@ body {
   /* Smooth toggle transition */
 }
 
+/* Fix iOS double-tap issue - applies to all interactive elements */
+button,
+[role="button"],
+a,
+input[type="button"],
+input[type="submit"],
+.cursor-pointer {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
 /* Hide noise texture in dark mode */
 .dark body {
   background-image: none;
@@ -264,4 +275,8 @@ body.modal-open {
   cursor: pointer;
   touch-action: manipulation;
   transition: color 0.1s, background-color 0.1s;
+}
+
+@utility tap-highlight-transparent {
+  -webkit-tap-highlight-color: transparent;
 }

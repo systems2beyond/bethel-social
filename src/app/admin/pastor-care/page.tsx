@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { db } from '@/lib/firebase';
 import { safeTimestamp } from '@/lib/utils';
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import DocumentUploadModal from '@/components/Pulpit/DocumentUploadModal';
 
 interface Note {
     id: string;
@@ -22,6 +23,7 @@ export default function PastorCarePage() {
     const [notes, setNotes] = useState<Note[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [notesLoading, setNotesLoading] = useState(true);
+    const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
 
     useEffect(() => {
         if (!user) return;
@@ -96,13 +98,13 @@ export default function PastorCarePage() {
 
                             {/* Search */}
                             <div className="relative mb-6">
-                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                                 <input
                                     type="text"
                                     placeholder="Search notes..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm"
+                                    className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm placeholder:text-gray-500"
                                 />
                             </div>
 
@@ -124,7 +126,7 @@ export default function PastorCarePage() {
                                                 <p className="text-xs text-gray-500 mt-1 line-clamp-1">
                                                     {note.content ? note.content.substring(0, 60).replace(/<[^>]*>?/gm, "") : 'No content'}...
                                                 </p>
-                                                <span className="text-xs text-gray-400 mt-2 block">
+                                                <span className="text-xs text-gray-500 mt-2 block font-medium">
                                                     Updated: {(() => {
                                                         const d = safeTimestamp(note.updatedAt);
                                                         return d ? d.toLocaleDateString() : 'Recently';
@@ -133,7 +135,7 @@ export default function PastorCarePage() {
                                             </div>
                                             <button
                                                 onClick={() => router.push(`/pulpit?noteId=${note.id}`)}
-                                                className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium shadow-sm hover:shadow-indigo-200 transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transform translate-x-0 sm:translate-x-2 sm:group-hover:translate-x-0"
+                                                className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium shadow-sm active:scale-95 transition-all"
                                             >
                                                 <MonitorPlay className="w-4 h-4 mr-2" />
                                                 Launch
@@ -147,46 +149,49 @@ export default function PastorCarePage() {
 
                     {/* Sidebar / Quick Actions */}
                     <div className="space-y-6">
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
-                                <BookOpen className="w-5 h-5 mr-2 text-blue-600" />
+                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                            <h2 className="text-base font-bold text-gray-900 mb-3 flex items-center">
+                                <BookOpen className="w-4 h-4 mr-2 text-blue-600" />
                                 Quick Links
                             </h2>
-                            <div className="space-y-3">
+                            <div className="space-y-2">
                                 <Link
                                     href="/pulpit"
-                                    className="flex items-center p-3 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors group"
+                                    className="flex items-center p-2 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors group"
                                 >
-                                    <div className="w-8 h-8 rounded-lg bg-blue-200 flex items-center justify-center mr-3 group-hover:scale-110 transition-transform">
-                                        <FileText className="w-4 h-4" />
+                                    <div className="w-7 h-7 rounded-lg bg-blue-200 flex items-center justify-center mr-2 group-hover:scale-110 transition-transform">
+                                        <FileText className="w-3.5 h-3.5" />
                                     </div>
                                     <div>
-                                        <div className="font-semibold">Launch Pulpit View</div>
-                                        <div className="text-xs opacity-80">Start Sunday Service HUD</div>
+                                        <div className="text-sm font-semibold">Launch Pulpit View</div>
+                                        <div className="text-[11px] opacity-75 font-medium">Start Sunday Service HUD</div>
                                     </div>
                                 </Link>
                                 <Link
                                     href="/notes"
-                                    className="flex items-center p-3 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 transition-colors group"
+                                    className="flex items-center p-2 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 transition-colors group"
                                 >
-                                    <div className="w-8 h-8 rounded-lg bg-purple-200 flex items-center justify-center mr-3 group-hover:scale-110 transition-transform">
-                                        <FileText className="w-4 h-4" />
+                                    <div className="w-7 h-7 rounded-lg bg-purple-200 flex items-center justify-center mr-2 group-hover:scale-110 transition-transform">
+                                        <FileText className="w-3.5 h-3.5" />
                                     </div>
                                     <div>
-                                        <div className="font-semibold">Manage Notes</div>
-                                        <div className="text-xs opacity-80">Create & Edit Sermons</div>
+                                        <div className="text-sm font-semibold">Manage Notes</div>
+                                        <div className="text-[11px] opacity-75 font-medium">Create & Edit Sermons</div>
                                     </div>
                                 </Link>
                                 {/* Future links: Visitation Logs, Counseling Notes */}
                             </div>
                         </div>
 
-                        <div className="bg-gradient-to-br from-purple-600 to-indigo-700 p-6 rounded-2xl shadow-sm text-white opacity-80 cursor-not-allowed">
-                            <h3 className="font-bold text-lg mb-2">Need a formatted manuscript? (Coming Soon)</h3>
+                        <div className="bg-gradient-to-br from-purple-600 to-indigo-700 p-6 rounded-2xl shadow-sm text-white">
+                            <h3 className="font-bold text-lg mb-2">Need a formatted manuscript?</h3>
                             <p className="text-indigo-100 text-sm mb-4">
                                 Upload your existing Word document or PDF to automatically extract text while preserving your bolding and highlights.
                             </p>
-                            <button disabled className="w-full py-2 bg-white/20 rounded-lg text-sm font-medium border border-white/40 flex items-center justify-center opacity-70">
+                            <button
+                                onClick={() => setIsUploadModalOpen(true)}
+                                className="w-full py-2 bg-white/20 rounded-lg text-sm font-medium border border-white/40 flex items-center justify-center hover:bg-white/30 transition-all font-bold"
+                            >
                                 <Upload className="w-4 h-4 mr-2" />
                                 Upload Document
                             </button>
@@ -194,6 +199,14 @@ export default function PastorCarePage() {
                     </div>
                 </div>
             </div>
+
+            <DocumentUploadModal
+                isOpen={isUploadModalOpen}
+                onClose={() => setIsUploadModalOpen(false)}
+                onSuccess={() => {
+                    // onSnapshot automatically updates the list
+                }}
+            />
         </div>
     );
 }

@@ -454,8 +454,9 @@ export default function BibleReader({ onInsertNote, onAskAi, onShareTabClick }: 
                                         <span
                                             id={`verse-${verse.verse}`}
                                             onClick={() => handleVerseClick(verse.verse)}
+                                            onTouchEnd={(e) => { e.preventDefault(); handleVerseClick(verse.verse); }}
                                             className={cn(
-                                                "relative cursor-pointer transition-colors duration-200 px-1 rounded hover:bg-gray-100 dark:hover:bg-zinc-800",
+                                                "relative cursor-pointer transition-colors duration-200 px-1 rounded active:bg-amber-100 dark:active:bg-amber-900/30 select-none touch-manipulation tap-highlight-transparent",
                                                 isSelected && "bg-amber-200 dark:bg-amber-900/50 text-gray-900 dark:text-white decoration-clone"
                                             )}
                                         >

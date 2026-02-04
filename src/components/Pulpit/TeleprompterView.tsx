@@ -150,6 +150,71 @@ export default function TeleprompterView({ session }: TeleprompterViewProps) {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, []);
 
+    // Memoize components to prevents re-renders on touch/scroll which kills the tap event
+    const markdownComponents = useMemo(() => ({
+        h1: ({ node, ...props }: any) => <h1 className="text-yellow-400 font-bold mb-[0.25em] mt-[0.5em] text-[1.4em]" {...props} />,
+        h2: ({ node, ...props }: any) => <h2 className="text-yellow-300 font-semibold mb-[0.2em] mt-[0.4em] text-[1.2em]" {...props} />,
+        h3: ({ node, ...props }: any) => <h3 className="text-yellow-200 font-medium mb-[0.15em] mt-[0.3em] text-[1.1em]" {...props} />,
+        p: ({ node, ...props }: any) => <p className="mb-[0.4em] leading-[1.5]" {...props} />,
+        ul: ({ node, ...props }: any) => <ul className="list-disc pl-[1.5em] mb-[0.4em] space-y-[0.15em] marker:text-yellow-500" {...props} />,
+        ol: ({ node, ...props }: any) => <ol className="list-decimal pl-[1.5em] mb-[0.4em] space-y-[0.15em] marker:text-yellow-500" {...props} />,
+        li: ({ node, ...props }: any) => <li className="pl-[0.25em]" {...props} />,
+        strong: ({ node, ...props }: any) => <strong className="text-yellow-100 font-bold" {...props} />,
+        em: ({ node, ...props }: any) => <em className="text-zinc-300 italic" {...props} />,
+        blockquote: ({ node, ...props }: any) => <blockquote className="border-l-4 border-yellow-500/50 pl-[0.5em] py-[0.15em] my-[0.4em] bg-yellow-500/5 rounded-r italic" {...props} />,
+        a: ({ node, href, children, ...props }: any) => {
+            const isBibleLink = href?.startsWith('bible://') || href?.startsWith('verse://') || href?.startsWith('bible-ref://');
+
+            const handleBibleClick = (e: React.MouseEvent | React.TouchEvent) => {
+                e.preventDefault();
+                e.stopPropagation();
+                // Parse back the reference if needed
+                // href is bible://1+John+3:16 or verse://John+3:16
+                const protoPattern = /^(bible|verse|bible-ref):\/\//;
+                const refString = decodeURIComponent(href!.replace(protoPattern, '')).replace(/\+/g, ' ');
+
+                // Try matching with optional numbered book prefix
+                let match = refString.match(/((?:[123]\s)?[A-Z][a-z]+)\s+(\d+):(\d+)(?:-(\d+))?/);
+
+                if (match) {
+                    let [_, book, chapter, verse, endVerse] = match;
+
+                    // Known Bible books with numeric prefixes
+                    const numberedBooks = ['Samuel', 'Kings', 'Chronicles', 'Corinthians', 'Thessalonians', 'Timothy', 'Peter', 'John'];
+
+                    // If the book doesn't have a prefix but should (e.g., "Kings" instead of "1 Kings")
+                    // Check if it's a numbered book that's missing its prefix
+                    if (!book.match(/^[123]\s/) && numberedBooks.some(nb => book === nb)) {
+                        // Default to "1 " prefix for these books
+                        book = `1 ${book}`;
+                    }
+
+                    openBible({
+                        book,
+                        chapter: parseInt(chapter),
+                        verse: parseInt(verse),
+                        endVerse: endVerse ? parseInt(endVerse) : undefined
+                    });
+                }
+            };
+
+            if (isBibleLink) {
+                return (
+                    <button
+                        onClick={handleBibleClick}
+                        onTouchEnd={handleBibleClick}
+                        style={{ touchAction: 'manipulation' }}
+                        className="text-blue-400 underline decoration-blue-400/30 active:text-blue-200 active:bg-blue-500/30 transition-colors inline-block mx-1 font-medium bg-blue-500/10 px-2 rounded cursor-pointer select-none touch-manipulation tap-highlight-transparent"
+                        title="Open in Bible Reader"
+                    >
+                        {children}
+                    </button>
+                );
+            }
+            return <a href={href} className="text-blue-400 underline" target="_blank" rel="noopener noreferrer" {...props}>{children}</a>;
+        }
+    }), [openBible]);
+
     return (
         <div className="flex flex-col h-full bg-black text-white relative overflow-hidden">
             {/* Controls Overlay (Hover to see) */}
@@ -224,65 +289,7 @@ export default function TeleprompterView({ session }: TeleprompterViewProps) {
                     <div className="prose prose-invert max-w-none text-[1em]">
                         <ReactMarkdown
                             urlTransform={(url) => url} // Allow Custom Protocols (bible://)
-                            components={{
-                                h1: ({ node, ...props }) => <h1 className="text-yellow-400 font-bold mb-[0.25em] mt-[0.5em] text-[1.4em]" {...props} />,
-                                h2: ({ node, ...props }) => <h2 className="text-yellow-300 font-semibold mb-[0.2em] mt-[0.4em] text-[1.2em]" {...props} />,
-                                h3: ({ node, ...props }) => <h3 className="text-yellow-200 font-medium mb-[0.15em] mt-[0.3em] text-[1.1em]" {...props} />,
-                                p: ({ node, ...props }) => <p className="mb-[0.4em] leading-[1.5]" {...props} />,
-                                ul: ({ node, ...props }) => <ul className="list-disc pl-[1.5em] mb-[0.4em] space-y-[0.15em] marker:text-yellow-500" {...props} />,
-                                ol: ({ node, ...props }) => <ol className="list-decimal pl-[1.5em] mb-[0.4em] space-y-[0.15em] marker:text-yellow-500" {...props} />,
-                                li: ({ node, ...props }) => <li className="pl-[0.25em]" {...props} />,
-                                strong: ({ node, ...props }) => <strong className="text-yellow-100 font-bold" {...props} />,
-                                em: ({ node, ...props }) => <em className="text-zinc-300 italic" {...props} />,
-                                blockquote: ({ node, ...props }) => <blockquote className="border-l-4 border-yellow-500/50 pl-[0.5em] py-[0.15em] my-[0.4em] bg-yellow-500/5 rounded-r italic" {...props} />,
-                                a: ({ node, href, children, ...props }) => {
-                                    const isBibleLink = href?.startsWith('bible://') || href?.startsWith('verse://') || href?.startsWith('bible-ref://');
-                                    if (isBibleLink) {
-                                        return (
-                                            <button
-                                                onClick={(e) => {
-                                                    e.preventDefault();
-                                                    // Parse back the reference if needed
-                                                    // href is bible://1+John+3:16 or verse://John+3:16
-                                                    const protoPattern = /^(bible|verse|bible-ref):\/\//;
-                                                    const refString = decodeURIComponent(href!.replace(protoPattern, '')).replace(/\+/g, ' ');
-
-                                                    // Try matching with optional numbered book prefix
-                                                    let match = refString.match(/((?:[123]\s)?[A-Z][a-z]+)\s+(\d+):(\d+)(?:-(\d+))?/);
-
-                                                    if (match) {
-                                                        let [_, book, chapter, verse, endVerse] = match;
-
-                                                        // Known Bible books with numeric prefixes
-                                                        const numberedBooks = ['Samuel', 'Kings', 'Chronicles', 'Corinthians', 'Thessalonians', 'Timothy', 'Peter', 'John'];
-
-                                                        // If the book doesn't have a prefix but should (e.g., "Kings" instead of "1 Kings")
-                                                        // Check if it's a numbered book that's missing its prefix
-                                                        if (!book.match(/^[123]\s/) && numberedBooks.some(nb => book === nb)) {
-                                                            // Try to find the chapter in the reference - if chapter seems too high,
-                                                            // the "1" might be the book number
-                                                            // Default to "1 " prefix for these books
-                                                            book = `1 ${book}`;
-                                                        }
-
-                                                        openBible({
-                                                            book,
-                                                            chapter: parseInt(chapter),
-                                                            verse: parseInt(verse),
-                                                            endVerse: endVerse ? parseInt(endVerse) : undefined
-                                                        });
-                                                    }
-                                                }}
-                                                className="text-blue-400 underline decoration-blue-400/30 hover:text-blue-300 hover:decoration-blue-300 transition-colors inline-block mx-1 font-medium bg-blue-500/10 px-2 rounded cursor-pointer"
-                                                title="Open in Bible Reader"
-                                            >
-                                                {children}
-                                            </button>
-                                        );
-                                    }
-                                    return <a href={href} className="text-blue-400 underline" target="_blank" rel="noopener noreferrer" {...props}>{children}</a>;
-                                }
-                            }}
+                            components={markdownComponents}
                         >
                             {notesContent}
                         </ReactMarkdown>

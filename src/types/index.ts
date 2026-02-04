@@ -567,6 +567,7 @@ export interface PulpitSession {
     churchId: string;
     date: any; // Firestore Timestamp - service date
     status: 'scheduled' | 'live' | 'completed';
+    startedAt?: any; // Firestore Timestamp - when "Start Timer" was pressed
 
     // Sermon content for teleprompter
     sermonTitle: string;
