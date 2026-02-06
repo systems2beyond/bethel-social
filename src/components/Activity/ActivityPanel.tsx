@@ -22,6 +22,8 @@ export function ActivityPanel() {
     const { openCollaboration, openNote } = useBible();
     const { user } = useAuth();
 
+    if (!user) return null;
+
     // Both sections collapsed by default
     const [invitesExpanded, setInvitesExpanded] = useState(false);
     const [notifsExpanded, setNotifsExpanded] = useState(false);

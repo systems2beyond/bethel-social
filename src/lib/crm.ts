@@ -208,7 +208,7 @@ export async function updateCustomFields(
  */
 export async function updatePipelineStage(
     visitorId: string,
-    newStage: 'new_guest' | 'contacted' | 'second_visit' | 'ready_for_membership' | 'converted',
+    newStage: string,
     userId?: string,
     notes?: string
 ): Promise<void> {
@@ -270,7 +270,7 @@ export async function bulkApplyTag(
  */
 export async function bulkUpdatePipelineStage(
     visitorIds: string[],
-    newStage: 'new_guest' | 'contacted' | 'second_visit' | 'ready_for_membership' | 'converted',
+    newStage: string,
     userId?: string
 ): Promise<void> {
     const batch = writeBatch(db);

@@ -39,6 +39,8 @@ import {
 import { AddMemberModal } from '@/components/Admin/PeopleHub/AddMemberModal';
 import { FamilyModal } from '@/components/Admin/PeopleHub/FamilyModal';
 import { LifeEventModal } from '@/components/Admin/PeopleHub/LifeEventModal';
+import { BulkMessageModal } from '@/components/Admin/PeopleHub/BulkMessageModal';
+import { toast } from 'sonner';
 
 // Stats card component
 const StatCard = ({ label, value, color }: { label: string; value: number; color: string }) => (
@@ -76,6 +78,9 @@ export default function MembersDirectoryPage() {
     // Life Event Modal State
     const [isLifeEventModalOpen, setIsLifeEventModalOpen] = useState(false);
     const [selectedMemberForLifeEvent, setSelectedMemberForLifeEvent] = useState<string | undefined>(undefined);
+
+    // Bulk Message Modal State
+    const [isBulkMessageOpen, setIsBulkMessageOpen] = useState(false);
 
 
     // Fetch real members from Firestore
@@ -138,7 +143,7 @@ export default function MembersDirectoryPage() {
         const csvContent = [
             headers.join(','),
             ...filteredMembers.map(m => {
-                const nameParts = m.displayName.split(' ');
+                const nameParts = (m.displayName || '').split(' ');
                 const fName = nameParts[0] || '';
                 const lName = nameParts.slice(1).join(' ') || '';
                 const lastAttended = m.lastAttendance
@@ -165,6 +170,47 @@ export default function MembersDirectoryPage() {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        toast.success('Export complete');
+    };
+
+    const handleExportPhoneList = () => {
+        const membersWithPhones = filteredMembers.filter(m => m.phoneNumber);
+        if (membersWithPhones.length === 0) {
+            toast.error('No phone numbers to export');
+            return;
+        }
+
+        const headers = ['Name', 'Phone'];
+        const csvContent = [
+            headers.join(','),
+            ...membersWithPhones.map(m => [
+                `"${m.displayName || m.email || 'Unknown'}"`,
+                `"${m.phoneNumber}"`
+            ].join(','))
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', `phone_list_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        toast.success(`Exported ${membersWithPhones.length} phone numbers`);
+    };
+
+    const handleOpenBulkMessage = () => {
+        if (filteredMembers.length === 0) {
+            toast.error('No members to message');
+            return;
+        }
+        setIsBulkMessageOpen(true);
+    };
+
+    const handleOpenLifeEventFromMenu = () => {
+        setSelectedMemberForLifeEvent(undefined); // Open without pre-selected member
+        setIsLifeEventModalOpen(true);
     };
 
     const handleMessage = (memberId: string) => {
@@ -176,8 +222,12 @@ export default function MembersDirectoryPage() {
     };
 
     const handleViewProfile = (memberId: string) => {
-        console.log('View profile:', memberId);
-        // TODO: Navigate to profile page or open profile modal
+        // Open message modal to send a direct message to this member
+        const member = members.find(m => m.uid === memberId);
+        if (member) {
+            setSelectedMemberForMessage(member);
+            setIsMessageModalOpen(true);
+        }
     };
 
     const handleAddLifeEvent = (memberId: string) => {
@@ -348,16 +398,16 @@ export default function MembersDirectoryPage() {
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                                <DropdownMenuItem>
+                                <DropdownMenuItem onClick={handleOpenBulkMessage}>
                                     <Mail className="h-4 w-4 mr-2" />
-                                    Send Bulk Email
+                                    Send Bulk Message
                                 </DropdownMenuItem>
-                                <DropdownMenuItem>
+                                <DropdownMenuItem onClick={handleExportPhoneList}>
                                     <Phone className="h-4 w-4 mr-2" />
                                     Export Phone List
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem>
+                                <DropdownMenuItem onClick={handleOpenLifeEventFromMenu}>
                                     <Heart className="h-4 w-4 mr-2" />
                                     Log Life Event
                                 </DropdownMenuItem>
@@ -450,6 +500,14 @@ export default function MembersDirectoryPage() {
                 }}
                 memberId={selectedMemberForLifeEvent}
                 members={members}
+                onSuccess={fetchMembers}
+            />
+
+            {/* Bulk Message Modal */}
+            <BulkMessageModal
+                open={isBulkMessageOpen}
+                onOpenChange={setIsBulkMessageOpen}
+                recipients={filteredMembers}
                 onSuccess={fetchMembers}
             />
         </div >

@@ -47,6 +47,7 @@ const MAX_RECENT_ITEMS = 6;
 export function LocalActivitySidebar({ className }: { className?: string }) {
     const router = useRouter();
     const { user } = useAuth();
+    if (!user) return null;
     const { invitations, notifications, sentInvitations, usersMap, markAsViewed, setActivityPanelOpen } = useActivity();
     const {
         openNote,

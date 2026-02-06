@@ -24,7 +24,7 @@ import { useChurchConfig } from '@/hooks/useChurchConfig';
 
 // Public routes that don't need sidebar
 // Public routes that don't need sidebar
-const PUBLIC_ROUTES = ['/connect'];
+const PUBLIC_ROUTES = ['/connect', '/connect-form', '/pulpit'];
 
 export function Sidebar() {
     const pathname = usePathname();

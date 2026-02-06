@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, query, where, getDocs, updateDoc, doc, serverTimestamp, setDoc } from 'firebase/firestore';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2, Send } from 'lucide-react';
@@ -93,6 +93,9 @@ export function QuickMessageModal({ isOpen, onClose, recipient }: QuickMessageMo
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
                     <DialogTitle>Message {recipient?.displayName}</DialogTitle>
+                    <DialogDescription>
+                        Send a direct message to this member's inbox
+                    </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                     <Textarea

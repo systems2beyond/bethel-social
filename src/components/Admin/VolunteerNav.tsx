@@ -1,3 +1,4 @@
+
 'use client';
 
 import React from 'react';
@@ -16,39 +17,25 @@ export function VolunteerNav() {
     ];
 
     return (
-        <div className="mb-8">
-            <div className="flex items-center space-x-2 text-gray-500 mb-4">
-                <Link href="/admin" className="hover:text-gray-900 flex items-center transition-colors">
-                    <ArrowLeft className="w-4 h-4 mr-1" /> Back to Dashboard
-                </Link>
-            </div>
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold text-gray-900">Volunteer Management</h1>
-                    <p className="text-gray-500">Coordinate your teams and services.</p>
-                </div>
-            </div>
-
-            <div className="flex space-x-1 mt-6 bg-white p-1 rounded-xl border border-gray-200 w-fit">
-                {links.map(link => {
-                    const isActive = pathname === link.href;
-                    return (
-                        <Link
-                            key={link.href}
-                            href={link.href}
-                            className={cn(
-                                "flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all",
-                                isActive
-                                    ? "bg-teal-50 text-teal-700 shadow-sm"
-                                    : "text-gray-600 hover:bg-gray-50"
-                            )}
-                        >
-                            <link.icon className="w-4 h-4" />
-                            <span>{link.label}</span>
-                        </Link>
-                    );
-                })}
-            </div>
+        <div className="flex space-x-1 mb-6 bg-white dark:bg-zinc-900 p-1 rounded-xl border border-gray-100 dark:border-zinc-800 w-fit">
+            {links.map(link => {
+                const isActive = pathname === link.href;
+                return (
+                    <Link
+                        key={link.href}
+                        href={link.href}
+                        className={cn(
+                            "flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all text-nowrap",
+                            isActive
+                                ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 shadow-sm"
+                                : "text-gray-600 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-zinc-800"
+                        )}
+                    >
+                        <link.icon className="w-4 h-4" />
+                        <span>{link.label}</span>
+                    </Link>
+                );
+            })}
         </div>
     );
 }

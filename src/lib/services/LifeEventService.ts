@@ -81,15 +81,32 @@ export class LifeEventService {
         event: Omit<LifeEvent, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>,
         createdBy: string
     ): Promise<string> {
-        // Create the life event document
-        const docRef = await addDoc(collection(db, LIFE_EVENTS_COLLECTION), {
-            ...event,
+        // Build the document data, excluding undefined fields
+        const eventData: Record<string, unknown> = {
+            memberId: event.memberId,
+            memberName: event.memberName,
+            eventType: event.eventType,
+            eventDate: event.eventDate,
+            description: event.description || '',
+            priority: event.priority || 'normal',
+            requiresFollowUp: event.requiresFollowUp ?? false,
+            status: event.status || 'new',
+            isActive: event.isActive ?? true,
             createdBy,
             createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-            isActive: event.isActive ?? true,
-            status: event.status || 'new'
-        });
+            updatedAt: serverTimestamp()
+        };
+
+        // Only add optional fields if they have values
+        if (event.assignedTo) {
+            eventData.assignedTo = event.assignedTo;
+        }
+        if (event.actions && event.actions.length > 0) {
+            eventData.actions = event.actions;
+        }
+
+        // Create the life event document
+        const docRef = await addDoc(collection(db, LIFE_EVENTS_COLLECTION), eventData);
 
         // Update user's lifeEvents array for quick access in table
         try {

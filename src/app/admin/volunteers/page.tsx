@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -8,15 +9,60 @@ import { VolunteerNav } from '@/components/Admin/VolunteerNav';
 import { VolunteerProfileModal } from '@/components/Admin/VolunteerProfileModal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Loader2, Search, Filter, Mail, Phone, MoreHorizontal, CheckCircle, AlertCircle, Calendar, Users } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
+import {
+    Loader2,
+    Search,
+    Filter,
+    Mail,
+    Phone,
+    MoreHorizontal,
+    CheckCircle,
+    AlertCircle,
+    Calendar,
+    Users,
+    UserPlus,
+    ArrowLeft,
+    ChevronDown,
+    Download,
+    ShieldCheck,
+    Clock,
+    Heart
+} from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import Link from 'next/link';
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
+    DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+
+// Stats card component
+const StatCard = ({ label, value, icon: Icon, color }: { label: string; value: number; icon: React.ElementType; color: string }) => (
+    <div className={cn(
+        "flex items-center gap-4 px-5 py-4 rounded-xl border",
+        "bg-white dark:bg-zinc-900 border-gray-100 dark:border-zinc-800 shadow-sm"
+    )}>
+        <div className={cn("p-3 rounded-xl", color)}>
+            <Icon className="h-5 w-5 text-white" />
+        </div>
+        <div>
+            <p className="text-2xl font-bold text-foreground">{value}</p>
+            <p className="text-sm text-muted-foreground">{label}</p>
+        </div>
+    </div>
+);
 
 export default function VolunteerDirectoryPage() {
     const { userData } = useAuth();
@@ -38,14 +84,12 @@ export default function VolunteerDirectoryPage() {
         if (!churchId) return;
         setLoading(true);
         try {
-            // Fetch active volunteers
             const filters: any = {};
             if (selectedMinistryId !== 'all') filters.ministry = selectedMinistryId;
             if (selectedDay !== 'all') filters.availableDay = selectedDay;
 
             const results = await VolunteerService.searchVolunteers(churchId, filters);
 
-            // Client-side name filtering (Firestore doesn't support partial text search natively well with other filters)
             let filtered = results;
             if (searchName) {
                 const lower = searchName.toLowerCase();
@@ -64,7 +108,7 @@ export default function VolunteerDirectoryPage() {
 
     useEffect(() => {
         fetchVolunteers();
-    }, [churchId, selectedMinistryId, selectedDay, searchName]); // Search name triggers re-fetch (suboptimal but simple for now, maybe debounce)
+    }, [churchId, selectedMinistryId, selectedDay, searchName]);
 
     const handleEdit = (user: FirestoreUser) => {
         setSelectedUser(user);
@@ -76,109 +120,225 @@ export default function VolunteerDirectoryPage() {
         return ids.map(id => ministries.find(m => m.id === id)?.name).filter(Boolean);
     };
 
+    // Stats
+    const totalVolunteers = volunteers.length;
+    const verifiedCount = volunteers.filter(v => v.volunteerProfile?.backgroundCheckStatus === 'approved').length;
+    const pendingCount = volunteers.filter(v => !v.volunteerProfile?.backgroundCheckStatus || v.volunteerProfile?.backgroundCheckStatus === 'pending').length;
+
     return (
-        <div className="min-h-screen bg-gray-50 p-8">
-            <div className="max-w-6xl mx-auto space-y-8">
+        <div className="min-h-screen bg-gray-50 dark:bg-zinc-950">
+            {/* Sticky Header - Copper Style */}
+            <div className="sticky top-0 z-10 bg-white dark:bg-zinc-900 border-b border-gray-100 dark:border-zinc-800 shadow-sm">
+                <div className="max-w-7xl mx-auto px-6 py-4">
+                    <div className="flex items-center justify-between">
+                        {/* Left: Back + Title */}
+                        <div className="flex items-center gap-4">
+                            <Link
+                                href="/admin"
+                                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
+                            >
+                                <ArrowLeft className="w-5 h-5 text-muted-foreground" />
+                            </Link>
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <div className="p-1.5 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600">
+                                        <Heart className="h-4 w-4 text-white" />
+                                    </div>
+                                    <h1 className="text-xl font-bold text-foreground">Volunteer Management</h1>
+                                    <Badge variant="secondary" className="ml-2 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                                        {totalVolunteers} volunteers
+                                    </Badge>
+                                </div>
+                                <p className="text-sm text-muted-foreground mt-0.5">
+                                    Manage volunteer assignments, schedules, and clearances
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Right: Actions */}
+                        <div className="flex items-center gap-2">
+                            <Button variant="outline" size="sm" className="hidden sm:flex">
+                                <Download className="h-4 w-4 mr-2" />
+                                Export
+                            </Button>
+                            <Button size="sm" className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-sm">
+                                <UserPlus className="h-4 w-4 mr-2" />
+                                Add Volunteer
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Main Content */}
+            <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
+
+                {/* Navigation Tabs */}
                 <VolunteerNav />
 
+                {/* Stats Row */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <StatCard
+                        label="Total Volunteers"
+                        value={totalVolunteers}
+                        icon={Users}
+                        color="bg-gradient-to-br from-emerald-500 to-teal-600"
+                    />
+                    <StatCard
+                        label="Background Verified"
+                        value={verifiedCount}
+                        icon={ShieldCheck}
+                        color="bg-gradient-to-br from-green-500 to-emerald-600"
+                    />
+                    <StatCard
+                        label="Pending Review"
+                        value={pendingCount}
+                        icon={Clock}
+                        color="bg-gradient-to-br from-amber-500 to-orange-600"
+                    />
+                </div>
+
                 {/* Filters */}
-                <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row gap-4 items-center">
+                <div className="flex flex-col md:flex-row gap-4 items-stretch md:items-center">
                     <div className="relative flex-1">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                         <Input
                             placeholder="Search by name or email..."
-                            className="pl-10"
+                            className="pl-10 bg-white dark:bg-zinc-900 border-gray-200 dark:border-zinc-700"
                             value={searchName}
                             onChange={(e) => setSearchName(e.target.value)}
                         />
                     </div>
-                    <select
-                        className="h-10 rounded-md border border-gray-300 px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                        value={selectedMinistryId}
-                        onChange={(e) => setSelectedMinistryId(e.target.value)}
-                    >
-                        <option value="all">All Ministries</option>
-                        {ministries.map(m => (
-                            <option key={m.id} value={m.id}>{m.name}</option>
-                        ))}
-                    </select>
-                    <select
-                        className="h-10 rounded-md border border-gray-300 px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                        value={selectedDay}
-                        onChange={(e) => setSelectedDay(e.target.value)}
-                    >
-                        <option value="all">Any Availability</option>
-                        <option value="sunday">Sunday</option>
-                        <option value="wednesday">Wednesday</option>
-                        <option value="saturday">Saturday</option>
-                    </select>
+                    <div className="flex items-center gap-2">
+                        <Select value={selectedMinistryId} onValueChange={setSelectedMinistryId}>
+                            <SelectTrigger className="w-[180px] bg-white dark:bg-zinc-900">
+                                <SelectValue placeholder="All Ministries" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Ministries</SelectItem>
+                                {ministries.map(m => (
+                                    <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <Select value={selectedDay} onValueChange={setSelectedDay}>
+                            <SelectTrigger className="w-[160px] bg-white dark:bg-zinc-900">
+                                <SelectValue placeholder="Any Day" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">Any Availability</SelectItem>
+                                <SelectItem value="sunday">Sunday</SelectItem>
+                                <SelectItem value="wednesday">Wednesday</SelectItem>
+                                <SelectItem value="saturday">Saturday</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
                 </div>
 
-                {/* List */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                {/* Volunteer List */}
+                <div className="rounded-xl border border-gray-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm overflow-hidden">
                     {loading ? (
-                        <div className="p-12 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-gray-400" /></div>
+                        <div className="p-8 space-y-4">
+                            {[1, 2, 3, 4].map(i => (
+                                <Skeleton key={i} className="h-20 w-full" />
+                            ))}
+                        </div>
                     ) : volunteers.length === 0 ? (
-                        <div className="p-12 text-center text-gray-500">
-                            <Users className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                            <p>No volunteers found matching your filters.</p>
+                        <div className="p-12 text-center">
+                            <div className="inline-flex p-4 rounded-full bg-emerald-50 dark:bg-emerald-900/20 mb-4">
+                                <Users className="h-8 w-8 text-emerald-400" />
+                            </div>
+                            <h3 className="font-semibold text-foreground mb-2">No volunteers found</h3>
+                            <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+                                {searchName ? 'Try adjusting your search filters' : 'Add volunteers to start managing your ministry teams'}
+                            </p>
+                            {!searchName && (
+                                <Button className="mt-4 bg-gradient-to-r from-emerald-500 to-teal-600">
+                                    <UserPlus className="h-4 w-4 mr-2" />
+                                    Add First Volunteer
+                                </Button>
+                            )}
                         </div>
                     ) : (
                         <table className="w-full text-left">
-                            <thead className="bg-gray-50 border-b border-gray-200">
+                            <thead className="bg-gray-50 dark:bg-zinc-800/50 border-b border-gray-200 dark:border-zinc-700">
                                 <tr>
-                                    <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Volunteer</th>
-                                    <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Ministries</th>
-                                    <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Availability</th>
-                                    <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Status</th>
-                                    <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase text-right">Actions</th>
+                                    <th className="px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Volunteer</th>
+                                    <th className="px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Ministries</th>
+                                    <th className="px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Availability</th>
+                                    <th className="px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
+                                    <th className="px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide text-right">Actions</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-100">
+                            <tbody className="divide-y divide-gray-100 dark:divide-zinc-800">
                                 {volunteers.map((volunteer) => (
-                                    <tr key={volunteer.uid} className="hover:bg-gray-50 transition-colors">
+                                    <tr key={volunteer.uid} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors">
                                         <td className="px-6 py-4">
-                                            <div className="flex flex-col">
-                                                <span className="font-medium text-gray-900">{volunteer.displayName}</span>
-                                                <span className="text-sm text-gray-500">{volunteer.email}</span>
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white font-semibold text-sm">
+                                                    {volunteer.displayName?.charAt(0).toUpperCase() || '?'}
+                                                </div>
+                                                <div>
+                                                    <span className="font-medium text-foreground">{volunteer.displayName}</span>
+                                                    <p className="text-sm text-muted-foreground">{volunteer.email}</p>
+                                                </div>
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">
                                             <div className="flex flex-wrap gap-1">
                                                 {getMinistryNames(volunteer.volunteerProfile?.ministries).map((name, i) => (
-                                                    <Badge key={i} variant="secondary" className="text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 border-none">
+                                                    <Badge key={i} variant="secondary" className="text-xs bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border-0">
                                                         {name}
                                                     </Badge>
                                                 ))}
                                                 {(!volunteer.volunteerProfile?.ministries || volunteer.volunteerProfile.ministries.length === 0) && (
-                                                    <span className="text-sm text-gray-400 italic">None</span>
+                                                    <span className="text-sm text-muted-foreground italic">None assigned</span>
                                                 )}
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <div className="flex gap-1 text-xs text-gray-500">
-                                                {volunteer.volunteerProfile?.availability?.sunday && <Badge variant="outline">Sun</Badge>}
-                                                {volunteer.volunteerProfile?.availability?.wednesday && <Badge variant="outline">Wed</Badge>}
-                                                {volunteer.volunteerProfile?.availability?.saturday && <Badge variant="outline">Sat</Badge>}
+                                            <div className="flex gap-1">
+                                                {volunteer.volunteerProfile?.availability?.sunday && <Badge variant="outline" className="text-xs">Sun</Badge>}
+                                                {volunteer.volunteerProfile?.availability?.wednesday && <Badge variant="outline" className="text-xs">Wed</Badge>}
+                                                {volunteer.volunteerProfile?.availability?.saturday && <Badge variant="outline" className="text-xs">Sat</Badge>}
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">
                                             {volunteer.volunteerProfile?.backgroundCheckStatus === 'approved' ? (
-                                                <div className="flex items-center text-xs text-green-600 font-medium">
-                                                    <CheckCircle className="w-3 h-3 mr-1" /> Verified
+                                                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-medium">
+                                                    <CheckCircle className="w-3 h-3" /> Verified
                                                 </div>
                                             ) : volunteer.volunteerProfile?.backgroundCheckStatus === 'expired' ? (
-                                                <div className="flex items-center text-xs text-red-600 font-medium">
-                                                    <AlertCircle className="w-3 h-3 mr-1" /> Expired
+                                                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-xs font-medium">
+                                                    <AlertCircle className="w-3 h-3" /> Expired
                                                 </div>
                                             ) : (
-                                                <span className="text-xs text-gray-400">Pending Check</span>
+                                                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-xs font-medium">
+                                                    <Clock className="w-3 h-3" /> Pending
+                                                </div>
                                             )}
                                         </td>
                                         <td className="px-6 py-4 text-right">
-                                            <Button variant="ghost" size="sm" onClick={() => handleEdit(volunteer)}>
-                                                Edit Profile
-                                            </Button>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" size="sm">
+                                                        <MoreHorizontal className="h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuItem onClick={() => handleEdit(volunteer)}>
+                                                        Edit Profile
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem>
+                                                        <Mail className="h-4 w-4 mr-2" />
+                                                        Send Message
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem>
+                                                        <Calendar className="h-4 w-4 mr-2" />
+                                                        View Schedule
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
                                         </td>
                                     </tr>
                                 ))}
@@ -192,7 +352,7 @@ export default function VolunteerDirectoryPage() {
                     onClose={() => setIsModalOpen(false)}
                     user={selectedUser}
                     ministries={ministries}
-                    onSave={async () => { await fetchVolunteers(); }} // Correctly await the refresh
+                    onSave={async () => { await fetchVolunteers(); }}
                 />
             </div>
         </div>

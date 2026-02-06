@@ -14,7 +14,7 @@ import { useAuth } from '@/context/AuthContext';
 import { PulpitService } from '@/lib/services/PulpitService';
 
 // Public routes that don't need the full app shell
-const PUBLIC_ROUTES = ['/connect', '/pulpit'];
+const PUBLIC_ROUTES = ['/connect', '/connect-form', '/pulpit'];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();

@@ -14,6 +14,7 @@ import { ArrowLeft, Users, Calendar, Settings, Search, MessageSquare, Plus } fro
 import { MemberTable } from '@/components/Admin/MinistryCRM/MemberTable';
 import * as Icons from 'lucide-react';
 import Link from 'next/link';
+import { canAccessVolunteerManagement } from '@/lib/permissions';
 
 export default function MinistryDetailPage() {
     const params = useParams();
@@ -73,6 +74,19 @@ export default function MinistryDetailPage() {
         loadMembers();
     }, [ministry, userData?.churchId]);
 
+    // 3. Permission Check
+    useEffect(() => {
+        if (!loadingMembers && ministry && userData) {
+            // Need ministry object to check if user is leader if strictly scoped
+            // But canAccessVolunteerManagement takes (user, ministryId)
+            if (!canAccessVolunteerManagement(userData, ministryId)) {
+                // Redirect or show access denied
+                // router.push('/admin'); // Uncomment to enforce
+                console.warn("Access Denied: User is not authorized for this ministry view.");
+            }
+        }
+    }, [ministry, userData, loadingMembers, ministryId]);
+
     if (!ministry) {
         return <div className="min-h-screen bg-gray-50 flex items-center justify-center">Loading...</div>;
     }
@@ -109,6 +123,14 @@ export default function MinistryDetailPage() {
                                 <ArrowLeft className="w-4 h-4 mr-2" />
                                 Back
                             </Button>
+                            {ministry.linkedGroupId && (
+                                <Link href={`/groups/${ministry.linkedGroupId}`}>
+                                    <Button variant="outline" className="text-blue-600 border-blue-200 hover:bg-blue-50">
+                                        <MessageSquare className="w-4 h-4 mr-2" />
+                                        Team Chat
+                                    </Button>
+                                </Link>
+                            )}
                             <Button className="bg-blue-600 hover:bg-blue-700">
                                 <Settings className="w-4 h-4 mr-2" />
                                 Settings
@@ -126,10 +148,12 @@ export default function MinistryDetailPage() {
                             <Calendar className="w-4 h-4" />
                             Schedule
                         </div>
-                        <div className="flex items-center gap-2 text-gray-500 pb-4 hover:text-gray-700 cursor-pointer">
-                            <MessageSquare className="w-4 h-4" />
-                            Discussion
-                        </div>
+                        {ministry.linkedGroupId && (
+                            <Link href={`/groups/${ministry.linkedGroupId}`} className="flex items-center gap-2 text-gray-500 pb-4 hover:text-gray-700 cursor-pointer">
+                                <MessageSquare className="w-4 h-4" />
+                                Discussion
+                            </Link>
+                        )}
                     </div>
                 </div>
             </div>

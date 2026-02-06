@@ -10,7 +10,7 @@ import { PostComposer } from '../Feed/PostComposer';
 
 // Public routes that don't need bottom bar
 // Public routes that don't need bottom bar
-const PUBLIC_ROUTES = ['/connect', '/pulpit'];
+const PUBLIC_ROUTES = ['/connect', '/connect-form', '/pulpit'];
 
 export function BottomBar() {
     const [input, setInput] = React.useState('');

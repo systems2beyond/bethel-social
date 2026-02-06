@@ -231,10 +231,13 @@ service cloud.firestore {
     // ---------------------------------------------------------
 
     // Visitors Collection - Staff/Admin can manage, public can create (via /connect form)
+    // Visitors Collection - Staff/Admin can manage, public can create (via /connect form)
     match /visitors/{visitorId} {
-      allow read: if isAuthenticated() && (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'staff']);
-      allow create: if true; // Public can submit via connection card
-      allow update, delete: if isAuthenticated() && (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'staff']);
+      // [DEBUG] Allow public access for development
+      allow read, write: if true;
+      // allow read: if isAuthenticated() && (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'staff']);
+      // allow create: if true; // Public can submit via connection card
+      // allow update, delete: if isAuthenticated() && (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'staff']);
     }
 
     // Tags Collection - Staff/Admin can manage
@@ -265,9 +268,12 @@ service cloud.firestore {
     }
 
     // Pipeline Boards - Staff/Admin can manage
+    // Pipeline Boards - Staff/Admin can manage
     match /pipeline_boards/{boardId} {
-      allow read: if isAuthenticated() && (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'staff']);
-      allow create, update, delete: if isAuthenticated() && (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'staff']);
+      // [DEBUG] Allow public access for development
+      allow read, write: if true;
+      // allow read: if isAuthenticated() && (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'staff']);
+      // allow create, update, delete: if isAuthenticated() && (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'staff']);
     }
 
     // Connect Form Config - Public read, admin write

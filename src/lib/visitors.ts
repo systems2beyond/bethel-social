@@ -13,6 +13,7 @@ export const VisitorsService = {
         const newVisitor = {
             ...data,
             status: 'new',
+            pipelineStage: 'new_guest',
             source: 'qr-code', // Default to QR code for the public form
             createdAt: serverTimestamp(),
             auditLog: [] // Initialize empty audit log

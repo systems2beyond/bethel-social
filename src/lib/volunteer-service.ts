@@ -68,12 +68,34 @@ export class VolunteerService {
     }
 
     /**
-     * Create a new ministry
+     * Create a new ministry and a linked Community Group
      */
     static async createMinistry(ministry: Omit<Ministry, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
         try {
+            // 1. Create Linked Group
+            const groupRef = await addDoc(collection(db, 'groups'), {
+                name: ministry.name,
+                description: ministry.description || `Ministry group for ${ministry.name}`,
+                type: 'ministry',
+                privacy: 'private', // Ministries are usually private/invite-only or request-to-join
+                status: 'active',
+                churchId: ministry.churchId,
+                tags: ['ministry', 'volunteer'],
+                memberCount: 0, // Leader will join later
+                createdBy: 'system', // or passed userId
+                createdAt: serverTimestamp(),
+                lastActivityAt: serverTimestamp(),
+                settings: {
+                    postingPermission: 'everyone',
+                    invitePermission: 'admins_only',
+                    joinPolicy: 'request'
+                }
+            });
+
+            // 2. Create Ministry with link
             const docRef = await addDoc(collection(db, MINISTRIES_COLLECTION), {
                 ...ministry,
+                linkedGroupId: groupRef.id,
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp()
             });

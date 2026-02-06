@@ -83,7 +83,6 @@ input[type="submit"],
 }
 
 /* Custom Scrollbar */
-/* Custom Scrollbar */
 .custom-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
@@ -91,29 +90,95 @@ input[type="submit"],
 
 .custom-scrollbar::-webkit-scrollbar {
   height: 12px;
-  /* Much taller */
   width: 12px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
   background: rgba(0, 0, 0, 0.1);
-  /* Visible track */
   border-radius: 6px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
   background-color: rgba(75, 85, 99, 1);
-  /* Dark grey */
   border-radius: 20px;
   border: 3px solid transparent;
-  /* Padding */
   background-clip: content-box;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background-color: rgba(55, 65, 81, 1);
-  /* Almost black on hover */
 }
+
+/* Pipeline Scrollbar - High Visibility Forced */
+.pipeline-scrollbar {
+  scrollbar-width: auto !important;
+  scrollbar-color: #94a3b8 #f1f5f9 !important;
+  /* Slate-400 thumb on Slate-100 track */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Chrome/Safari/Webkit Force Visibility */
+.pipeline-scrollbar::-webkit-scrollbar {
+  height: 16px !important;
+  /* Even larger for absolute clarity */
+  width: 16px !important;
+  display: block !important;
+  /* CRITICAL: Forces display on macOS */
+  -webkit-appearance: none !important;
+  background-color: #f1f5f9 !important;
+  /* Track color */
+}
+
+.pipeline-scrollbar::-webkit-scrollbar-track {
+  background-color: #f1f5f9 !important;
+  /* Slate-100 */
+  border-left: 1px solid #e2e8f0 !important;
+  /* Subtle border */
+}
+
+.pipeline-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #64748b !important;
+  /* Slate-500 - Visible Contrast */
+  border-radius: 8px !important;
+  border: 3px solid #f1f5f9 !important;
+  /* Creates padding effect */
+  background-clip: content-box !important;
+}
+
+.pipeline-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #475569 !important;
+  /* Slate-600 on hover */
+}
+
+/* Dark Mode Overrides - High Contrast */
+.dark .pipeline-scrollbar {
+  scrollbar-color: #a1a1aa #27272a !important;
+  /* Zinc-400 on Zinc-800 */
+}
+
+.dark .pipeline-scrollbar::-webkit-scrollbar {
+  background-color: #27272a !important;
+  /* Zinc-800 - Lighter than bg */
+}
+
+.dark .pipeline-scrollbar::-webkit-scrollbar-track {
+  background-color: #27272a !important;
+  /* Zinc-800 */
+  border-left: 1px solid #3f3f46 !important;
+}
+
+.dark .pipeline-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #a1a1aa !important;
+  /* Zinc-400 - Much lighter/visible */
+  border: 3px solid #27272a !important;
+  border-radius: 8px !important;
+}
+
+.dark .pipeline-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #d4d4d8 !important;
+  /* Zinc-300 on hover */
+}
+
 
 /* Tiptap Global Drag Handle */
 .drag-handle {
