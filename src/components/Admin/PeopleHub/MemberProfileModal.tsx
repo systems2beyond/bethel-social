@@ -246,16 +246,16 @@ export function MemberProfileModal({
                     </div>
                 </div>
 
-                {/* Avatar overlapping header */}
+                {/* Avatar and Name row below header */}
                 <div className="px-6 -mt-12">
-                    <div className="flex items-end gap-5">
-                        <Avatar className="h-20 w-20 ring-4 ring-white dark:ring-zinc-900 shadow-lg">
+                    <div className="flex items-end gap-4">
+                        <Avatar className="h-20 w-20 ring-4 ring-white dark:ring-zinc-900 shadow-lg shrink-0">
                             <AvatarImage src={member.photoURL} />
                             <AvatarFallback className="text-xl bg-gradient-to-br from-amber-500 to-orange-600 text-white">
                                 {initials}
                             </AvatarFallback>
                         </Avatar>
-                        <div className="flex-1 min-w-0 pb-2 pl-1">
+                        <div className="flex-1 min-w-0 pb-2 ml-1">
                             {isEditing ? (
                                 <Input
                                     value={editData.displayName}

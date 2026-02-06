@@ -36,6 +36,8 @@ import { QuickMessageModal } from '@/components/Admin/MinistryCRM/QuickMessageMo
 import { LifeEventModal } from '@/components/Admin/PeopleHub/LifeEventModal';
 import { MemberProfileModal } from '@/components/Admin/PeopleHub/MemberProfileModal';
 import { DistrictModal } from '@/components/Admin/PeopleHub/DistrictModal';
+import { FamilyModal } from '@/components/Admin/PeopleHub/FamilyModal';
+import { AssignDistrictModal } from '@/components/Admin/PeopleHub/AssignDistrictModal';
 import { DistrictService } from '@/lib/services/DistrictService';
 import { toast } from 'sonner';
 
@@ -106,8 +108,18 @@ export default function DistrictCRMPage() {
     // District Modal State (for creating new districts)
     const [isDistrictModalOpen, setIsDistrictModalOpen] = useState(false);
 
-    // Check if user is admin (can see all districts)
-    const isAdmin = userData?.role === 'admin' || userData?.role === 'super_admin' || userData?.role === 'pastor_admin';
+    // Family Modal State
+    const [isFamilyModalOpen, setIsFamilyModalOpen] = useState(false);
+    const [selectedFamilyId, setSelectedFamilyId] = useState<string | undefined>(undefined);
+    const [selectedMemberForFamily, setSelectedMemberForFamily] = useState<string | undefined>(undefined);
+
+    // Assign District Modal State
+    const [isAssignDistrictModalOpen, setIsAssignDistrictModalOpen] = useState(false);
+    const [selectedMemberForAssignDistrict, setSelectedMemberForAssignDistrict] = useState<FirestoreUser | null>(null);
+
+    // Check if user is admin (can see all districts) - case-insensitive check
+    const userRole = userData?.role?.toLowerCase();
+    const isAdmin = userRole === 'admin' || userRole === 'super_admin' || userRole === 'pastor_admin';
 
     // Fetch all users once
     useEffect(() => {
@@ -238,6 +250,20 @@ export default function DistrictCRMPage() {
     const handleAddLifeEvent = (memberId: string) => {
         setSelectedMemberForLifeEvent(memberId);
         setIsLifeEventModalOpen(true);
+    };
+
+    const handleOpenFamilyModal = (memberId: string, familyId?: string) => {
+        setSelectedMemberForFamily(memberId);
+        setSelectedFamilyId(familyId);
+        setIsFamilyModalOpen(true);
+    };
+
+    const handleOpenAssignDistrictModal = (memberId: string) => {
+        const member = members.find(m => m.uid === memberId);
+        if (member) {
+            setSelectedMemberForAssignDistrict(member);
+            setIsAssignDistrictModalOpen(true);
+        }
     };
 
     const refreshData = async () => {
@@ -475,6 +501,9 @@ export default function DistrictCRMPage() {
                                     onViewProfile={handleViewProfile}
                                     onAddLifeEvent={handleAddLifeEvent}
                                     onRoleUpdate={refreshData}
+                                    onOpenFamilyModal={handleOpenFamilyModal}
+                                    onOpenDistrictModal={handleOpenAssignDistrictModal}
+                                    districts={availableDistricts}
                                 />
                             )}
                         </div>
@@ -522,6 +551,14 @@ export default function DistrictCRMPage() {
                     setSelectedMemberForLifeEvent(memberId);
                     setIsLifeEventModalOpen(true);
                 }}
+                onAssignDistrict={(memberId) => {
+                    handleOpenAssignDistrictModal(memberId);
+                }}
+                onAssignFamily={(memberId, familyId) => {
+                    setSelectedMemberForFamily(memberId);
+                    setSelectedFamilyId(familyId);
+                    setIsFamilyModalOpen(true);
+                }}
             />
 
             {/* District Modal (for creating new districts) */}
@@ -538,6 +575,36 @@ export default function DistrictCRMPage() {
                     }}
                 />
             )}
+
+            {/* Family Modal */}
+            <FamilyModal
+                open={isFamilyModalOpen}
+                onOpenChange={(open) => {
+                    setIsFamilyModalOpen(open);
+                    if (!open) {
+                        setSelectedMemberForFamily(undefined);
+                        setSelectedFamilyId(undefined);
+                    }
+                }}
+                familyId={selectedFamilyId}
+                preSelectedMemberId={selectedMemberForFamily}
+                members={allMembers}
+                onSuccess={refreshData}
+            />
+
+            {/* Assign District Modal */}
+            <AssignDistrictModal
+                open={isAssignDistrictModalOpen}
+                onOpenChange={(open) => {
+                    setIsAssignDistrictModalOpen(open);
+                    if (!open) {
+                        setSelectedMemberForAssignDistrict(null);
+                    }
+                }}
+                member={selectedMemberForAssignDistrict}
+                districts={availableDistricts}
+                onSuccess={refreshData}
+            />
         </div>
     );
 }
