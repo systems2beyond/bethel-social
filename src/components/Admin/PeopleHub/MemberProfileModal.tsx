@@ -198,52 +198,11 @@ export function MemberProfileModal({
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-[640px] max-h-[90vh] overflow-hidden p-0 rounded-2xl border-gray-200/50 dark:border-zinc-700/50 shadow-[0_25px_50px_-12px_rgb(0,0,0,0.25)] bg-white dark:bg-zinc-900">
-                {/* Header with Avatar - Copper/Amber Treatment */}
+                {/* Header - Copper/Amber Treatment */}
                 <div className="relative bg-gradient-to-r from-amber-500 to-orange-600 px-6 pt-6 pb-16">
-                    <div className="flex items-center justify-between">
-                        <DialogTitle className="text-white text-xl font-semibold">
-                            Member Profile
-                        </DialogTitle>
-                        <div className="flex items-center gap-2">
-                            {!isEditing ? (
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => setIsEditing(true)}
-                                    className="text-white/90 hover:text-white hover:bg-white/10"
-                                >
-                                    <Edit2 className="h-4 w-4 mr-1" />
-                                    Edit
-                                </Button>
-                            ) : (
-                                <>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => setIsEditing(false)}
-                                        disabled={loading}
-                                        className="text-white/90 hover:text-white hover:bg-white/10"
-                                    >
-                                        <X className="h-4 w-4 mr-1" />
-                                        Cancel
-                                    </Button>
-                                    <Button
-                                        size="sm"
-                                        onClick={handleSave}
-                                        disabled={loading}
-                                        className="bg-white text-amber-600 hover:bg-white/90"
-                                    >
-                                        {loading ? (
-                                            <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                                        ) : (
-                                            <Save className="h-4 w-4 mr-1" />
-                                        )}
-                                        Save
-                                    </Button>
-                                </>
-                            )}
-                        </div>
-                    </div>
+                    <DialogTitle className="text-white text-xl font-semibold">
+                        Member Profile
+                    </DialogTitle>
                 </div>
 
                 {/* Avatar and Name section below header */}
@@ -256,31 +215,74 @@ export function MemberProfileModal({
                             </AvatarFallback>
                         </Avatar>
                         <div className="pt-6 flex-1">
-                            {isEditing ? (
-                                <Input
-                                    value={editData.displayName}
-                                    onChange={(e) => setEditData(prev => ({ ...prev, displayName: e.target.value }))}
-                                    className="text-xl font-bold border-gray-200 dark:border-zinc-700 max-w-[300px]"
-                                    placeholder="Full Name"
-                                />
-                            ) : (
-                                <h2 className="text-xl font-bold text-foreground">
-                                    {member.displayName || 'No Name'}
-                                </h2>
-                            )}
-                            <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                <Badge
-                                    variant={member.membershipStage === 'active' ? 'default' : 'secondary'}
-                                    className={cn(
-                                        "capitalize",
-                                        member.membershipStage === 'active' && "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                            <div className="flex items-start justify-between">
+                                <div>
+                                    {isEditing ? (
+                                        <Input
+                                            value={editData.displayName}
+                                            onChange={(e) => setEditData(prev => ({ ...prev, displayName: e.target.value }))}
+                                            className="text-xl font-bold border-gray-200 dark:border-zinc-700 max-w-[280px]"
+                                            placeholder="Full Name"
+                                        />
+                                    ) : (
+                                        <h2 className="text-xl font-bold text-foreground">
+                                            {member.displayName || 'No Name'}
+                                        </h2>
                                     )}
-                                >
-                                    {member.membershipStage || 'active'}
-                                </Badge>
-                                <Badge variant="outline" className="capitalize">
-                                    {member.role || 'member'}
-                                </Badge>
+                                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                        <Badge
+                                            variant={member.membershipStage === 'active' ? 'default' : 'secondary'}
+                                            className={cn(
+                                                "capitalize",
+                                                member.membershipStage === 'active' && "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                            )}
+                                        >
+                                            {member.membershipStage || 'active'}
+                                        </Badge>
+                                        <Badge variant="outline" className="capitalize">
+                                            {member.role || 'member'}
+                                        </Badge>
+                                    </div>
+                                </div>
+                                {/* Edit/Save Actions */}
+                                <div className="flex items-center gap-2 pt-1">
+                                    {!isEditing ? (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setIsEditing(true)}
+                                            className="rounded-lg text-muted-foreground hover:text-foreground"
+                                        >
+                                            <Edit2 className="h-4 w-4 mr-1" />
+                                            Edit
+                                        </Button>
+                                    ) : (
+                                        <>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => setIsEditing(false)}
+                                                disabled={loading}
+                                                className="rounded-lg"
+                                            >
+                                                Cancel
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                onClick={handleSave}
+                                                disabled={loading}
+                                                className="rounded-lg bg-amber-600 hover:bg-amber-700 text-white"
+                                            >
+                                                {loading ? (
+                                                    <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                                                ) : (
+                                                    <Save className="h-4 w-4 mr-1" />
+                                                )}
+                                                Save
+                                            </Button>
+                                        </>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>
