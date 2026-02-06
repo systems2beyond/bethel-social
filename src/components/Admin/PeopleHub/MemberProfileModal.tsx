@@ -246,25 +246,25 @@ export function MemberProfileModal({
                     </div>
                 </div>
 
-                {/* Avatar and Name row below header */}
-                <div className="px-6 -mt-12">
-                    <div className="flex items-end gap-4">
+                {/* Avatar and Name section below header */}
+                <div className="px-6 -mt-10">
+                    <div className="flex items-start gap-4">
                         <Avatar className="h-20 w-20 ring-4 ring-white dark:ring-zinc-900 shadow-lg shrink-0">
                             <AvatarImage src={member.photoURL} />
                             <AvatarFallback className="text-xl bg-gradient-to-br from-amber-500 to-orange-600 text-white">
                                 {initials}
                             </AvatarFallback>
                         </Avatar>
-                        <div className="flex-1 min-w-0 pb-2 ml-1">
+                        <div className="pt-6 flex-1">
                             {isEditing ? (
                                 <Input
                                     value={editData.displayName}
                                     onChange={(e) => setEditData(prev => ({ ...prev, displayName: e.target.value }))}
-                                    className="text-xl font-bold border-gray-200 dark:border-zinc-700"
+                                    className="text-xl font-bold border-gray-200 dark:border-zinc-700 max-w-[300px]"
                                     placeholder="Full Name"
                                 />
                             ) : (
-                                <h2 className="text-xl font-bold text-foreground break-words">
+                                <h2 className="text-xl font-bold text-foreground">
                                     {member.displayName || 'No Name'}
                                 </h2>
                             )}
