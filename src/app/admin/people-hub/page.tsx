@@ -192,10 +192,10 @@ export default function PeopleHubDashboard() {
             color: "green" as const
         },
         {
-            title: "Manage Groups",
-            description: "Organize small groups and teams",
+            title: "District CRM",
+            description: "Pastoral care dashboard for your assigned districts",
             icon: Layers,
-            href: "/admin/groups", // Placeholder route
+            href: "/admin/district-crm",
             color: "blue" as const
         },
         {

@@ -6,7 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { canAccessPeopleHub } from '@/lib/permissions';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -24,10 +24,13 @@ import {
     ChevronDown,
     Mail,
     Phone,
-    Heart
+    Heart,
+    FileText,
+    QrCode
 } from "lucide-react";
 import { MemberTable } from '@/components/Admin/PeopleHub/MemberTable';
-import { FirestoreUser } from '@/types';
+import { FirestoreUser, District } from '@/types';
+import { DistrictService } from '@/lib/services/DistrictService';
 import { QuickMessageModal } from '@/components/Admin/MinistryCRM/QuickMessageModal';
 import {
     DropdownMenu,
@@ -40,18 +43,25 @@ import { AddMemberModal } from '@/components/Admin/PeopleHub/AddMemberModal';
 import { FamilyModal } from '@/components/Admin/PeopleHub/FamilyModal';
 import { LifeEventModal } from '@/components/Admin/PeopleHub/LifeEventModal';
 import { BulkMessageModal } from '@/components/Admin/PeopleHub/BulkMessageModal';
+import { DistrictModal } from '@/components/Admin/PeopleHub/DistrictModal';
+import { AssignDistrictModal } from '@/components/Admin/PeopleHub/AssignDistrictModal';
+import { MemberProfileModal } from '@/components/Admin/PeopleHub/MemberProfileModal';
 import { toast } from 'sonner';
 
-// Stats card component
+// Stats card component - Modern glassmorphic design
 const StatCard = ({ label, value, color }: { label: string; value: number; color: string }) => (
     <div className={cn(
-        "flex items-center gap-3 px-4 py-3 rounded-lg border",
-        "bg-white dark:bg-zinc-900 border-gray-100 dark:border-zinc-800"
+        "flex items-center gap-4 px-5 py-4 rounded-2xl",
+        "bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm",
+        "border border-gray-200/50 dark:border-zinc-700/50",
+        "shadow-[0_4px_20px_rgb(0,0,0,0.04)] dark:shadow-[0_4px_20px_rgb(0,0,0,0.2)]",
+        "hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] dark:hover:shadow-[0_8px_30px_rgb(0,0,0,0.3)]",
+        "transition-all duration-300 hover:-translate-y-0.5"
     )}>
-        <div className={cn("w-2 h-8 rounded-full", color)} />
+        <div className={cn("w-1.5 h-12 rounded-full shadow-sm", color)} />
         <div>
-            <p className="text-2xl font-bold text-foreground">{value}</p>
-            <p className="text-xs text-muted-foreground">{label}</p>
+            <p className="text-3xl font-bold text-foreground tracking-tight">{value}</p>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{label}</p>
         </div>
     </div>
 );
@@ -62,7 +72,7 @@ export default function MembersDirectoryPage() {
     const [loading, setLoading] = useState(true);
     const [members, setMembers] = useState<FirestoreUser[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
-    const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
+    const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive' | 'visitor' | 'non-member'>('all');
     const [filterRole, setFilterRole] = useState<'all' | 'admin' | 'staff' | 'leader' | 'member' | 'visitor'>('all');
 
     // Modal States
@@ -82,6 +92,31 @@ export default function MembersDirectoryPage() {
     // Bulk Message Modal State
     const [isBulkMessageOpen, setIsBulkMessageOpen] = useState(false);
 
+    // District Modal State (for creating districts - moved to settings)
+    const [isDistrictModalOpen, setIsDistrictModalOpen] = useState(false);
+    const [selectedDistrictId, setSelectedDistrictId] = useState<string | undefined>(undefined);
+    const [selectedMemberForDistrict, setSelectedMemberForDistrict] = useState<string | undefined>(undefined);
+    const [districts, setDistricts] = useState<District[]>([]);
+
+    // Assign District Modal State (for assigning members to existing districts)
+    const [isAssignDistrictModalOpen, setIsAssignDistrictModalOpen] = useState(false);
+    const [selectedMemberForAssignDistrict, setSelectedMemberForAssignDistrict] = useState<FirestoreUser | null>(null);
+
+    // Member Profile Modal State
+    const [isMemberProfileOpen, setIsMemberProfileOpen] = useState(false);
+    const [selectedMemberForProfile, setSelectedMemberForProfile] = useState<FirestoreUser | null>(null);
+
+
+    // Fetch districts
+    const fetchDistricts = async () => {
+        try {
+            const churchId = userData?.churchId || 'default';
+            const districtData = await DistrictService.getDistricts(churchId);
+            setDistricts(districtData);
+        } catch (error) {
+            console.error('Error fetching districts:', error);
+        }
+    };
 
     // Fetch real members from Firestore
     const fetchMembers = async () => {
@@ -136,6 +171,7 @@ export default function MembersDirectoryPage() {
             // Access check - for now allow through for dev
         }
         fetchMembers();
+        fetchDistricts();
     }, [authLoading, userData]);
 
     const handleExportCSV = () => {
@@ -222,11 +258,11 @@ export default function MembersDirectoryPage() {
     };
 
     const handleViewProfile = (memberId: string) => {
-        // Open message modal to send a direct message to this member
+        // Open member profile modal to view all details
         const member = members.find(m => m.uid === memberId);
         if (member) {
-            setSelectedMemberForMessage(member);
-            setIsMessageModalOpen(true);
+            setSelectedMemberForProfile(member);
+            setIsMemberProfileOpen(true);
         }
     };
 
@@ -241,6 +277,37 @@ export default function MembersDirectoryPage() {
         setIsFamilyModalOpen(true);
     };
 
+    const handleOpenDistrictModal = (memberId: string, districtId?: string) => {
+        // For backward compatibility with DistrictModal (creation)
+        setSelectedMemberForDistrict(memberId);
+        setSelectedDistrictId(districtId);
+        setIsDistrictModalOpen(true);
+    };
+
+    const handleOpenAssignDistrictModal = (memberId: string, _districtId?: string) => {
+        // districtId is not needed - we get it from the member object
+        const member = members.find(m => m.uid === memberId);
+        if (member) {
+            setSelectedMemberForAssignDistrict(member);
+            setIsAssignDistrictModalOpen(true);
+        }
+    };
+
+    const handleRemoveMember = async (memberId: string, memberName: string) => {
+        // Confirm before deletion
+        const confirmed = window.confirm(`Are you sure you want to remove "${memberName}" from the directory? This action cannot be undone.`);
+        if (!confirmed) return;
+
+        try {
+            await deleteDoc(doc(db, 'users', memberId));
+            toast.success(`${memberName} has been removed`);
+            fetchMembers(); // Refresh the list
+        } catch (error) {
+            console.error('Error removing member:', error);
+            toast.error('Failed to remove member');
+        }
+    };
+
     // Filter members based on search query
     const filteredMembers = members.filter(m => {
         const searchLower = searchQuery.toLowerCase();
@@ -250,9 +317,7 @@ export default function MembersDirectoryPage() {
             m.email?.toLowerCase().includes(searchLower) ||
             (phoneDigits && m.phoneNumber?.replace(/[^0-9]/g, '').includes(phoneDigits));
 
-        const matchesStatus = filterStatus === 'all' ||
-            (filterStatus === 'active' && m.membershipStage === 'active') || // Adjust logic if 'status' field differs
-            (filterStatus === 'inactive' && m.membershipStage !== 'active');
+        const matchesStatus = filterStatus === 'all' || m.membershipStage === filterStatus;
 
         const matchesRole = filterRole === 'all' || m.role === filterRole;
 
@@ -310,14 +375,14 @@ export default function MembersDirectoryPage() {
                         </div>
 
                         {/* Right: Actions */}
-                        <div className="flex items-center gap-2">
-                            <Button variant="outline" size="sm" className="hidden sm:flex" onClick={handleExportCSV}>
+                        <div className="flex items-center gap-3">
+                            <Button variant="outline" size="sm" className="hidden sm:flex rounded-xl border-gray-200/50 dark:border-zinc-700/50 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm shadow-sm hover:shadow hover:bg-white dark:hover:bg-zinc-800 transition-all duration-200" onClick={handleExportCSV}>
                                 <Download className="h-4 w-4 mr-2" />
                                 Export
                             </Button>
                             <Button
                                 size="sm"
-                                className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-sm"
+                                className="rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-md hover:shadow-lg transition-all duration-200"
                                 onClick={() => setIsAddMemberOpen(true)}
                             >
                                 <UserPlus className="h-4 w-4 mr-2" />
@@ -341,33 +406,51 @@ export default function MembersDirectoryPage() {
 
                 {/* Search + Filters */}
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
-                    <div className="relative flex-1">
+                    <div className="relative flex-1 max-w-md">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input
                             placeholder="Search by name, email, or phone..."
-                            className="pl-10 bg-white dark:bg-zinc-900 border-gray-200 dark:border-zinc-700"
+                            className="pl-10 rounded-xl bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm border-gray-200/50 dark:border-zinc-700/50 shadow-sm hover:shadow transition-all duration-200"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                         />
                     </div>
                     <div className="flex items-center gap-2">
+                        {/* New Member Registration Form Button */}
+                        <Link href="/admin/member-registration">
+                            <Button variant="outline" size="sm" className="rounded-xl border-amber-200/50 dark:border-amber-700/50 bg-amber-50/80 dark:bg-amber-900/20 backdrop-blur-sm shadow-sm hover:shadow hover:bg-amber-100 dark:hover:bg-amber-800/30 text-amber-700 dark:text-amber-300 transition-all duration-200">
+                                <QrCode className="h-4 w-4 mr-2" />
+                                Registration Form
+                            </Button>
+                        </Link>
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button variant="outline" size="sm">
+                                <Button variant="outline" size="sm" className="rounded-xl border-gray-200/50 dark:border-zinc-700/50 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm shadow-sm hover:shadow hover:bg-white dark:hover:bg-zinc-800 transition-all duration-200">
                                     <Filter className="h-4 w-4 mr-2" />
                                     Status
                                     <ChevronDown className="h-4 w-4 ml-2" />
                                 </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent>
-                                <DropdownMenuItem onClick={() => setFilterStatus('all')}>
-                                    All Members
+                            <DropdownMenuContent className="rounded-xl shadow-lg border border-gray-200/50 dark:border-zinc-700/50">
+                                <DropdownMenuItem onClick={() => setFilterStatus('all')} className="cursor-pointer">
+                                    All Statuses
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setFilterStatus('active')}>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => setFilterStatus('active')} className="cursor-pointer">
+                                    <span className="h-2 w-2 rounded-full bg-green-500 mr-2" />
                                     Active
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setFilterStatus('inactive')}>
+                                <DropdownMenuItem onClick={() => setFilterStatus('inactive')} className="cursor-pointer">
+                                    <span className="h-2 w-2 rounded-full bg-gray-400 mr-2" />
                                     Inactive
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setFilterStatus('visitor')} className="cursor-pointer">
+                                    <span className="h-2 w-2 rounded-full bg-blue-500 mr-2" />
+                                    Visitor
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setFilterStatus('non-member')} className="cursor-pointer">
+                                    <span className="h-2 w-2 rounded-full bg-orange-500 mr-2" />
+                                    Non-Member
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
@@ -375,39 +458,39 @@ export default function MembersDirectoryPage() {
                         {/* Role Filter */}
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button variant="outline" size="sm">
+                                <Button variant="outline" size="sm" className="rounded-xl border-gray-200/50 dark:border-zinc-700/50 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm shadow-sm hover:shadow hover:bg-white dark:hover:bg-zinc-800 transition-all duration-200">
                                     <Filter className="h-4 w-4 mr-2" />
                                     {filterRole === 'all' ? 'Role' : filterRole.charAt(0).toUpperCase() + filterRole.slice(1)}
                                     <ChevronDown className="h-4 w-4 ml-2" />
                                 </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent>
-                                <DropdownMenuItem onClick={() => setFilterRole('all')}>All Roles</DropdownMenuItem>
+                            <DropdownMenuContent className="rounded-xl shadow-lg border border-gray-200/50 dark:border-zinc-700/50">
+                                <DropdownMenuItem onClick={() => setFilterRole('all')} className="cursor-pointer">All Roles</DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => setFilterRole('admin')}>Admin</DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setFilterRole('staff')}>Staff</DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setFilterRole('leader')}>Leader</DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setFilterRole('member')}>Member</DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setFilterRole('visitor')}>Visitor</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setFilterRole('admin')} className="cursor-pointer">Admin</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setFilterRole('staff')} className="cursor-pointer">Staff</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setFilterRole('leader')} className="cursor-pointer">Leader</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setFilterRole('member')} className="cursor-pointer">Member</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setFilterRole('visitor')} className="cursor-pointer">Visitor</DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button variant="outline" size="sm">
+                                <Button variant="outline" size="sm" className="rounded-xl border-gray-200/50 dark:border-zinc-700/50 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm shadow-sm hover:shadow hover:bg-white dark:hover:bg-zinc-800 transition-all duration-200 px-2.5">
                                     <MoreHorizontal className="h-4 w-4" />
                                 </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={handleOpenBulkMessage}>
+                            <DropdownMenuContent align="end" className="rounded-xl shadow-lg border border-gray-200/50 dark:border-zinc-700/50 min-w-[180px]">
+                                <DropdownMenuItem onClick={handleOpenBulkMessage} className="cursor-pointer">
                                     <Mail className="h-4 w-4 mr-2" />
                                     Send Bulk Message
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={handleExportPhoneList}>
+                                <DropdownMenuItem onClick={handleExportPhoneList} className="cursor-pointer">
                                     <Phone className="h-4 w-4 mr-2" />
                                     Export Phone List
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={handleOpenLifeEventFromMenu}>
+                                <DropdownMenuItem onClick={handleOpenLifeEventFromMenu} className="cursor-pointer">
                                     <Heart className="h-4 w-4 mr-2" />
                                     Log Life Event
                                 </DropdownMenuItem>
@@ -449,6 +532,9 @@ export default function MembersDirectoryPage() {
                             onAddLifeEvent={handleAddLifeEvent}
                             onRoleUpdate={fetchMembers}
                             onOpenFamilyModal={handleOpenFamilyModal}
+                            onRemoveMember={handleRemoveMember}
+                            onOpenDistrictModal={handleOpenAssignDistrictModal}
+                            districts={districts}
                         />
                     )}
                 </div>
@@ -472,6 +558,9 @@ export default function MembersDirectoryPage() {
                     setIsAddMemberOpen(open);
                     if (!open) fetchMembers();
                 }}
+                districts={districts}
+                members={members}
+                onDistrictCreated={fetchDistricts}
             />
 
             {/* Family Modal */}
@@ -509,6 +598,76 @@ export default function MembersDirectoryPage() {
                 onOpenChange={setIsBulkMessageOpen}
                 recipients={filteredMembers}
                 onSuccess={fetchMembers}
+            />
+
+            {/* District Modal (for creation - used from admin settings) */}
+            <DistrictModal
+                open={isDistrictModalOpen}
+                onOpenChange={(open) => {
+                    setIsDistrictModalOpen(open);
+                    if (!open) {
+                        setSelectedDistrictId(undefined);
+                        setSelectedMemberForDistrict(undefined);
+                    }
+                }}
+                districtId={selectedDistrictId}
+                preSelectedMemberId={selectedMemberForDistrict}
+                members={members}
+                onSuccess={() => {
+                    fetchMembers();
+                    fetchDistricts();
+                }}
+            />
+
+            {/* Assign District Modal (for assigning members to existing districts) */}
+            <AssignDistrictModal
+                open={isAssignDistrictModalOpen}
+                onOpenChange={(open) => {
+                    setIsAssignDistrictModalOpen(open);
+                    if (!open) {
+                        setSelectedMemberForAssignDistrict(null);
+                    }
+                }}
+                member={selectedMemberForAssignDistrict}
+                districts={districts}
+                onSuccess={() => {
+                    fetchMembers();
+                    fetchDistricts();
+                }}
+            />
+
+            {/* Member Profile Modal */}
+            <MemberProfileModal
+                open={isMemberProfileOpen}
+                onOpenChange={(open) => {
+                    setIsMemberProfileOpen(open);
+                    if (!open) {
+                        setSelectedMemberForProfile(null);
+                    }
+                }}
+                member={selectedMemberForProfile}
+                districts={districts}
+                onSuccess={fetchMembers}
+                onMessage={(member) => {
+                    setSelectedMemberForMessage(member);
+                    setIsMessageModalOpen(true);
+                }}
+                onAddLifeEvent={(memberId) => {
+                    setSelectedMemberForLifeEvent(memberId);
+                    setIsLifeEventModalOpen(true);
+                }}
+                onAssignDistrict={(memberId) => {
+                    const member = members.find(m => m.uid === memberId);
+                    if (member) {
+                        setSelectedMemberForAssignDistrict(member);
+                        setIsAssignDistrictModalOpen(true);
+                    }
+                }}
+                onAssignFamily={(memberId, familyId) => {
+                    setSelectedMemberForFamily(memberId);
+                    setSelectedFamilyId(familyId);
+                    setIsFamilyModalOpen(true);
+                }}
             />
         </div >
     );

@@ -25,7 +25,10 @@ import {
     Minimize2,
     AlertCircle,
     CheckCircle2,
-    Users
+    Users,
+    ChevronDown,
+    ChevronUp,
+    Search
 } from "lucide-react";
 import { FirestoreUser } from '@/types';
 import { useAuth } from '@/context/AuthContext';
@@ -68,6 +71,8 @@ export const BulkMessageModal: React.FC<BulkMessageModalProps> = ({
     const [sending, setSending] = useState(false);
     const [progress, setProgress] = useState<SendingProgress | null>(null);
     const [isMinimized, setIsMinimized] = useState(false);
+    const [recipientsExpanded, setRecipientsExpanded] = useState(false);
+    const [recipientSearch, setRecipientSearch] = useState('');
 
     // Reset form when modal opens
     useEffect(() => {
@@ -76,6 +81,8 @@ export const BulkMessageModal: React.FC<BulkMessageModalProps> = ({
             setMessage('');
             setProgress(null);
             setIsMinimized(false);
+            setRecipientsExpanded(false);
+            setRecipientSearch('');
         }
     }, [open]);
 
@@ -196,14 +203,19 @@ export const BulkMessageModal: React.FC<BulkMessageModalProps> = ({
             return;
         }
 
-        if (recipients.length === 0) {
-            toast.error('No recipients selected');
+        // Filter to valid recipients based on message type
+        const validRecipients = isEmail
+            ? recipients.filter(r => r.email)
+            : recipients;
+
+        if (validRecipients.length === 0) {
+            toast.error(isEmail ? 'No recipients have email addresses' : 'No recipients selected');
             return;
         }
 
         setSending(true);
         const progressState: SendingProgress = {
-            total: recipients.length,
+            total: validRecipients.length,
             sent: 0,
             failed: 0,
             current: '',
@@ -213,8 +225,8 @@ export const BulkMessageModal: React.FC<BulkMessageModalProps> = ({
         setProgress(progressState);
 
         // Process in batches
-        for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
-            const batch = recipients.slice(i, i + BATCH_SIZE);
+        for (let i = 0; i < validRecipients.length; i += BATCH_SIZE) {
+            const batch = validRecipients.slice(i, i + BATCH_SIZE);
 
             for (const recipient of batch) {
                 progressState.current = recipient.displayName || recipient.email || 'Unknown';
@@ -237,7 +249,7 @@ export const BulkMessageModal: React.FC<BulkMessageModalProps> = ({
             }
 
             // Delay between batches (not after the last batch)
-            if (i + BATCH_SIZE < recipients.length) {
+            if (i + BATCH_SIZE < validRecipients.length) {
                 await sleep(BATCH_DELAY_MS);
             }
         }
@@ -270,7 +282,7 @@ export const BulkMessageModal: React.FC<BulkMessageModalProps> = ({
         if (!isMinimized || !progress) return null;
 
         return createPortal(
-            <div className="fixed bottom-4 right-4 z-50 bg-white dark:bg-zinc-900 rounded-lg shadow-lg border border-gray-200 dark:border-zinc-700 p-4 w-80">
+            <div className="fixed bottom-4 right-4 z-50 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.4)] border border-gray-200/50 dark:border-zinc-700/50 p-4 w-80">
                 <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                         {isEmail ? <Mail className="h-4 w-4" /> : <MessageSquare className="h-4 w-4" />}
@@ -333,33 +345,39 @@ export const BulkMessageModal: React.FC<BulkMessageModalProps> = ({
     return (
         <>
             <Dialog open={open} onOpenChange={handleClose}>
-                <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                            {isEmail ? <Mail className="h-5 w-5" /> : <MessageSquare className="h-5 w-5" />}
+                <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto rounded-2xl border-gray-200/50 dark:border-zinc-700/50 shadow-[0_25px_50px_-12px_rgb(0,0,0,0.25)] bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl">
+                    <DialogHeader className="pb-4 border-b border-gray-100 dark:border-zinc-800">
+                        <DialogTitle className="flex items-center gap-3 text-xl">
+                            <div className={`p-2 rounded-xl ${isEmail ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-green-100 dark:bg-green-900/30'}`}>
+                                {isEmail ? <Mail className="h-5 w-5 text-blue-600 dark:text-blue-400" /> : <MessageSquare className="h-5 w-5 text-green-600 dark:text-green-400" />}
+                            </div>
                             Send Bulk {isEmail ? 'Email' : 'Message'}
                         </DialogTitle>
-                        <DialogDescription>
+                        <DialogDescription className="text-muted-foreground">
                             Send to {recipients.length} {recipients.length === 1 ? 'recipient' : 'recipients'}
                         </DialogDescription>
                     </DialogHeader>
 
                     {progress ? (
-                        <div className="py-6 space-y-4">
-                            <div className="flex items-center justify-center mb-4">
+                        <div className="py-8 space-y-6">
+                            <div className="flex items-center justify-center mb-6">
                                 {progress.isComplete ? (
-                                    <div className="flex flex-col items-center gap-2">
-                                        <CheckCircle2 className="h-12 w-12 text-green-500" />
-                                        <span className="font-medium">
+                                    <div className="flex flex-col items-center gap-3">
+                                        <div className="p-4 rounded-full bg-green-100 dark:bg-green-900/30">
+                                            <CheckCircle2 className="h-10 w-10 text-green-500" />
+                                        </div>
+                                        <span className="font-semibold text-lg">
                                             {progress.failed === 0 ? 'All messages sent!' : 'Sending complete'}
                                         </span>
                                     </div>
                                 ) : (
-                                    <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                                    <div className="p-4 rounded-full bg-blue-100 dark:bg-blue-900/30">
+                                        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                                    </div>
                                 )}
                             </div>
 
-                            <Progress value={progressPercent} className="h-3" />
+                            <Progress value={progressPercent} className="h-3 rounded-full" />
 
                             <div className="flex justify-between text-sm">
                                 <span className="flex items-center gap-1 text-green-600">
@@ -416,45 +434,140 @@ export const BulkMessageModal: React.FC<BulkMessageModalProps> = ({
                             )}
                         </div>
                     ) : (
-                        <div className="space-y-4 py-4">
+                        <div className="space-y-5 py-4">
                             {/* Message Type Toggle */}
-                            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-zinc-800 rounded-lg">
+                            <div className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-gray-100/50 dark:from-zinc-800/80 dark:to-zinc-800/50 rounded-xl border border-gray-200/50 dark:border-zinc-700/50">
                                 <div className="flex items-center gap-2">
-                                    <MessageSquare className={`h-4 w-4 ${!isEmail ? 'text-blue-500' : 'text-muted-foreground'}`} />
-                                    <span className={!isEmail ? 'font-medium' : 'text-muted-foreground'}>
+                                    <div className={`p-1.5 rounded-lg transition-colors duration-200 ${!isEmail ? 'bg-green-100 dark:bg-green-900/30' : 'bg-gray-200/50 dark:bg-zinc-700/50'}`}>
+                                        <MessageSquare className={`h-4 w-4 transition-colors duration-200 ${!isEmail ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`} />
+                                    </div>
+                                    <span className={`text-sm transition-colors duration-200 ${!isEmail ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
                                         In-App Message
                                     </span>
                                 </div>
                                 <Switch
                                     checked={isEmail}
                                     onCheckedChange={setIsEmail}
+                                    className="data-[state=checked]:bg-blue-600"
                                 />
                                 <div className="flex items-center gap-2">
-                                    <span className={isEmail ? 'font-medium' : 'text-muted-foreground'}>
+                                    <span className={`text-sm transition-colors duration-200 ${isEmail ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
                                         Email
                                     </span>
-                                    <Mail className={`h-4 w-4 ${isEmail ? 'text-blue-500' : 'text-muted-foreground'}`} />
+                                    <div className={`p-1.5 rounded-lg transition-colors duration-200 ${isEmail ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-gray-200/50 dark:bg-zinc-700/50'}`}>
+                                        <Mail className={`h-4 w-4 transition-colors duration-200 ${isEmail ? 'text-blue-600 dark:text-blue-400' : 'text-muted-foreground'}`} />
+                                    </div>
                                 </div>
                             </div>
 
-                            {/* Recipients Preview */}
+                            {/* Recipients Preview - Collapsible Smart Summary */}
                             <div className="space-y-2">
-                                <Label className="flex items-center gap-2">
-                                    <Users className="h-4 w-4" />
-                                    Recipients ({recipients.length})
-                                </Label>
-                                <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto p-2 bg-gray-50 dark:bg-zinc-800 rounded-lg">
-                                    {recipients.slice(0, 10).map(r => (
-                                        <Badge key={r.uid} variant="secondary" className="text-xs">
-                                            {r.displayName || r.email}
-                                        </Badge>
-                                    ))}
-                                    {recipients.length > 10 && (
-                                        <Badge variant="outline" className="text-xs">
-                                            +{recipients.length - 10} more
-                                        </Badge>
-                                    )}
-                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setRecipientsExpanded(!recipientsExpanded)}
+                                    className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-gray-100/50 dark:from-zinc-800/80 dark:to-zinc-800/50 rounded-xl border border-gray-200/50 dark:border-zinc-700/50 hover:border-blue-200 dark:hover:border-blue-800 hover:shadow-sm transition-all duration-200"
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30">
+                                            <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                                        </div>
+                                        <div className="text-left">
+                                            <p className="font-medium text-sm">
+                                                {recipients.length} {recipients.length === 1 ? 'Recipient' : 'Recipients'}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground">
+                                                {isEmail ? (
+                                                    <>
+                                                        {recipients.filter(r => r.email).length} with email
+                                                        {recipients.filter(r => !r.email).length > 0 && (
+                                                            <span className="text-amber-600 dark:text-amber-400 ml-1">
+                                                                • {recipients.filter(r => !r.email).length} missing email
+                                                            </span>
+                                                        )}
+                                                    </>
+                                                ) : (
+                                                    'In-app direct messages'
+                                                )}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-muted-foreground">
+                                            {recipientsExpanded ? 'Hide' : 'View'}
+                                        </span>
+                                        {recipientsExpanded ? (
+                                            <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                                        ) : (
+                                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                        )}
+                                    </div>
+                                </button>
+
+                                {/* Expanded Recipients List */}
+                                {recipientsExpanded && (
+                                    <div className="border border-gray-200 dark:border-zinc-700 rounded-lg overflow-hidden">
+                                        {/* Search */}
+                                        <div className="p-2 border-b border-gray-200 dark:border-zinc-700 bg-gray-50 dark:bg-zinc-800">
+                                            <div className="relative">
+                                                <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                                <Input
+                                                    placeholder="Search recipients..."
+                                                    value={recipientSearch}
+                                                    onChange={(e) => setRecipientSearch(e.target.value)}
+                                                    className="pl-8 h-8 text-sm"
+                                                />
+                                            </div>
+                                        </div>
+                                        {/* List */}
+                                        <div className="max-h-48 overflow-y-auto">
+                                            {recipients
+                                                .filter(r => {
+                                                    if (!recipientSearch) return true;
+                                                    const search = recipientSearch.toLowerCase();
+                                                    return (
+                                                        r.displayName?.toLowerCase().includes(search) ||
+                                                        r.email?.toLowerCase().includes(search)
+                                                    );
+                                                })
+                                                .map(r => (
+                                                    <div
+                                                        key={r.uid}
+                                                        className="flex items-center justify-between px-3 py-2 border-b border-gray-100 dark:border-zinc-800 last:border-0 text-sm"
+                                                    >
+                                                        <span className="truncate">
+                                                            {r.displayName || 'No name'}
+                                                        </span>
+                                                        <span className="text-xs text-muted-foreground truncate ml-2">
+                                                            {isEmail ? (
+                                                                r.email || <span className="text-amber-600">No email</span>
+                                                            ) : null}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            {recipients.filter(r => {
+                                                if (!recipientSearch) return true;
+                                                const search = recipientSearch.toLowerCase();
+                                                return (
+                                                    r.displayName?.toLowerCase().includes(search) ||
+                                                    r.email?.toLowerCase().includes(search)
+                                                );
+                                            }).length === 0 && (
+                                                <div className="px-3 py-4 text-center text-sm text-muted-foreground">
+                                                    No recipients match your search
+                                                </div>
+                                            )}
+                                        </div>
+                                        {/* Footer stats */}
+                                        <div className="px-3 py-2 border-t border-gray-200 dark:border-zinc-700 bg-gray-50 dark:bg-zinc-800 text-xs text-muted-foreground flex justify-between">
+                                            <span>Total: {recipients.length}</span>
+                                            {isEmail && recipients.filter(r => !r.email).length > 0 && (
+                                                <span className="text-amber-600 dark:text-amber-400">
+                                                    {recipients.filter(r => !r.email).length} will be skipped (no email)
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Email Subject (only for email) */}
@@ -523,7 +636,7 @@ export const BulkMessageModal: React.FC<BulkMessageModalProps> = ({
                                     disabled={!message.trim() || (isEmail && !subject.trim()) || (isEmail && !googleAccessToken)}
                                 >
                                     <Send className="h-4 w-4 mr-2" />
-                                    Send to {recipients.length} {recipients.length === 1 ? 'person' : 'people'}
+                                    Send to {isEmail ? recipients.filter(r => r.email).length : recipients.length} {(isEmail ? recipients.filter(r => r.email).length : recipients.length) === 1 ? 'person' : 'people'}
                                 </Button>
                             </DialogFooter>
                         </div>

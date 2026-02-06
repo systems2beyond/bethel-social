@@ -27,6 +27,14 @@ export interface FirestoreUser {
     displayName: string;
     photoURL?: string;
     phoneNumber?: string;
+    address?: {
+        street1: string;
+        street2?: string;
+        city: string;
+        state: string;
+        postalCode: string;
+        country: string;
+    };
     notificationSettings?: {
         posts?: boolean;
         messages?: boolean;
@@ -75,6 +83,10 @@ export interface FirestoreUser {
     }[];
     pastoralNotes?: string; // Restricted access
     prayerRequestsList?: string[];
+
+    // District/Shepherding Assignment
+    districtId?: string;
+    districtRole?: 'leader' | 'co_leader' | 'member';
 }
 
 // Family/Household Management for ChMS
@@ -154,6 +166,72 @@ export interface LifeEvent {
     updatedAt: any; // Timestamp
     isActive: boolean;
 }
+
+// District/Shepherding System - For pastoral care organization
+export interface District {
+    id: string;
+    churchId: string;
+
+    // Naming
+    name: string; // e.g., "District A" or "North Zone"
+
+    // Leadership
+    leaderId: string; // Primary leader (deacon/elder)
+    leaderName?: string; // Cached for display
+    coLeaderIds?: string[];
+
+    // Members
+    memberIds: string[];
+
+    // Connected Group (for communication)
+    connectedGroupId?: string; // Auto-created group for messaging
+
+    // Assignment Method
+    assignmentMethod: 'geographic' | 'alphabetic' | 'manual' | 'affinity';
+    geographicBounds?: {
+        zipCodes?: string[];
+        neighborhoods?: string[];
+    };
+    alphabeticRange?: {
+        startLetter: string;
+        endLetter: string;
+    };
+
+    // Pipeline (optional)
+    pipelineId?: string;
+
+    // Metadata
+    createdAt: any;
+    updatedAt: any;
+    createdBy: string;
+    isActive: boolean;
+}
+
+// Church-level settings for district terminology
+export interface ChurchDistrictSettings {
+    enabled: boolean;
+    terminology: {
+        leaderSingular: string;  // "Deacon", "Elder", "Shepherd"
+        leaderPlural: string;    // "Deacons", "Elders", "Shepherds"
+        groupSingular: string;   // "District", "Flock", "Zone"
+        groupPlural: string;     // "Districts", "Flocks", "Zones"
+    };
+    allowMultipleLeaders: boolean;
+    autoCreateGroup: boolean;
+    defaultPipelineId?: string;
+}
+
+// Terminology preset options for onboarding
+export const DISTRICT_TERMINOLOGY_OPTIONS = [
+    { id: 'deacon', leaderLabel: 'Deacon', groupLabel: 'District', description: 'Baptist/Traditional' },
+    { id: 'elder', leaderLabel: 'Elder', groupLabel: 'Shepherding Group', description: 'Presbyterian/Reformed' },
+    { id: 'shepherd', leaderLabel: 'Shepherd', groupLabel: 'Flock', description: 'Church of Christ/Non-denom' },
+    { id: 'class_leader', leaderLabel: 'Class Leader', groupLabel: 'Class', description: 'Methodist' },
+    { id: 'cell_leader', leaderLabel: 'Cell Leader', groupLabel: 'Cell', description: 'Cell Church/Pentecostal' },
+    { id: 'care_leader', leaderLabel: 'Care Group Leader', groupLabel: 'Care Group', description: 'Non-denominational' },
+    { id: 'zone_leader', leaderLabel: 'Zone Leader', groupLabel: 'Zone', description: 'Large Churches' },
+    { id: 'custom', leaderLabel: '', groupLabel: '', description: 'Custom terminology' }
+] as const;
 
 // Phase 2: Volunteer Profile
 export interface VolunteerProfile {
@@ -791,4 +869,125 @@ export interface MinistryRole {
     description?: string;
     requiresBackgroundCheck: boolean;
     requiredTraining?: string[]; // Training IDs
+}
+
+// =========================================
+// Member Registration Form Types
+// =========================================
+
+// Reuse ConnectFormFieldType for consistency
+export type MemberRegistrationFieldType = ConnectFormFieldType;
+
+export interface MemberRegistrationField {
+    id: string;
+    type: MemberRegistrationFieldType;
+    label: string;
+    placeholder?: string;
+    required: boolean;
+    enabled: boolean;
+    options?: string[]; // For select type
+    order: number;
+    // Special field markers for auto-mapping
+    mapsTo?: 'firstName' | 'lastName' | 'email' | 'phone' | 'address' | 'dateOfBirth' | 'custom';
+}
+
+// Family member entry for family intake section
+export interface FamilyMemberEntry {
+    id: string; // Temp ID for form tracking
+    existingMemberId?: string; // If linking to existing member
+    isExisting: boolean;
+    // New member fields
+    firstName: string;
+    lastName: string;
+    email?: string;
+    phone?: string;
+    dateOfBirth?: string;
+    relationship: 'spouse' | 'child' | 'parent' | 'sibling' | 'other';
+    // Ministry interests for this family member
+    ministryInterests?: string[]; // Ministry IDs
+}
+
+export interface MemberRegistrationFormConfig {
+    id: string;
+    churchId: string;
+
+    // Branding (same as Connect Form for consistency)
+    branding: {
+        formTitle: string;
+        tagline: string;
+        logoUrl?: string;
+        primaryColor: string;
+        backgroundColor: string;
+    };
+
+    // Form Configuration
+    fields: MemberRegistrationField[];
+
+    // Family Intake Settings
+    familyIntake: {
+        enabled: boolean;
+        askAboutSpouse: boolean;
+        askAboutChildren: boolean;
+        askAboutOtherFamily: boolean;
+        maxFamilyMembers: number;
+    };
+
+    // Ministry Interest Settings
+    ministrySettings: {
+        enabled: boolean;
+        allowMultiple: boolean;
+        ministryOptions: string[]; // Ministry IDs to show
+    };
+
+    // Success State
+    successMessage: {
+        title: string;
+        subtitle: string;
+        showNextSteps?: boolean;
+        nextStepsContent?: string;
+    };
+
+    // Settings
+    settings: {
+        enabled: boolean;
+        notifyAdmins: boolean;
+        autoAssignToDistrict?: boolean;
+        defaultDistrictId?: string;
+        defaultMembershipStage: 'visitor' | 'active' | 'inactive' | 'non-member';
+        requireEmailVerification?: boolean;
+        createUserAccount?: boolean; // Whether to create a user account for login
+    };
+
+    updatedAt: any;
+    updatedBy: string;
+}
+
+// Submission data structure for processing
+export interface MemberRegistrationSubmission {
+    // Primary registrant data
+    primaryMember: {
+        firstName: string;
+        lastName: string;
+        email?: string;
+        phone?: string;
+        address?: {
+            street1: string;
+            street2?: string;
+            city: string;
+            state: string;
+            postalCode: string;
+            country: string;
+        };
+        dateOfBirth?: string;
+        ministryInterests?: string[];
+        customFields?: Record<string, any>;
+    };
+
+    // Family members to be added
+    familyMembers?: FamilyMemberEntry[];
+
+    // Metadata
+    submittedAt: any;
+    source: 'qr-code' | 'web' | 'kiosk' | 'manual';
+    churchId: string;
 }

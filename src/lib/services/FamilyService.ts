@@ -20,6 +20,23 @@ const USERS_COLLECTION = 'users';
 
 export class FamilyService {
     /**
+     * Remove undefined values from object (Firestore doesn't accept undefined)
+     */
+    private static cleanObject(obj: any): any {
+        if (obj === null || obj === undefined) return null;
+        if (typeof obj !== 'object') return obj;
+        if (Array.isArray(obj)) return obj.map(item => this.cleanObject(item));
+
+        const cleaned: Record<string, any> = {};
+        for (const [key, value] of Object.entries(obj)) {
+            if (value !== undefined) {
+                cleaned[key] = this.cleanObject(value);
+            }
+        }
+        return cleaned;
+    }
+
+    /**
      * Get all families for a church
      */
     static async getFamilies(churchId: string): Promise<Family[]> {
@@ -67,12 +84,14 @@ export class FamilyService {
         family: Omit<Family, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'> & { createdBy?: string },
         createdBy: string
     ): Promise<string> {
-        const docRef = await addDoc(collection(db, FAMILIES_COLLECTION), {
+        // Clean data to remove undefined values before saving
+        const cleanedData = this.cleanObject({
             ...family,
             createdBy,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp()
         });
+        const docRef = await addDoc(collection(db, FAMILIES_COLLECTION), cleanedData);
         return docRef.id;
     }
 
