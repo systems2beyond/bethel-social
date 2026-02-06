@@ -33,7 +33,7 @@ export interface FirestoreUser {
         sermons?: boolean;
     };
     churchId?: string; // Mandatory eventually
-    role?: 'super_admin' | 'admin' | 'pastor_admin' | 'media_admin' | 'staff' | 'member';
+    role?: 'super_admin' | 'admin' | 'pastor_admin' | 'media_admin' | 'staff' | 'member' | 'ministry_leader';
     connectedChurchIds?: string[];
     customBibleSources?: any[]; // For custom bible versions
     theme?: string;
@@ -50,6 +50,109 @@ export interface FirestoreUser {
 
     // Phase 2: Volunteer Management Extensions
     volunteerProfile?: VolunteerProfile;
+
+    // Phase 3: Advanced CRM Extensions
+
+    servingIn?: {
+        ministryId: string;
+        ministryName: string;
+        role: "member" | "leader" | "coordinator";
+        startDate: any; // Timestamp
+        status: "active" | "on_break" | "inactive";
+    }[];
+    skills?: string[];
+    // availability is already in VolunteerProfile, might be redundant or we sync them
+    membershipStage?: 'active' | 'inactive' | 'visitor' | 'non-member';
+    spiritualGifts?: string[];
+    lastAttendance?: any; // Timestamp
+    lastActive?: any; // Timestamp - last app activity
+    attendanceHistory?: any[]; // Timestamp[]
+    lifeEvents?: {
+        eventId: string;
+        eventType: string;
+        isActive: boolean;
+        priority: string;
+    }[];
+    pastoralNotes?: string; // Restricted access
+    prayerRequestsList?: string[];
+}
+
+// Family/Household Management for ChMS
+export interface Family {
+    id: string;
+    churchId: string;
+    familyName: string;
+
+    // Structure
+    headOfHouseholdId: string;
+    spouseId?: string;
+    childrenIds?: string[];
+    otherMemberIds?: string[];
+
+    // Shared Contact
+    address?: {
+        street1: string;
+        street2?: string;
+        city: string;
+        state: string;
+        postalCode: string;
+        country: string;
+    };
+    homePhone?: string;
+
+    // Giving/Tax (IRS Compliance)
+    envelopeNumber?: string;
+    givingStatementAddress?: {
+        street1: string;
+        street2?: string;
+        city: string;
+        state: string;
+        postalCode: string;
+        country: string;
+    };
+
+    createdAt: any;
+    updatedAt: any;
+    createdBy: string;
+}
+
+export interface LifeEvent {
+    id: string;
+    memberId: string;
+    memberName: string;
+    familyId?: string;
+    eventType:
+    | "hospitalized" | "surgery" | "serious_illness"
+    | "pregnancy_announced" | "baby_born"
+    | "engagement" | "marriage" | "divorce"
+    | "job_loss" | "new_job" | "retirement"
+    | "graduation" | "college_acceptance"
+    | "moved" | "death_in_family"
+    | "milestone_birthday" | "anniversary"
+    | "salvation" | "baptism_scheduled"
+    | "other";
+    eventDate: any; // Timestamp
+    description: string;
+    priority: "urgent" | "high" | "normal" | "low";
+    requiresFollowUp: boolean;
+    assignedTo?: string;
+    followUpDate?: any; // Timestamp
+    status: "new" | "contacted" | "visiting" | "ongoing_care" | "resolved";
+    actions?: {
+        date: any; // Timestamp
+        actionType: "phone_call" | "visit" | "card_sent" | "meal_delivered" | "prayer";
+        performedBy: string;
+        notes: string;
+    }[];
+    // Care Tracking
+    prayerRequestAdded?: boolean;
+    cardSent?: boolean;
+    mealTrainOrganized?: boolean;
+
+    createdBy: string;
+    createdAt: any; // Timestamp
+    updatedAt: any; // Timestamp
+    isActive: boolean;
 }
 
 // Phase 2: Volunteer Profile
@@ -675,6 +778,7 @@ export interface Ministry {
     color: string; // Hex color
     leaderId?: string; // User ID of ministry leader
     leaderName?: string;
+    linkedGroupId?: string; // Linked Community Group for messaging
     roles: MinistryRole[];
     active: boolean;
     createdAt: any;

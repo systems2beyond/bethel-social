@@ -23,7 +23,10 @@ export function MinistryProvider({ children }: { children: React.ReactNode }) {
     const [loading, setLoading] = useState(true);
 
     const refreshMinistries = async () => {
-        if (!churchId) return;
+        if (!churchId) {
+            setLoading(false);
+            return;
+        }
         setLoading(true);
         try {
             const data = await VolunteerService.getMinistries(churchId);
