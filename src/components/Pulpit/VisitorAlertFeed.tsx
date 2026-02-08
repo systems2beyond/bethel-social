@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { PulpitService } from '@/lib/services/PulpitService';
 import { PulpitSession, PulpitAlert, PulpitCheckIn } from '@/types';
@@ -13,6 +13,9 @@ export default function VisitorAlertFeed({ session }: VisitorAlertFeedProps) {
     const { user } = useAuth();
     const [alerts, setAlerts] = useState<PulpitAlert[]>([]);
     const [checkins, setCheckins] = useState<PulpitCheckIn[]>([]);
+
+    // Track alerts that are pending resolution to prevent write loops
+    const resolvingAlertIds = useRef<Set<string>>(new Set());
 
     useEffect(() => {
         const unsubscribeAlerts = PulpitService.streamAlerts(session.churchId, (newAlerts) => {
@@ -35,10 +38,14 @@ export default function VisitorAlertFeed({ session }: VisitorAlertFeedProps) {
 
     useEffect(() => {
         // Auto-resolve acknowledged alerts after 2 minutes
+        // Use ref to track which alerts are being resolved to prevent write loops
         const acknowledgedAlerts = alerts.filter(a => a.acknowledged && !a.resolved);
         const timers: NodeJS.Timeout[] = [];
 
         acknowledgedAlerts.forEach(alert => {
+            // Skip if already resolving this alert
+            if (resolvingAlertIds.current.has(alert.id)) return;
+
             const acknowledgedAt = alert.acknowledgedAt?.seconds
                 ? new Date(alert.acknowledgedAt.seconds * 1000)
                 : new Date();
@@ -46,10 +53,20 @@ export default function VisitorAlertFeed({ session }: VisitorAlertFeedProps) {
             const twoMinutes = 2 * 60 * 1000;
 
             if (timeSinceAck >= twoMinutes) {
-                PulpitService.resolveAlert(alert.id);
+                // Mark as resolving before calling to prevent loop
+                resolvingAlertIds.current.add(alert.id);
+                PulpitService.resolveAlert(alert.id).catch(() => {
+                    // Remove from set on error so it can be retried
+                    resolvingAlertIds.current.delete(alert.id);
+                });
             } else {
                 const timer = setTimeout(() => {
-                    PulpitService.resolveAlert(alert.id);
+                    if (!resolvingAlertIds.current.has(alert.id)) {
+                        resolvingAlertIds.current.add(alert.id);
+                        PulpitService.resolveAlert(alert.id).catch(() => {
+                            resolvingAlertIds.current.delete(alert.id);
+                        });
+                    }
                 }, twoMinutes - timeSinceAck);
                 timers.push(timer);
             }
