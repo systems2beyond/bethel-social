@@ -332,6 +332,37 @@ export function BibleProvider({ children }: { children: ReactNode }) {
         setOnInsertNote(() => handler);
     }, []);
 
+    // Helper to normalize data for consistent hashing (prevents write loops)
+    // This ensures Firestore data and local state produce IDENTICAL hashes
+    // by normalizing undefined → null, missing fields → defaults, etc.
+    const normalizeForHash = useCallback((data: {
+        tabs?: any[];
+        activeTabId?: string;
+        groups?: any[];
+        searchVersion?: string;
+    }) => ({
+        tabs: (data.tabs || []).map((tab: any) => ({
+            id: tab.id || 'unknown',
+            reference: {
+                book: tab.reference?.book || 'Genesis',
+                chapter: tab.reference?.chapter || 1,
+                verse: tab.reference?.verse ?? null,
+                endVerse: tab.reference?.endVerse ?? null
+            },
+            groupId: tab.groupId || null,
+            scrollPosition: tab.scrollPosition ?? 0
+        })),
+        activeTabId: data.activeTabId || '1',
+        groups: (data.groups || []).map((g: any) => ({
+            id: g.id,
+            name: g.name,
+            color: g.color,
+            isCollapsed: g.isCollapsed ?? false,
+            createdAt: g.createdAt
+        })),
+        searchVersion: data.searchVersion || 'kjv'
+    }), []);
+
     // Load tabs from Firestore
     useEffect(() => {
         if (!user) return;
@@ -339,14 +370,14 @@ export function BibleProvider({ children }: { children: ReactNode }) {
             if (docSnap.exists()) {
                 const data = docSnap.data();
 
-                // Store a hash of the received state to prevent save loops
-                // Only save when local changes differ from what Firestore has
-                const stateHash = JSON.stringify({
+                // Store a NORMALIZED hash of the received state to prevent save loops
+                // Normalization ensures Firestore data and local state produce identical hashes
+                const stateHash = JSON.stringify(normalizeForHash({
                     tabs: data.tabs,
                     activeTabId: data.activeTabId,
                     groups: data.groups,
                     searchVersion: data.searchVersion
-                });
+                }));
                 lastSavedStateRef.current = stateHash;
 
                 if (data.tabs) setTabs(data.tabs);
@@ -376,35 +407,17 @@ export function BibleProvider({ children }: { children: ReactNode }) {
         if (!user) return;
 
         const saveState = setTimeout(() => {
-            // Sanitize tabs to remove undefined values which Firebase rejects
-            const sanitizedTabs = tabs.map(tab => ({
-                id: tab.id || 'tab-' + Date.now(),
-                reference: {
-                    book: tab.reference?.book || 'Genesis',
-                    chapter: tab.reference?.chapter || '1',
-                    verse: tab.reference?.verse ?? null,
-                    endVerse: tab.reference?.endVerse ?? null
-                },
-                groupId: tab.groupId || null,
-                scrollPosition: tab.scrollPosition ?? 0
-            }));
-
-            const sanitizedGroups = groups.map(g => ({
-                ...g,
-                isCollapsed: g.isCollapsed ?? false
-            }));
-
-            // Ensure searchVersion is never undefined
-            const safeSearchVersion = searchVersion || 'kjv';
+            // Use the same normalization as the listener for consistent hash comparison
+            const normalized = normalizeForHash({
+                tabs,
+                activeTabId,
+                groups,
+                searchVersion
+            });
 
             // Check if state has actually changed from what's in Firestore
             // This prevents write loops where save → listener → save cycles endlessly
-            const currentStateHash = JSON.stringify({
-                tabs: sanitizedTabs,
-                activeTabId: activeTabId || '1',
-                groups: sanitizedGroups,
-                searchVersion: safeSearchVersion
-            });
+            const currentStateHash = JSON.stringify(normalized);
 
             if (currentStateHash === lastSavedStateRef.current) {
                 // Data matches what's in Firestore, skip save
@@ -414,18 +427,19 @@ export function BibleProvider({ children }: { children: ReactNode }) {
             // Update ref before saving to prevent race conditions
             lastSavedStateRef.current = currentStateHash;
 
+            // Save the normalized data (sanitized for Firebase - no undefined values)
             setDoc(doc(db, 'users', user.uid, 'settings', 'bible-tabs'), {
-                tabs: sanitizedTabs,
-                groups: sanitizedGroups,
-                activeTabId: activeTabId || '1', // Ensure activeTabId is never undefined
-                searchVersion: safeSearchVersion,
+                tabs: normalized.tabs,
+                groups: normalized.groups,
+                activeTabId: normalized.activeTabId,
+                searchVersion: normalized.searchVersion,
                 activeCollaborationId: collaborationId || null,
                 activeNoteId: activeNoteId || null,
                 noteTitle: noteTitle || 'General Bible Study'
             }, { merge: true }).catch(err => console.error('Error saving bible tabs:', err));
         }, 1000);
         return () => clearTimeout(saveState);
-    }, [tabs, activeTabId, user, searchVersion, groups]);
+    }, [tabs, activeTabId, user, searchVersion, groups, normalizeForHash]);
 
 
     const closeNote = useCallback(() => {

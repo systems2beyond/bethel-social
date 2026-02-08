@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { PulpitService } from '@/lib/services/PulpitService';
 import TeleprompterView from '@/components/Pulpit/TeleprompterView';
@@ -20,6 +20,9 @@ function PulpitContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const noteId = searchParams.get('noteId');
+
+    // Track which session+noteId combos have been synced to prevent write loops
+    const syncedNoteRef = useRef<string | null>(null);
 
     useEffect(() => {
         if (!user || authLoading) return;
@@ -47,7 +50,9 @@ function PulpitContent() {
                 let activeSession = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as PulpitSession;
 
                 // If there's a noteId and an existing session, update the session with the note content
-                if (noteId) {
+                // Use ref to prevent write loops - only sync once per session+noteId combo
+                const syncKey = `${activeSession.id}:${noteId}`;
+                if (noteId && syncedNoteRef.current !== syncKey) {
                     try {
                         const noteDoc = await getDoc(doc(db, 'users', user.uid, 'notes', noteId));
                         if (noteDoc.exists()) {
@@ -57,7 +62,9 @@ function PulpitContent() {
                                 sermonTitle: noteData.title || activeSession.sermonTitle,
                                 sermonNotes: noteData.content || activeSession.sermonNotes
                             };
-                            // Also update in Firestore
+                            // Mark as synced BEFORE writing to prevent loop
+                            syncedNoteRef.current = syncKey;
+                            // Update in Firestore
                             await PulpitService.updateTeleprompter(activeSession.id, noteData.content || '');
                         }
                     } catch (error) {
@@ -140,7 +147,7 @@ function PulpitContent() {
 
     if (authLoading || loading || (noteId && initializing)) {
         return (
-            <div className="flex h-screen w-full items-center justify-center bg-zinc-950 text-white flex-col gap-4">
+            <div className="flex h-dvh w-full items-center justify-center bg-zinc-950 text-white flex-col gap-4">
                 <Loader2 className="animate-spin text-zinc-500" size={32} />
                 {noteId && initializing && <p className="text-zinc-500 mt-4">Initializing session from note...</p>}
             </div>
@@ -149,7 +156,7 @@ function PulpitContent() {
 
     if (!session) {
         return (
-            <div className="flex h-screen w-full flex-col items-center justify-center bg-zinc-950 text-white gap-6">
+            <div className="flex h-dvh w-full flex-col items-center justify-center bg-zinc-950 text-white gap-6">
                 <div className="bg-zinc-900 p-8 rounded-2xl border border-zinc-800 text-center max-w-md shadow-2xl">
                     <div className="mx-auto w-16 h-16 bg-zinc-800 rounded-full flex items-center justify-center mb-6">
                         <MonitorPlay size={32} className="text-zinc-400" />
@@ -183,7 +190,7 @@ function PulpitContent() {
     }
 
     return (
-        <div className="flex flex-col h-screen bg-zinc-950 text-white overflow-hidden">
+        <div className="flex flex-col h-dvh bg-zinc-950 text-white overflow-hidden">
             <div className="flex-1 flex min-h-0">
                 {/* Main Content (Teleprompter) - 70% */}
                 <div className="flex-[0.7] border-r border-zinc-800 bg-black h-full relative">
@@ -207,7 +214,7 @@ function PulpitContent() {
 export default function PulpitDashboard() {
     return (
         <Suspense fallback={
-            <div className="flex h-screen w-full items-center justify-center bg-zinc-950 text-white">
+            <div className="flex h-dvh w-full items-center justify-center bg-zinc-950 text-white">
                 <Loader2 className="animate-spin text-zinc-500" size={32} />
             </div>
         }>
