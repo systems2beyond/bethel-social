@@ -18,15 +18,23 @@ export default function VisitorAlertFeed({ session }: VisitorAlertFeedProps) {
     const resolvingAlertIds = useRef<Set<string>>(new Set());
 
     useEffect(() => {
+        console.log('[VisitorAlertFeed] Subscribing to session:', {
+            sessionId: session.id,
+            churchId: session.churchId,
+            status: session.status
+        });
+
         const unsubscribeAlerts = PulpitService.streamAlerts(session.churchId, (newAlerts) => {
             // Only show urgent type OR critical priority alerts on the Pulpit view
             const urgentAlerts = newAlerts.filter(
                 alert => alert.type === 'urgent' || alert.priority === 'critical'
             );
+            console.log('[VisitorAlertFeed] Alerts received:', urgentAlerts.length);
             setAlerts(urgentAlerts);
         });
 
         const unsubscribeCheckins = PulpitService.streamCheckins(session.churchId, session.id, (newCheckins) => {
+            console.log('[VisitorAlertFeed] Check-ins received:', newCheckins.length, newCheckins.map(c => ({ id: c.id, name: c.name })));
             setCheckins(newCheckins);
         });
 

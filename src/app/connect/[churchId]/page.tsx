@@ -94,23 +94,31 @@ export default function ConnectPage() {
             // Also create a pulpit_checkin if there's an active session
             // This makes the check-in appear on the Pulpit Dashboard in real-time
             try {
+                console.log('[Connect Form] Looking for active session with churchId:', churchId);
                 const activeSession = await PulpitService.getActiveSession(churchId);
+                console.log('[Connect Form] Active session found:', activeSession ? { id: activeSession.id, status: activeSession.status, churchId: activeSession.churchId } : 'NONE');
+
                 if (activeSession) {
                     const fullName = `${visitorData.firstName} ${visitorData.lastName}`.trim() || 'Guest';
-                    await PulpitService.createCheckin({
+                    console.log('[Connect Form] Creating pulpit check-in for session:', activeSession.id);
+                    // Use null instead of undefined for empty values (Firestore rejects undefined)
+                    const checkinId = await PulpitService.createCheckin({
                         sessionId: activeSession.id,
                         churchId: churchId,
                         visitorId: visitorId,
                         name: fullName,
                         isFirstTime: visitorData.isFirstTime || false,
                         source: 'qr-code',
-                        notes: visitorData.prayerRequests || undefined,
-                        prayerRequest: visitorData.prayerRequests || undefined
+                        notes: visitorData.prayerRequests || null,
+                        prayerRequest: visitorData.prayerRequests || null
                     });
+                    console.log('[Connect Form] Pulpit check-in created with ID:', checkinId);
+                } else {
+                    console.warn('[Connect Form] No active session found for churchId:', churchId, '- check-in will only appear in pipeline');
                 }
             } catch (sessionError) {
                 // Non-critical: If pulpit check-in fails, visitor is still saved
-                console.warn('Could not create pulpit check-in:', sessionError);
+                console.warn('[Connect Form] Could not create pulpit check-in:', sessionError);
             }
 
             setSuccess(true);
@@ -129,7 +137,7 @@ export default function ConnectPage() {
     // Loading state
     if (loading) {
         return (
-            <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+            <div className="min-h-dvh bg-zinc-950 flex items-center justify-center">
                 <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
             </div>
         );
@@ -144,7 +152,7 @@ export default function ConnectPage() {
     if (!settings.enabled) {
         return (
             <div
-                className="min-h-screen flex items-center justify-center p-6 text-center"
+                className="min-h-dvh flex items-center justify-center p-6 text-center"
                 style={{ backgroundColor: branding.backgroundColor }}
             >
                 <div className="max-w-md w-full bg-zinc-900 border border-zinc-800 p-8 rounded-3xl">
@@ -159,7 +167,7 @@ export default function ConnectPage() {
     if (success) {
         return (
             <div
-                className="min-h-screen flex items-center justify-center p-6 text-center"
+                className="min-h-dvh overflow-y-auto flex items-center justify-center p-6 text-center"
                 style={{ backgroundColor: branding.backgroundColor }}
             >
                 <motion.div
@@ -184,13 +192,13 @@ export default function ConnectPage() {
 
     return (
         <div
-            className="min-h-screen flex flex-col items-center justify-center p-4 sm:p-6"
+            className="h-dvh overflow-y-auto overscroll-contain py-8 px-4 sm:px-6 sm:py-12 pb-24"
             style={{ backgroundColor: branding.backgroundColor }}
         >
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="w-full max-w-lg"
+                className="w-full max-w-lg mx-auto"
             >
                 {/* Header */}
                 <div className="text-center mb-8">

@@ -299,35 +299,23 @@ export default function AdminPage() {
     };
 
     // Handle opening the pop-out alerts window
-    const handlePopOutAlerts = async () => {
-        if (!userData?.churchId) {
-            alert('Church ID not found. Please refresh and try again.');
-            return;
-        }
+    const handlePopOutAlerts = () => {
+        // Use the already-loaded activeSession from the real-time listener
+        // instead of calling getActiveSession() which has stricter date filters
+        if (activeSession) {
+            // Open popup window
+            const width = 400;
+            const height = 650;
+            const left = window.screen.width - width - 20;
+            const top = 100;
 
-        setLoadingSession(true);
-        try {
-            const session = await PulpitService.getActiveSession(userData.churchId);
-            if (session) {
-                // Open popup window
-                const width = 400;
-                const height = 650;
-                const left = window.screen.width - width - 20;
-                const top = 100;
-
-                window.open(
-                    '/pulpit/alerts',
-                    'AlertsPopup',
-                    `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
-                );
-            } else {
-                alert('No active service session. Start a session from Pastor Care to view alerts.');
-            }
-        } catch (error) {
-            console.error('Error checking for active session:', error);
-            alert('Failed to check for active session.');
-        } finally {
-            setLoadingSession(false);
+            window.open(
+                '/pulpit/alerts',
+                'AlertsPopup',
+                `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+            );
+        } else {
+            alert('No active service session. Start a session from Pastor Care to view alerts.');
         }
     };
 
@@ -375,64 +363,86 @@ export default function AdminPage() {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 p-8">
+        <div className="min-h-screen bg-gray-50 p-4 md:p-8 overflow-x-hidden">
             <div className="max-w-6xl mx-auto">
                 <header className="mb-8">
                     <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard v2</h1>
                     <p className="text-gray-500 mt-2">Manage content, users, and community safety.</p>
                 </header>
 
-                {/* Tabs */}
-                <div className="flex space-x-1 mb-6 bg-white p-1 rounded-xl border border-gray-200 w-fit">
-                    <button
-                        onClick={() => setActiveTab('overview')}
-                        className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'overview' ? 'bg-blue-50 text-blue-700 shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
-                    >
-                        <LayoutDashboard className="w-4 h-4" />
-                        <span>Overview</span>
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('reports')}
-                        className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'reports' ? 'bg-yellow-50 text-yellow-700 shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
-                    >
-                        <Flag className="w-4 h-4" />
-                        <span>Reported Content</span>
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('pinned')}
-                        className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'pinned' ? 'bg-blue-50 text-blue-700 shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
-                    >
-                        <Pin className="w-4 h-4" />
-                        <span>Pinned Posts</span>
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('groups')}
-                        className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'groups' ? 'bg-purple-50 text-purple-700 shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
-                    >
-                        <Users className="w-4 h-4" />
-                        <span>Pending Groups</span>
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('config')}
-                        className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'config' ? 'bg-gray-100 text-gray-900 shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
-                    >
-                        <Settings className="w-4 h-4" />
-                        <span>Configuration</span>
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('giving')}
-                        className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'giving' ? 'bg-green-50 text-green-700 shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
-                    >
-                        <DollarSign className="w-4 h-4" />
-                        <span>Giving & Transactions</span>
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('sermons')}
-                        className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'sermons' ? 'bg-indigo-50 text-indigo-700 shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
-                    >
-                        <PlayCircle className="w-4 h-4" />
-                        <span>Sermons</span>
-                    </button>
+                {/* Tabs - Dropdown for mobile/tablet (below 1024px) */}
+                <div className="lg:hidden mb-6">
+                    <div className="relative">
+                        <select
+                            value={activeTab}
+                            onChange={(e) => setActiveTab(e.target.value as typeof activeTab)}
+                            className="w-full appearance-none bg-white border border-gray-200 rounded-xl px-4 py-3 pr-10 text-base font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
+                        >
+                            <option value="overview">Overview</option>
+                            <option value="reports">Reported Content</option>
+                            <option value="pinned">Pinned Posts</option>
+                            <option value="groups">Pending Groups</option>
+                            <option value="config">Configuration</option>
+                            <option value="giving">Giving & Transactions</option>
+                            <option value="sermons">Sermons</option>
+                        </select>
+                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+                    </div>
+                </div>
+
+                {/* Tabs - Desktop only (1024px+) - all tabs visible, no scrolling needed */}
+                <div className="hidden lg:block mb-6">
+                    <div className="inline-flex gap-1 bg-white p-1 rounded-xl border border-gray-200">
+                        <button
+                            onClick={() => setActiveTab('overview')}
+                            className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'overview' ? 'bg-blue-50 text-blue-700 shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
+                        >
+                            <LayoutDashboard className="w-4 h-4" />
+                            <span>Overview</span>
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('reports')}
+                            className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'reports' ? 'bg-yellow-50 text-yellow-700 shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
+                        >
+                            <Flag className="w-4 h-4" />
+                            <span>Reports</span>
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('pinned')}
+                            className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'pinned' ? 'bg-blue-50 text-blue-700 shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
+                        >
+                            <Pin className="w-4 h-4" />
+                            <span>Pinned</span>
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('groups')}
+                            className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'groups' ? 'bg-purple-50 text-purple-700 shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
+                        >
+                            <Users className="w-4 h-4" />
+                            <span>Groups</span>
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('config')}
+                            className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'config' ? 'bg-gray-100 text-gray-900 shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
+                        >
+                            <Settings className="w-4 h-4" />
+                            <span>Config</span>
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('giving')}
+                            className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'giving' ? 'bg-green-50 text-green-700 shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
+                        >
+                            <DollarSign className="w-4 h-4" />
+                            <span>Giving</span>
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('sermons')}
+                            className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'sermons' ? 'bg-indigo-50 text-indigo-700 shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
+                        >
+                            <PlayCircle className="w-4 h-4" />
+                            <span>Sermons</span>
+                        </button>
+                    </div>
                 </div>
 
                 {/* Content */}

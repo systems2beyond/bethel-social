@@ -9,8 +9,7 @@ import {
     updateDoc,
     doc,
     onSnapshot,
-    serverTimestamp,
-    Timestamp
+    serverTimestamp
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { PulpitSession, PulpitAlert, PulpitCheckIn } from '@/types';
@@ -22,41 +21,31 @@ export const PulpitService = {
 
     async getActiveSession(churchId: string): Promise<PulpitSession | null> {
         try {
-            // Priority 1: Check for 'live' status
-            const liveQuery = query(
+            console.log('[PulpitService] getActiveSession called with churchId:', churchId);
+
+            // Simple query: Get most recent session with status 'live' or 'scheduled'
+            // No date filter - if a session exists and is active, we want to find it
+            const q = query(
                 collection(db, 'pulpit_sessions'),
                 where('churchId', '==', churchId),
-                where('status', '==', 'live'),
+                where('status', 'in', ['live', 'scheduled']),
                 orderBy('createdAt', 'desc'),
                 limit(1)
             );
 
-            const liveSnapshot = await getDocs(liveQuery);
-            if (!liveSnapshot.empty) {
-                return { id: liveSnapshot.docs[0].id, ...liveSnapshot.docs[0].data() } as PulpitSession;
+            const snapshot = await getDocs(q);
+            console.log('[PulpitService] Active sessions found:', snapshot.size);
+
+            if (!snapshot.empty) {
+                const session = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as PulpitSession;
+                console.log('[PulpitService] Returning session:', session.id, 'status:', session.status);
+                return session;
             }
 
-            // Priority 2: Check for 'scheduled' status for today
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-
-            const scheduledQuery = query(
-                collection(db, 'pulpit_sessions'),
-                where('churchId', '==', churchId),
-                where('status', '==', 'scheduled'),
-                where('date', '>=', today),
-                orderBy('date', 'asc'),
-                limit(1)
-            );
-
-            const scheduledSnapshot = await getDocs(scheduledQuery);
-            if (!scheduledSnapshot.empty) {
-                return { id: scheduledSnapshot.docs[0].id, ...scheduledSnapshot.docs[0].data() } as PulpitSession;
-            }
-
+            console.log('[PulpitService] No active session found for churchId:', churchId);
             return null;
         } catch (error) {
-            console.error('Error fetching active pulpit session:', error);
+            console.error('[PulpitService] Error fetching active pulpit session:', error);
             return null;
         }
     },
