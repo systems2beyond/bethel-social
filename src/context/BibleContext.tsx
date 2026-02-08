@@ -108,8 +108,9 @@ export function BibleProvider({ children }: { children: ReactNode }) {
     const [groups, setGroups] = useState<TabGroup[]>([]);
     const [activeTabId, setActiveTabId] = useState<string>('1');
 
-    // Track if initial Firestore load is complete to avoid reopening study on every save
-    const initialLoadDoneRef = useRef(false);
+    // Track last-saved data to prevent write loops
+    // Only save when data actually differs from what's in Firestore
+    const lastSavedStateRef = useRef<string | null>(null);
 
     const [version, setVersion] = useState('kjv');
     const [searchVersion, setSearchVersion] = useState('kjv'); // Default to KJV
@@ -334,15 +335,26 @@ export function BibleProvider({ children }: { children: ReactNode }) {
     // Load tabs from Firestore
     useEffect(() => {
         if (!user) return;
-        const unsubscribe = onSnapshot(doc(db, 'users', user.uid, 'settings', 'bible-tabs'), (doc) => {
-            if (doc.exists()) {
-                const data = doc.data();
+        const unsubscribe = onSnapshot(doc(db, 'users', user.uid, 'settings', 'bible-tabs'), (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+
+                // Store a hash of the received state to prevent save loops
+                // Only save when local changes differ from what Firestore has
+                const stateHash = JSON.stringify({
+                    tabs: data.tabs,
+                    activeTabId: data.activeTabId,
+                    groups: data.groups,
+                    searchVersion: data.searchVersion
+                });
+                lastSavedStateRef.current = stateHash;
+
                 if (data.tabs) setTabs(data.tabs);
                 if (data.activeTabId) setActiveTabId(data.activeTabId);
                 if (data.groups) setGroups(data.groups);
                 // Also restore search version if saved
                 if (data.searchVersion) setSearchVersion(data.searchVersion);
-                // Resore collaboration ID if it exists
+                // Restore collaboration ID if it exists
                 if (data.activeCollaborationId) {
                     _setCollaborationId(data.activeCollaborationId);
                     // State is restored but study modal stays closed - user opens it explicitly
@@ -362,6 +374,7 @@ export function BibleProvider({ children }: { children: ReactNode }) {
     // Save tabs/state
     useEffect(() => {
         if (!user) return;
+
         const saveState = setTimeout(() => {
             // Sanitize tabs to remove undefined values which Firebase rejects
             const sanitizedTabs = tabs.map(tab => ({
@@ -384,6 +397,23 @@ export function BibleProvider({ children }: { children: ReactNode }) {
             // Ensure searchVersion is never undefined
             const safeSearchVersion = searchVersion || 'kjv';
 
+            // Check if state has actually changed from what's in Firestore
+            // This prevents write loops where save → listener → save cycles endlessly
+            const currentStateHash = JSON.stringify({
+                tabs: sanitizedTabs,
+                activeTabId: activeTabId || '1',
+                groups: sanitizedGroups,
+                searchVersion: safeSearchVersion
+            });
+
+            if (currentStateHash === lastSavedStateRef.current) {
+                // Data matches what's in Firestore, skip save
+                return;
+            }
+
+            // Update ref before saving to prevent race conditions
+            lastSavedStateRef.current = currentStateHash;
+
             setDoc(doc(db, 'users', user.uid, 'settings', 'bible-tabs'), {
                 tabs: sanitizedTabs,
                 groups: sanitizedGroups,
@@ -395,7 +425,7 @@ export function BibleProvider({ children }: { children: ReactNode }) {
             }, { merge: true }).catch(err => console.error('Error saving bible tabs:', err));
         }, 1000);
         return () => clearTimeout(saveState);
-    }, [tabs, activeTabId, user, searchVersion]);
+    }, [tabs, activeTabId, user, searchVersion, groups]);
 
 
     const closeNote = useCallback(() => {
