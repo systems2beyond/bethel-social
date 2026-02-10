@@ -762,7 +762,7 @@ export default function ZipCodeMapSelector({
                         />
                     )}
 
-                    {/* Render saved shapes - editable */}
+                    {/* Render saved shapes - use onMouseUp/onDragEnd to avoid infinite loops */}
                     {drawnShapes.map(shape => {
                         if (shape.type === 'circle' && shape.center && shape.radius) {
                             return (
@@ -772,7 +772,19 @@ export default function ZipCodeMapSelector({
                                     radius={shape.radius}
                                     editable={true}
                                     draggable={true}
-                                    onCenterChanged={function(this: google.maps.Circle) {
+                                    onMouseUp={function(this: google.maps.Circle) {
+                                        // Update both center and radius on mouse up (after drag or resize)
+                                        const newCenter = this.getCenter();
+                                        const newRadius = this.getRadius();
+                                        if (newCenter) {
+                                            setDrawnShapes(prev => prev.map(s =>
+                                                s.id === shape.id
+                                                    ? { ...s, center: { lat: newCenter.lat(), lng: newCenter.lng() }, radius: newRadius }
+                                                    : s
+                                            ));
+                                        }
+                                    }}
+                                    onDragEnd={function(this: google.maps.Circle) {
                                         const newCenter = this.getCenter();
                                         if (newCenter) {
                                             setDrawnShapes(prev => prev.map(s =>
@@ -781,14 +793,6 @@ export default function ZipCodeMapSelector({
                                                     : s
                                             ));
                                         }
-                                    }}
-                                    onRadiusChanged={function(this: google.maps.Circle) {
-                                        const newRadius = this.getRadius();
-                                        setDrawnShapes(prev => prev.map(s =>
-                                            s.id === shape.id
-                                                ? { ...s, radius: newRadius }
-                                                : s
-                                        ));
                                     }}
                                     options={{
                                         fillColor: '#10B981',
@@ -806,7 +810,28 @@ export default function ZipCodeMapSelector({
                                     bounds={shape.bounds}
                                     editable={true}
                                     draggable={true}
-                                    onBoundsChanged={function(this: google.maps.Rectangle) {
+                                    onMouseUp={function(this: google.maps.Rectangle) {
+                                        // Update bounds on mouse up (after drag or resize)
+                                        const newBounds = this.getBounds();
+                                        if (newBounds) {
+                                            const ne = newBounds.getNorthEast();
+                                            const sw = newBounds.getSouthWest();
+                                            setDrawnShapes(prev => prev.map(s =>
+                                                s.id === shape.id
+                                                    ? {
+                                                        ...s,
+                                                        bounds: {
+                                                            north: ne.lat(),
+                                                            south: sw.lat(),
+                                                            east: ne.lng(),
+                                                            west: sw.lng(),
+                                                        }
+                                                    }
+                                                    : s
+                                            ));
+                                        }
+                                    }}
+                                    onDragEnd={function(this: google.maps.Rectangle) {
                                         const newBounds = this.getBounds();
                                         if (newBounds) {
                                             const ne = newBounds.getNorthEast();
@@ -843,6 +868,19 @@ export default function ZipCodeMapSelector({
                                     editable={true}
                                     draggable={true}
                                     onMouseUp={function(this: google.maps.Polygon) {
+                                        const path = this.getPath();
+                                        const newPaths: { lat: number; lng: number }[] = [];
+                                        for (let i = 0; i < path.getLength(); i++) {
+                                            const point = path.getAt(i);
+                                            newPaths.push({ lat: point.lat(), lng: point.lng() });
+                                        }
+                                        setDrawnShapes(prev => prev.map(s =>
+                                            s.id === shape.id
+                                                ? { ...s, paths: newPaths }
+                                                : s
+                                        ));
+                                    }}
+                                    onDragEnd={function(this: google.maps.Polygon) {
                                         const path = this.getPath();
                                         const newPaths: { lat: number; lng: number }[] = [];
                                         for (let i = 0; i < path.getLength(); i++) {
