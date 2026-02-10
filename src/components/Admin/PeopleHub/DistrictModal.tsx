@@ -19,12 +19,27 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Loader2, ShieldCheck, Search, X, User, Plus, MapPin, AlertCircle } from "lucide-react";
+import { Loader2, ShieldCheck, Search, X, User, Plus, MapPin, AlertCircle, Map } from "lucide-react";
 import { District, FirestoreUser } from '@/types';
 import { DistrictService } from '@/lib/services/DistrictService';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import dynamic from 'next/dynamic';
+
+// Dynamically import the map component to avoid SSR issues with Google Maps
+const ZipCodeMapSelector = dynamic(
+    () => import('./ZipCodeMapSelector'),
+    {
+        ssr: false,
+        loading: () => (
+            <div className="flex items-center justify-center p-8 bg-gray-50 dark:bg-zinc-800/50 rounded-xl">
+                <Loader2 className="h-6 w-6 animate-spin text-blue-500 mr-2" />
+                <span className="text-sm text-muted-foreground">Loading map...</span>
+            </div>
+        )
+    }
+);
 
 interface DistrictModalProps {
     open: boolean;
@@ -60,6 +75,7 @@ export function DistrictModal({
 
     // ZIP code input
     const [zipCodeInput, setZipCodeInput] = useState('');
+    const [showMapView, setShowMapView] = useState(false);
 
     // Member search states
     const [leaderSearch, setLeaderSearch] = useState('');
@@ -133,6 +149,7 @@ export function DistrictModal({
             setLeaderSearch('');
             setMemberSearch('');
             setZipCodeInput('');
+            setShowMapView(false);
             setErrors({});
         }
     }, [open]);
@@ -483,63 +500,99 @@ export function DistrictModal({
                         {/* ZIP Code Section - Only visible when geographic is selected */}
                         {formData.assignmentMethod === 'geographic' && (
                             <div className="space-y-3 p-4 bg-blue-50/50 dark:bg-blue-950/20 rounded-xl border border-blue-200/50 dark:border-blue-800/30">
-                                <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
-                                    <MapPin className="h-4 w-4" />
-                                    <Label className="font-medium">
-                                        ZIP Code Coverage
-                                    </Label>
-                                </div>
-
-                                <p className="text-xs text-muted-foreground">
-                                    Enter ZIP codes for this district. Members with matching addresses will be shown below.
-                                </p>
-
-                                {/* ZIP Code Input */}
-                                <div className="flex gap-2">
-                                    <Input
-                                        type="text"
-                                        placeholder="Enter ZIP code (e.g., 30301)"
-                                        value={zipCodeInput}
-                                        onChange={(e) => setZipCodeInput(e.target.value.replace(/[^0-9-]/g, '').slice(0, 10))}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter') {
-                                                e.preventDefault();
-                                                handleAddZipCode();
-                                            }
-                                        }}
-                                        className="flex-1 rounded-xl border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800"
-                                    />
-                                    <Button
-                                        type="button"
-                                        onClick={handleAddZipCode}
-                                        disabled={!zipCodeInput.trim()}
-                                        variant="outline"
-                                        className="rounded-xl"
-                                    >
-                                        <Plus className="h-4 w-4" />
-                                    </Button>
-                                </div>
-
-                                {/* ZIP Code Tags */}
-                                {formData.zipCodes.length > 0 && (
-                                    <div className="flex flex-wrap gap-2">
-                                        {formData.zipCodes.map(zip => (
-                                            <span
-                                                key={zip}
-                                                className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-lg text-sm font-medium"
-                                            >
-                                                <MapPin className="h-3 w-3" />
-                                                {zip}
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleRemoveZipCode(zip)}
-                                                    className="ml-1 hover:text-blue-900 dark:hover:text-blue-100"
-                                                >
-                                                    <X className="h-3 w-3" />
-                                                </button>
-                                            </span>
-                                        ))}
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
+                                        <MapPin className="h-4 w-4" />
+                                        <Label className="font-medium">
+                                            ZIP Code Coverage
+                                        </Label>
                                     </div>
+                                    <div className="flex gap-1">
+                                        <Button
+                                            type="button"
+                                            variant={!showMapView ? "default" : "ghost"}
+                                            size="sm"
+                                            onClick={() => setShowMapView(false)}
+                                            className="h-7 text-xs rounded-lg"
+                                        >
+                                            <Plus className="h-3 w-3 mr-1" />
+                                            Manual
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant={showMapView ? "default" : "ghost"}
+                                            size="sm"
+                                            onClick={() => setShowMapView(true)}
+                                            className="h-7 text-xs rounded-lg"
+                                        >
+                                            <Map className="h-3 w-3 mr-1" />
+                                            Map
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                {showMapView ? (
+                                    /* Map View */
+                                    <ZipCodeMapSelector
+                                        zipCodes={formData.zipCodes}
+                                        onZipCodesChange={(newZips) => setFormData(prev => ({ ...prev, zipCodes: newZips }))}
+                                        churchLocation={undefined} // TODO: Pass church location if available
+                                    />
+                                ) : (
+                                    /* Manual Entry View */
+                                    <>
+                                        <p className="text-xs text-muted-foreground">
+                                            Enter ZIP codes for this district. Members with matching addresses will be shown below.
+                                        </p>
+
+                                        {/* ZIP Code Input */}
+                                        <div className="flex gap-2">
+                                            <Input
+                                                type="text"
+                                                placeholder="Enter ZIP code (e.g., 30301)"
+                                                value={zipCodeInput}
+                                                onChange={(e) => setZipCodeInput(e.target.value.replace(/[^0-9-]/g, '').slice(0, 10))}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        handleAddZipCode();
+                                                    }
+                                                }}
+                                                className="flex-1 rounded-xl border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800"
+                                            />
+                                            <Button
+                                                type="button"
+                                                onClick={handleAddZipCode}
+                                                disabled={!zipCodeInput.trim()}
+                                                variant="outline"
+                                                className="rounded-xl"
+                                            >
+                                                <Plus className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+
+                                        {/* ZIP Code Tags */}
+                                        {formData.zipCodes.length > 0 && (
+                                            <div className="flex flex-wrap gap-2">
+                                                {formData.zipCodes.map(zip => (
+                                                    <span
+                                                        key={zip}
+                                                        className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-lg text-sm font-medium"
+                                                    >
+                                                        <MapPin className="h-3 w-3" />
+                                                        {zip}
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleRemoveZipCode(zip)}
+                                                            className="ml-1 hover:text-blue-900 dark:hover:text-blue-100"
+                                                        >
+                                                            <X className="h-3 w-3" />
+                                                        </button>
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </>
                                 )}
 
                                 {/* Members in ZIP Codes */}
