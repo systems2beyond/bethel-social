@@ -542,10 +542,11 @@ export default function VisitorPipeline({
         <div className="bg-gray-50 dark:bg-zinc-950 flex flex-col h-full overflow-hidden">
             {/* Copper Style Toolbar Area - Made Sticky */}
             <div className="sticky top-0 z-40 bg-white dark:bg-zinc-900 border-b border-gray-100 dark:border-zinc-800 shadow-sm flex-shrink-0">
-                <div className="max-w-full mx-auto px-4 sm:px-6 py-4">
-                    <div className="flex items-center justify-between gap-4">
+                <div className="max-w-full mx-auto px-4 sm:px-6 py-3">
+                    {/* Mobile: Two rows - Board selector on top, actions below */}
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                         {/* Left: Board Selector + Info */}
-                        <div className="flex items-center gap-4 flex-shrink-0">
+                        <div className="flex items-center gap-3 min-w-0">
                             <BoardSelector
                                 boards={boards}
                                 selectedBoard={selectedBoard}
@@ -554,11 +555,11 @@ export default function VisitorPipeline({
 
                             <div className="h-6 w-px bg-gray-100 dark:bg-zinc-700 hidden sm:block" />
 
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 shrink-0">
                                 <span className="text-xs font-bold text-gray-900 dark:text-zinc-300">
                                     {boardVisitors.length}
                                 </span>
-                                <span className="text-xs text-muted-foreground uppercase tracking-wider text-[10px] font-semibold mr-4">
+                                <span className="text-xs text-muted-foreground uppercase tracking-wider text-[10px] font-semibold">
                                     Contacts
                                 </span>
                             </div>
@@ -568,16 +569,16 @@ export default function VisitorPipeline({
                                     <div className="h-6 w-px bg-gray-100 dark:bg-zinc-700 hidden sm:block" />
                                     <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-blue-50 text-blue-700 border border-blue-100 rounded-full shadow-sm">
                                         <Calendar className="w-3.5 h-3.5" />
-                                        <span className="text-xs font-bold">
+                                        <span className="text-xs font-bold truncate max-w-[120px]">
                                             {linkedEvent.title}
                                         </span>
                                     </div>
                                 </>
                             )}
                         </div>
-                        {/* Right: Actions */}
-                        <div className="flex items-center gap-2 justify-end flex-shrink-0">
 
+                        {/* Right: Actions - wraps on mobile */}
+                        <div className="flex items-center gap-2 flex-wrap">
                             {/* Select All Button */}
                             <button
                                 onClick={() => {
@@ -588,53 +589,48 @@ export default function VisitorPipeline({
                                     }
                                 }}
                                 className={cn(
-                                    "flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-lg transition-all border shadow-sm active:scale-95 whitespace-nowrap",
+                                    "flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg transition-all border shadow-sm active:scale-95",
                                     selectedVisitors.size === currentBoardIds.length && currentBoardIds.length > 0
                                         ? "bg-rose-50 text-rose-600 border-rose-100"
                                         : "bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 text-gray-600 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-zinc-700"
                                 )}
                                 title="Select All Visible"
                             >
-                                <CheckSquare className="w-4 h-4 flex-shrink-0" />
-                                <span className="hidden lg:inline">Select All</span>
+                                <CheckSquare className="w-4 h-4 shrink-0" />
+                                <span className="hidden sm:inline">Select</span>
                             </button>
-
-                            <div className="h-6 w-px bg-gray-100 dark:bg-zinc-700 mx-1 hidden sm:block" />
 
                             <button
                                 onClick={() => setShowQRCode(!showQRCode)}
                                 className={cn(
-                                    "flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-lg transition-all border shadow-sm active:scale-95 whitespace-nowrap",
+                                    "flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg transition-all border shadow-sm active:scale-95",
                                     showQRCode
                                         ? "bg-emerald-50 text-emerald-600 border-emerald-100"
                                         : "bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 text-gray-600 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-zinc-700"
                                 )}
                                 title="Share QR Code"
                             >
-                                <QrCode className="w-4 h-4 flex-shrink-0" />
-                                <span className="hidden lg:inline">QR Code</span>
+                                <QrCode className="w-4 h-4 shrink-0" />
+                                <span className="hidden sm:inline">QR</span>
                             </button>
 
                             <Link
                                 href="/admin/connect"
-                                className="flex items-center gap-2 px-3 py-2 text-xs font-semibold bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 text-gray-600 dark:text-zinc-400 rounded-lg hover:bg-gray-50 dark:hover:bg-zinc-700 transition-all shadow-sm active:scale-95 whitespace-nowrap"
+                                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 text-gray-600 dark:text-zinc-400 rounded-lg hover:bg-gray-50 dark:hover:bg-zinc-700 transition-all shadow-sm active:scale-95"
                                 title="Form Editor"
                             >
-                                <Layout className="w-4 h-4 flex-shrink-0" />
-                                <span className="hidden lg:inline">Form Editor</span>
+                                <Layout className="w-4 h-4 shrink-0" />
+                                <span className="hidden sm:inline">Form</span>
                             </Link>
 
                             <Button
                                 size="sm"
                                 onClick={() => setCreateBoardOpen(true)}
-                                className="bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-700 hover:to-rose-600 text-white shadow-md border-0 px-4 font-black tracking-tight rounded-xl active:scale-95 whitespace-nowrap"
+                                className="bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-700 hover:to-rose-600 text-white shadow-md border-0 px-3 py-1.5 h-auto font-bold text-xs tracking-tight rounded-lg active:scale-95"
                             >
-                                <Plus className="w-4 h-4 mr-2" />
-                                <span className="hidden sm:inline">Create Pipeline</span>
-                                <span className="sm:hidden">Create</span>
+                                <Plus className="w-4 h-4 mr-1" />
+                                <span>New</span>
                             </Button>
-
-                            <div className="h-6 w-px bg-gray-100 dark:bg-zinc-700 mx-1 hidden sm:block" />
                         </div>
                     </div>
                 </div>
@@ -724,7 +720,7 @@ export default function VisitorPipeline({
             }
 
             {/* Kanban Board Container */}
-            <div className="flex-1 overflow-x-scroll px-6 py-6 pb-20 mb-24 pipeline-scrollbar">
+            <div className="flex-1 overflow-x-scroll px-4 sm:px-6 py-4 pb-4 pipeline-scrollbar">
                 <div className="flex gap-6 h-full min-w-max items-start">
                     {stages.map((stage) => {
                         const stageVisitors = visitorsByStage[stage.id] || [];

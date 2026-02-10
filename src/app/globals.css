@@ -37,18 +37,29 @@
   --font-display: var(--font-outfit);
 }
 
+/* Stable scroll lock for modals - doesn't break scroll position or zoom */
+html.prevent-scroll,
+html.prevent-scroll body {
+  overflow: hidden !important;
+  overscroll-behavior: none;
+}
+
 body.prevent-scroll {
   overflow: hidden !important;
-  height: 100vh !important;
-  width: 100vw !important;
-  position: fixed !important;
-  touch-action: none !important;
+  overscroll-behavior: none;
 }
 
 html {
   scroll-behavior: smooth;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Prevent iOS text size adjustment and ensure stable viewport */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* Lock viewport on all devices - app shell handles internal scrolling */
+  height: 100%;
+  height: 100dvh;
+  overflow: hidden;
 }
 
 .dark {
@@ -64,6 +75,13 @@ body {
   font-family: Arial, Helvetica, sans-serif;
   transition: background-color 0.3s ease, color 0.3s ease;
   /* Smooth toggle transition */
+  margin: 0;
+  padding: 0;
+  /* Lock viewport on all devices - app shell handles internal scrolling */
+  height: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 /* Fix iOS double-tap issue - applies to all interactive elements */
@@ -344,4 +362,14 @@ body.modal-open {
 
 @utility tap-highlight-transparent {
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Hide scrollbar but keep scroll functionality */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari, Opera */
 }

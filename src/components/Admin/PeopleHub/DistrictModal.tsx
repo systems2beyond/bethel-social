@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,7 +19,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Loader2, ShieldCheck, Search, X, User, Plus } from "lucide-react";
+import { Loader2, ShieldCheck, Search, X, User, Plus, MapPin, AlertCircle } from "lucide-react";
 import { District, FirestoreUser } from '@/types';
 import { DistrictService } from '@/lib/services/DistrictService';
 import { useAuth } from '@/context/AuthContext';
@@ -54,8 +54,12 @@ export function DistrictModal({
         leaderId: '',
         coLeaderIds: [] as string[],
         memberIds: [] as string[],
-        assignmentMethod: 'manual' as 'geographic' | 'alphabetic' | 'manual' | 'affinity'
+        assignmentMethod: 'manual' as 'geographic' | 'alphabetic' | 'manual' | 'affinity',
+        zipCodes: [] as string[]
     });
+
+    // ZIP code input
+    const [zipCodeInput, setZipCodeInput] = useState('');
 
     // Member search states
     const [leaderSearch, setLeaderSearch] = useState('');
@@ -77,7 +81,8 @@ export function DistrictModal({
                             leaderId: district.leaderId,
                             coLeaderIds: district.coLeaderIds || [],
                             memberIds: district.memberIds || [],
-                            assignmentMethod: district.assignmentMethod || 'manual'
+                            assignmentMethod: district.assignmentMethod || 'manual',
+                            zipCodes: district.geographicBounds?.zipCodes || []
                         });
                         // Set leader search to show name
                         const leader = members.find(m => m.uid === district.leaderId);
@@ -122,10 +127,12 @@ export function DistrictModal({
                 leaderId: '',
                 coLeaderIds: [],
                 memberIds: [],
-                assignmentMethod: 'manual'
+                assignmentMethod: 'manual',
+                zipCodes: []
             });
             setLeaderSearch('');
             setMemberSearch('');
+            setZipCodeInput('');
             setErrors({});
         }
     }, [open]);
@@ -153,6 +160,68 @@ export function DistrictModal({
         .filter(Boolean) as FirestoreUser[];
 
     const selectedLeader = members.find(m => m.uid === formData.leaderId);
+
+    // Members matching the entered ZIP codes (for geographic assignment)
+    const membersInZipCodes = useMemo(() => {
+        if (formData.assignmentMethod !== 'geographic' || formData.zipCodes.length === 0) {
+            return [];
+        }
+        return members.filter(m => {
+            const memberZip = m.address?.postalCode?.trim();
+            if (!memberZip) return false;
+            return formData.zipCodes.some(zip => memberZip.startsWith(zip.trim()));
+        });
+    }, [members, formData.zipCodes, formData.assignmentMethod]);
+
+    // Handle adding a ZIP code
+    const handleAddZipCode = useCallback(() => {
+        const zip = zipCodeInput.trim();
+        if (!zip) return;
+
+        // Validate ZIP code format (US 5-digit or 5+4)
+        const zipPattern = /^\d{5}(-\d{4})?$/;
+        if (!zipPattern.test(zip)) {
+            toast.error('Please enter a valid 5-digit ZIP code');
+            return;
+        }
+
+        if (formData.zipCodes.includes(zip)) {
+            toast.error('This ZIP code is already added');
+            return;
+        }
+
+        setFormData(prev => ({
+            ...prev,
+            zipCodes: [...prev.zipCodes, zip]
+        }));
+        setZipCodeInput('');
+    }, [zipCodeInput, formData.zipCodes]);
+
+    // Handle removing a ZIP code
+    const handleRemoveZipCode = useCallback((zip: string) => {
+        setFormData(prev => ({
+            ...prev,
+            zipCodes: prev.zipCodes.filter(z => z !== zip)
+        }));
+    }, []);
+
+    // Auto-add members from ZIP codes to the member list
+    const handleAutoAddZipMembers = useCallback(() => {
+        const newMemberIds = membersInZipCodes
+            .map(m => m.uid)
+            .filter(id => !formData.memberIds.includes(id));
+
+        if (newMemberIds.length === 0) {
+            toast.info('All matching members are already added');
+            return;
+        }
+
+        setFormData(prev => ({
+            ...prev,
+            memberIds: [...prev.memberIds, ...newMemberIds]
+        }));
+        toast.success(`Added ${newMemberIds.length} member${newMemberIds.length > 1 ? 's' : ''} from ZIP codes`);
+    }, [membersInZipCodes, formData.memberIds]);
 
     const clearError = (field: string) => {
         if (errors[field]) {
@@ -223,6 +292,11 @@ export function DistrictModal({
 
         setLoading(true);
         try {
+            // Build geographicBounds if using geographic assignment
+            const geographicBounds = formData.assignmentMethod === 'geographic' && formData.zipCodes.length > 0
+                ? { zipCodes: formData.zipCodes }
+                : undefined;
+
             if (districtId) {
                 // Update existing
                 await DistrictService.updateDistrict(districtId, {
@@ -230,7 +304,8 @@ export function DistrictModal({
                     leaderId: formData.leaderId,
                     coLeaderIds: formData.coLeaderIds,
                     memberIds: formData.memberIds,
-                    assignmentMethod: formData.assignmentMethod
+                    assignmentMethod: formData.assignmentMethod,
+                    geographicBounds
                 });
                 toast.success('District updated successfully');
             } else {
@@ -244,6 +319,7 @@ export function DistrictModal({
                         coLeaderIds: formData.coLeaderIds,
                         memberIds: formData.memberIds,
                         assignmentMethod: formData.assignmentMethod,
+                        geographicBounds,
                         isActive: true
                     },
                     userData?.uid || 'system'
@@ -403,6 +479,132 @@ export function DistrictModal({
                                 </SelectContent>
                             </Select>
                         </div>
+
+                        {/* ZIP Code Section - Only visible when geographic is selected */}
+                        {formData.assignmentMethod === 'geographic' && (
+                            <div className="space-y-3 p-4 bg-blue-50/50 dark:bg-blue-950/20 rounded-xl border border-blue-200/50 dark:border-blue-800/30">
+                                <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
+                                    <MapPin className="h-4 w-4" />
+                                    <Label className="font-medium">
+                                        ZIP Code Coverage
+                                    </Label>
+                                </div>
+
+                                <p className="text-xs text-muted-foreground">
+                                    Enter ZIP codes for this district. Members with matching addresses will be shown below.
+                                </p>
+
+                                {/* ZIP Code Input */}
+                                <div className="flex gap-2">
+                                    <Input
+                                        type="text"
+                                        placeholder="Enter ZIP code (e.g., 30301)"
+                                        value={zipCodeInput}
+                                        onChange={(e) => setZipCodeInput(e.target.value.replace(/[^0-9-]/g, '').slice(0, 10))}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                handleAddZipCode();
+                                            }
+                                        }}
+                                        className="flex-1 rounded-xl border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800"
+                                    />
+                                    <Button
+                                        type="button"
+                                        onClick={handleAddZipCode}
+                                        disabled={!zipCodeInput.trim()}
+                                        variant="outline"
+                                        className="rounded-xl"
+                                    >
+                                        <Plus className="h-4 w-4" />
+                                    </Button>
+                                </div>
+
+                                {/* ZIP Code Tags */}
+                                {formData.zipCodes.length > 0 && (
+                                    <div className="flex flex-wrap gap-2">
+                                        {formData.zipCodes.map(zip => (
+                                            <span
+                                                key={zip}
+                                                className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-lg text-sm font-medium"
+                                            >
+                                                <MapPin className="h-3 w-3" />
+                                                {zip}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleRemoveZipCode(zip)}
+                                                    className="ml-1 hover:text-blue-900 dark:hover:text-blue-100"
+                                                >
+                                                    <X className="h-3 w-3" />
+                                                </button>
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* Members in ZIP Codes */}
+                                {formData.zipCodes.length > 0 && (
+                                    <div className="pt-2 border-t border-blue-200/50 dark:border-blue-800/30">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
+                                                Members in these ZIP codes: {membersInZipCodes.length}
+                                            </span>
+                                            {membersInZipCodes.length > 0 && (
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={handleAutoAddZipMembers}
+                                                    className="h-7 text-xs rounded-lg border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40"
+                                                >
+                                                    <Plus className="h-3 w-3 mr-1" />
+                                                    Add All to District
+                                                </Button>
+                                            )}
+                                        </div>
+
+                                        {membersInZipCodes.length === 0 ? (
+                                            <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 p-2 rounded-lg">
+                                                <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+                                                <span>No members found with addresses in these ZIP codes</span>
+                                            </div>
+                                        ) : (
+                                            <div className="max-h-[120px] overflow-y-auto space-y-1">
+                                                {membersInZipCodes.map(member => {
+                                                    const isAlreadyAdded = formData.memberIds.includes(member.uid);
+                                                    return (
+                                                        <div
+                                                            key={member.uid}
+                                                            className={cn(
+                                                                "flex items-center gap-2 p-1.5 rounded-lg text-xs",
+                                                                isAlreadyAdded
+                                                                    ? "bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-300"
+                                                                    : "bg-white dark:bg-zinc-800/50"
+                                                            )}
+                                                        >
+                                                            <div className="w-6 h-6 rounded-full bg-gray-200 dark:bg-zinc-700 flex items-center justify-center text-[10px] font-medium">
+                                                                {(member.displayName || member.email || 'U').slice(0, 2).toUpperCase()}
+                                                            </div>
+                                                            <span className="font-medium truncate flex-1">
+                                                                {member.displayName || 'No Name'}
+                                                            </span>
+                                                            <span className="text-muted-foreground">
+                                                                {member.address?.postalCode}
+                                                            </span>
+                                                            {isAlreadyAdded && (
+                                                                <span className="text-green-600 dark:text-green-400 text-[10px] font-semibold">
+                                                                    Added
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                         {/* Members */}
                         <div className="space-y-2">

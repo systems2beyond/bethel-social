@@ -805,39 +805,91 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ content, 
         }
     }, [content, editor, collaborationId]);
 
-    // Native Click Listener
+    // Native Click & Touch Listener - Critical for verse links on mobile
     const containerRef = useRef<HTMLDivElement>(null);
     useEffect(() => {
         const container = containerRef.current;
         if (!container) return;
 
-        const handleNativeClick = (e: MouseEvent) => {
-            const target = e.target as HTMLElement;
+        // Helper to find verse link and extract URI
+        const getVerseLinkInfo = (target: HTMLElement): { isVerseLink: boolean; uri: string | null } => {
             const link = target.closest('a') || target.closest('.verse-link');
+            if (!link) return { isVerseLink: false, uri: null };
 
-            if (link) {
-                const href = link.getAttribute('href');
-                const dataVerse = link.getAttribute('data-verse');
-                const isVerseLink = (href && href.startsWith('verse://')) || !!dataVerse;
+            const href = link.getAttribute('href');
+            const dataVerse = link.getAttribute('data-verse');
+            const isVerseLink = (href && href.startsWith('verse://')) || !!dataVerse;
 
-                if (isVerseLink) {
-                    e.preventDefault();
-                    e.stopPropagation();
+            if (isVerseLink) {
+                const uri = (href && href.startsWith('verse://')) ? href : `verse://${dataVerse}`;
+                return { isVerseLink: true, uri };
+            }
+            return { isVerseLink: false, uri: null };
+        };
 
-                    if (onLinkClickRef.current) {
-                        const uri = (href && href.startsWith('verse://')) ? href : `verse://${dataVerse}`;
-                        onLinkClickRef.current(uri);
-                    }
-                    return false;
+        // MOBILE FIX: Handle touchstart to prevent cursor placement and keyboard opening
+        const handleTouchStart = (e: TouchEvent) => {
+            const target = e.target as HTMLElement;
+            const { isVerseLink, uri } = getVerseLinkInfo(target);
+
+            if (isVerseLink && uri) {
+                // Store the URI to use in touchend
+                container.dataset.pendingVerseLink = uri;
+            }
+        };
+
+        const handleTouchEnd = (e: TouchEvent) => {
+            const pendingUri = container.dataset.pendingVerseLink;
+            if (pendingUri) {
+                // Clear the pending link
+                delete container.dataset.pendingVerseLink;
+
+                // Prevent default BEFORE it can focus the editor
+                e.preventDefault();
+                e.stopPropagation();
+
+                // Blur the editor to prevent keyboard from opening
+                if (editor && !editor.isDestroyed) {
+                    editor.commands.blur();
+                }
+
+                // Trigger the link click handler
+                if (onLinkClickRef.current) {
+                    onLinkClickRef.current(pendingUri);
                 }
             }
         };
 
+        const handleNativeClick = (e: MouseEvent) => {
+            const target = e.target as HTMLElement;
+            const { isVerseLink, uri } = getVerseLinkInfo(target);
+
+            if (isVerseLink && uri) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                // Blur the editor to ensure keyboard doesn't open
+                if (editor && !editor.isDestroyed) {
+                    editor.commands.blur();
+                }
+
+                if (onLinkClickRef.current) {
+                    onLinkClickRef.current(uri);
+                }
+                return false;
+            }
+        };
+
+        // Use capture phase to intercept before TipTap's handlers
+        container.addEventListener('touchstart', handleTouchStart, { capture: true, passive: true });
+        container.addEventListener('touchend', handleTouchEnd, { capture: true });
         container.addEventListener('click', handleNativeClick, { capture: true });
         return () => {
+            container.removeEventListener('touchstart', handleTouchStart, { capture: true });
+            container.removeEventListener('touchend', handleTouchEnd, { capture: true });
             container.removeEventListener('click', handleNativeClick, { capture: true });
         };
-    }, []);
+    }, [editor]);
 
     if (!editor) {
         return null;

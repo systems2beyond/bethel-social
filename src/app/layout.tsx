@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { BibleBot } from "@/components/Chat/BibleBot";
@@ -23,6 +23,14 @@ const caveat = Caveat({
 export const metadata: Metadata = {
   title: "Bethel Metropolitan Baptist Church",
   description: "Community Platform",
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: 'cover',
 };
 
 import { Providers } from "@/components/Providers";

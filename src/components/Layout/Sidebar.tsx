@@ -124,7 +124,7 @@ export function Sidebar() {
                             exit={isMobileOrTabletPortrait ? { x: -280 } : undefined}
                             transition={{ type: "spring", bounce: 0, duration: 0.3 }}
                             className={cn(
-                                "w-64 h-screen bg-gray-50 dark:bg-zinc-900 border-r border-gray-200 dark:border-zinc-800 flex flex-col flex-shrink-0 transition-colors duration-300",
+                                "w-64 h-dvh bg-gray-50 dark:bg-zinc-900 border-r border-gray-200 dark:border-zinc-800 flex flex-col flex-shrink-0 transition-colors duration-300",
                                 isMobileOrTabletPortrait ? "fixed top-0 left-0 z-[20000] shadow-2xl" : "relative"
                             )}
                         >

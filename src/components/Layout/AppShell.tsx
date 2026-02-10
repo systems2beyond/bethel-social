@@ -80,7 +80,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     // For authenticated routes, render full app shell
     return (
         <>
-            <div className="flex h-screen overflow-hidden">
+            <div className="flex h-dvh overflow-hidden fixed inset-0">
                 {/* Sidebar - Responsive */}
                 <Sidebar />
 

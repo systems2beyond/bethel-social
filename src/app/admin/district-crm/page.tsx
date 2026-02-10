@@ -320,10 +320,10 @@ export default function DistrictCRMPage() {
                         You are not currently assigned as a leader to any pastoral care district.
                         Please contact your church administrator to be assigned.
                     </p>
-                    <Link href="/admin">
+                    <Link href="/admin/people-hub">
                         <Button variant="outline" className="rounded-xl">
                             <ArrowLeft className="h-4 w-4 mr-2" />
-                            Back to Dashboard
+                            Back to People Hub
                         </Button>
                     </Link>
                 </div>
@@ -339,7 +339,7 @@ export default function DistrictCRMPage() {
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
                             <Link
-                                href="/admin"
+                                href="/admin/people-hub"
                                 className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
                             >
                                 <ArrowLeft className="w-5 h-5 text-muted-foreground" />

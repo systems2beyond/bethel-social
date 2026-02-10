@@ -356,9 +356,9 @@ export function FellowshipView({ content, collaborationId, userName, userColor, 
     }
 
     return (
-        <div className="h-full flex flex-col bg-slate-50 dark:bg-[#0B1120]"> {/* Distinct Background */}
-            {/* Fellowship Header */}
-            <div className="sticky top-0 z-10 bg-white/80 dark:bg-[#0B1120]/80 backdrop-blur-md border-b border-indigo-100 dark:border-indigo-900/30 px-4 py-3 flex items-center justify-between shrink-0">
+        <div className="h-full flex flex-col overflow-hidden bg-slate-50 dark:bg-[#0B1120]"> {/* Distinct Background */}
+            {/* Fellowship Header - Glassmorphic */}
+            <div className="z-20 bg-white/90 dark:bg-[#0B1120]/90 backdrop-blur-xl border-b border-indigo-100/50 dark:border-indigo-900/30 px-4 py-3 flex items-center justify-between shrink-0 shadow-sm">
                 <div className="flex items-center gap-3">
                     <div className="p-2 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg shadow-lg shadow-indigo-500/20 text-white animate-pulse-slow">
                         <Users className="w-4 h-4" />
@@ -500,56 +500,64 @@ export function FellowshipView({ content, collaborationId, userName, userColor, 
             </AnimatePresence>
 
 
-            {/* Editor Container with Special Styling */}
-            <div className="flex-1 overflow-hidden relative flex">
-                <div className="flex-1 overflow-hidden relative flex flex-col">
-                    <div className="absolute inset-0 bg-[url('/patterns/grid.svg')] opacity-[0.03] pointer-events-none" /> {/* Subtle pattern */}
-                    <div className="h-full flex flex-col">
-                        <div className="border-b border-indigo-50 dark:border-indigo-900/20 px-2 bg-white/80 dark:bg-[#0B1120]/50 backdrop-blur-sm">
-                            {/* Toolbar placeholder */}
-                        </div>
+            {/* Toolbar - Glassmorphic, stays above scrolling content */}
+            <div className="z-10 shrink-0 bg-white/90 dark:bg-[#0B1120]/90 backdrop-blur-xl border-b border-indigo-100 dark:border-indigo-900/30 shadow-sm">
+                {editor && (
+                    <EditorToolbar
+                        editor={editor}
+                        className="px-2 py-1"
+                    />
+                )}
+            </div>
 
-                        <div className="flex-1 overflow-y-auto">
-                            <TiptapEditor
-                                {...editorProps}
-                                authReady={!!user} // Use Firebase User object for immediate auth check
-                                onEditorReady={(e) => {
-                                    setEditor(e);
-                                    if (onEditorReady) onEditorReady(e);
-                                }}
-                                onAwarenessUpdate={setOnlineUsers}
-                                debugLabel={debugLabel}
-                                className="h-full overflow-y-auto px-6 py-6 custom-scrollbar prose-indigo max-w-none"
-                                // COLLABORATION PROPS
-                                enableComments={true} // Always enable comments in Fellowship
-                                onSelectionChange={selected => {
-                                    console.log('[FellowshipView] onSelectionChange:', selected);
-                                    setPendingSelection(selected);
-                                }}
-                                onYDocReady={handleYDocReady}
-                                onAddComment={(snapshot) => {
-                                    console.log('[FellowshipView] onAddComment triggered. Snapshot:', snapshot, 'Current pendingSelection:', pendingSelection);
+            {/* Editor Container - flex row for editor + optional collab panel */}
+            <div className="flex-1 min-h-0 flex">
+                {/* Main editor area - relative container for absolute scroll child */}
+                <div className="flex-1 relative">
+                    {/* Pattern overlay */}
+                    <div className="absolute inset-0 bg-[url('/patterns/grid.svg')] opacity-[0.03] pointer-events-none z-0" />
+                    {/* Scroll container - absolute positioning guarantees it fills parent */}
+                    <div className="absolute inset-0 overflow-y-auto z-10">
+                        <TiptapEditor
+                            {...editorProps}
+                            showToolbar={false}
+                            authReady={!!user} // Use Firebase User object for immediate auth check
+                            onEditorReady={(e) => {
+                                setEditor(e);
+                                if (onEditorReady) onEditorReady(e);
+                            }}
+                            onAwarenessUpdate={setOnlineUsers}
+                            debugLabel={debugLabel}
+                            className="px-6 py-6 custom-scrollbar prose-indigo max-w-none"
+                            // COLLABORATION PROPS
+                            enableComments={true} // Always enable comments in Fellowship
+                            onSelectionChange={selected => {
+                                console.log('[FellowshipView] onSelectionChange:', selected);
+                                setPendingSelection(selected);
+                            }}
+                            onYDocReady={handleYDocReady}
+                            onAddComment={(snapshot) => {
+                                console.log('[FellowshipView] onAddComment triggered. Snapshot:', snapshot, 'Current pendingSelection:', pendingSelection);
 
-                                    // 1. If we got a snapshot, use it PREFERENTIALLY (it's the most accurate)
-                                    if (snapshot && typeof snapshot === 'object' && 'from' in snapshot) {
-                                        console.log('[FellowshipView] Using selection snapshot from editor');
-                                        setPendingSelection(snapshot);
+                                // 1. If we got a snapshot, use it PREFERENTIALLY (it's the most accurate)
+                                if (snapshot && typeof snapshot === 'object' && 'from' in snapshot) {
+                                    console.log('[FellowshipView] Using selection snapshot from editor');
+                                    setPendingSelection(snapshot);
+                                }
+                                // 2. Recovery Logic: If snapshot failed but editor has a selection, recover it
+                                else if (!pendingSelection && editor) {
+                                    const { from, to } = editor.state.selection;
+                                    if (from !== to) {
+                                        const text = editor.state.doc.textBetween(from, to, ' ');
+                                        console.log('[FellowshipView] Recovering selection manually from editor state:', { from, to, text });
+                                        setPendingSelection({ from, to, text });
                                     }
-                                    // 2. Recovery Logic: If snapshot failed but editor has a selection, recover it
-                                    else if (!pendingSelection && editor) {
-                                        const { from, to } = editor.state.selection;
-                                        if (from !== to) {
-                                            const text = editor.state.doc.textBetween(from, to, ' ');
-                                            console.log('[FellowshipView] Recovering selection manually from editor state:', { from, to, text });
-                                            setPendingSelection({ from, to, text });
-                                        }
-                                    }
+                                }
 
-                                    setIsCollabSidebarOpen(true);
-                                }}
-                                onStatusChange={setConnectionStatus}
-                            />
-                        </div>
+                                setIsCollabSidebarOpen(true);
+                            }}
+                            onStatusChange={setConnectionStatus}
+                        />
                     </div>
                 </div>
                 {/* Collaboration Panel */}

@@ -274,7 +274,7 @@ export default function MemberRegistrationPage() {
     // Loading state
     if (loading) {
         return (
-            <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+            <div className="min-h-dvh bg-zinc-950 flex items-center justify-center">
                 <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
             </div>
         );
@@ -290,7 +290,7 @@ export default function MemberRegistrationPage() {
     if (!settings.enabled) {
         return (
             <div
-                className="min-h-screen flex items-center justify-center p-6 text-center"
+                className="min-h-dvh flex items-center justify-center p-6 text-center"
                 style={{ backgroundColor: branding.backgroundColor }}
             >
                 <div className="max-w-md w-full bg-zinc-900 border border-zinc-800 p-8 rounded-3xl">
@@ -305,7 +305,7 @@ export default function MemberRegistrationPage() {
     if (success) {
         return (
             <div
-                className="min-h-screen flex items-center justify-center p-6 text-center"
+                className="min-h-dvh overflow-y-auto flex items-center justify-center p-6 text-center"
                 style={{ backgroundColor: branding.backgroundColor }}
             >
                 <motion.div
@@ -372,13 +372,13 @@ export default function MemberRegistrationPage() {
 
     return (
         <div
-            className="min-h-screen flex flex-col items-center justify-start p-4 sm:p-6 pt-8 sm:pt-12"
+            className="h-dvh overflow-y-auto overscroll-contain p-4 sm:p-6 pt-8 sm:pt-12 pb-24"
             style={{ backgroundColor: branding.backgroundColor }}
         >
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="w-full max-w-2xl"
+                className="w-full max-w-2xl mx-auto"
             >
                 {/* Header */}
                 <div className="text-center mb-8">

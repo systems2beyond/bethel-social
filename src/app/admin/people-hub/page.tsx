@@ -21,7 +21,8 @@ import {
     Megaphone,
     ListTodo,
     ClipboardList,
-    Layers
+    Layers,
+    ArrowLeft
 } from "lucide-react";
 import { MetricCard } from "@/components/Admin/PeopleHub/MetricCard";
 import { LifeEventsCard } from "@/components/Admin/PeopleHub/LifeEventsCard";
@@ -202,14 +203,14 @@ export default function PeopleHubDashboard() {
             title: "Volunteer Schedule",
             description: "Coordinate service teams",
             icon: ClipboardList,
-            href: "/admin/volunteers", // Placeholder
+            href: "/admin/ministries",
             color: "amber" as const
         },
         {
             title: "Attendance Reports",
             description: "View detailed engagement stats",
             icon: BarChart3,
-            href: "/admin/reports", // Placeholder
+            href: "/admin",
             color: "purple" as const
         }
     ];
@@ -231,13 +232,21 @@ export default function PeopleHubDashboard() {
         <div className="min-h-screen bg-gray-50/50 dark:bg-black p-6 lg:p-10 space-y-8 animate-in fade-in duration-500">
             {/* Header Section */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                <div>
-                    <h1 className="text-3xl font-black tracking-tight text-gray-900 dark:text-zinc-50">
-                        People Hub
-                    </h1>
-                    <p className="text-muted-foreground mt-2 max-w-2xl text-lg">
-                        Manage your congregation, track pastoral care, and oversee visitor follow-ups all in one place.
-                    </p>
+                <div className="flex items-start gap-4">
+                    <Link
+                        href="/admin"
+                        className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors mt-1"
+                    >
+                        <ArrowLeft className="w-5 h-5 text-muted-foreground" />
+                    </Link>
+                    <div>
+                        <h1 className="text-3xl font-black tracking-tight text-gray-900 dark:text-zinc-50">
+                            People Hub
+                        </h1>
+                        <p className="text-muted-foreground mt-2 max-w-2xl text-lg">
+                            Manage your congregation, track pastoral care, and oversee visitor follow-ups all in one place.
+                        </p>
+                    </div>
                 </div>
                 <div className="flex items-center gap-3 w-full md:w-auto">
                     <div className="relative flex-1 md:w-64">

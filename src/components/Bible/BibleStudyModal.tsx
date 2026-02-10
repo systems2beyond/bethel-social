@@ -402,6 +402,25 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
         }
     };
 
+    // Create a new note (save current, then reset)
+    const handleNewNote = async () => {
+        // Save current note if there's content
+        if (personalEditor && notes.trim()) {
+            await handleSaveNotes(personalEditor.getHTML(), noteTitle);
+        }
+
+        // Clear the editor and title for a fresh note
+        const newTitle = `Note - ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+        setNoteTitle(newTitle);
+        setNotes('');
+
+        // Clear editor content
+        if (personalEditor && !personalEditor.isDestroyed) {
+            personalEditor.commands.setContent('');
+            personalEditor.commands.focus();
+        }
+    };
+
     // Old handleSearch removed in favor of proper separate functions
     // kept performSearch above
 
@@ -1282,7 +1301,7 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                             )}
 
                             {/* --- FELLOWSHIP VIEW --- */}
-                            <div className={cn("flex-1 flex flex-col overflow-hidden", rightPaneView !== 'fellowship' && "hidden")}>
+                            <div className={cn("flex-1 h-full flex flex-col overflow-hidden", rightPaneView !== 'fellowship' && "hidden")}>
                                 <FellowshipView
                                     content={collaborationInitialContent || ''}
                                     collaborationId={collaborationId || `fellowship-${tabs.find(t => t.id === activeTabId)?.reference.book}-${tabs.find(t => t.id === activeTabId)?.reference.chapter}`}
@@ -1299,8 +1318,8 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
 
                             {/* --- PERSONAL NOTES VIEW (ALWAYS MOUNTED, HIDDEN IF NOT ACTIVE) --- */}
                             <div className={cn("h-full flex flex-col overflow-hidden", rightPaneView !== 'notes' && "hidden")}>
-                                {/* Toolbar Header */}
-                                <div className="sticky top-0 z-10 bg-white dark:bg-zinc-900 border-b border-gray-100 dark:border-zinc-800 px-4 py-2 flex items-center justify-between shrink-0">
+                                {/* Header - Glassmorphic */}
+                                <div className="sticky top-0 z-20 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-xl border-b border-gray-100/50 dark:border-zinc-800/50 px-4 py-2 flex items-center justify-between shrink-0 shadow-sm">
                                     <div className="flex flex-col gap-0.5 flex-1 mr-4">
                                         <div className="flex items-center gap-2">
                                             <Edit3 className="w-4 h-4 text-blue-500 shrink-0" />
@@ -1315,6 +1334,16 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                         {savingNotes && <span className="text-[10px] text-green-600 animate-pulse font-medium ml-6">Saving...</span>}
                                     </div>
                                     <div className="flex items-center gap-2">
+                                        {/* New Note Button */}
+                                        <button
+                                            onClick={handleNewNote}
+                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-all active:scale-95"
+                                            title="Start New Note"
+                                        >
+                                            <Plus className="w-3.5 h-3.5" />
+                                            <span>New</span>
+                                        </button>
+                                        <div className="w-px h-4 bg-gray-200 dark:bg-zinc-800 mx-1" />
                                         <button
                                             onClick={handleOpenShareModal}
                                             className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-indigo-500"
@@ -1333,8 +1362,17 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                         </button>
                                     </div>
                                 </div>
+                                {/* Sticky Editor Toolbar - Glassmorphic */}
+                                <div className="sticky top-0 z-10 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-xl border-b border-gray-100/50 dark:border-zinc-800/50 shadow-sm">
+                                    {personalEditor && (
+                                        <EditorToolbar
+                                            editor={personalEditor}
+                                            className="px-2 py-1"
+                                        />
+                                    )}
+                                </div>
                                 <div
-                                    className="h-full overflow-y-auto px-4 pt-4 pb-48 custom-scrollbar cursor-text"
+                                    className="flex-1 overflow-y-auto px-4 pt-4 pb-48 custom-scrollbar cursor-text"
                                     onClick={() => {
                                         // Safely focus editor if available
                                         const activeEditor = getActiveEditor();
@@ -1351,7 +1389,7 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
                                         onEditorReady={setPersonalEditor}
                                         onAskAi={handleAskAi}
                                         onLinkClick={handleLinkClick}
-                                        showToolbar={true}
+                                        showToolbar={false}
                                         collaborationId={undefined}
                                         user={tiptapUser}
                                         authReady={!!user}

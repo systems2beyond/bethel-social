@@ -1,7 +1,7 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { collection, query, where, orderBy, onSnapshot, getDoc, doc } from 'firebase/firestore';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
+import { collection, query, where, orderBy, onSnapshot, getDoc, doc, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from './AuthContext';
 
@@ -61,7 +61,8 @@ export function ActivityProvider({ children }: { children: ReactNode }) {
         const qInvites = query(
             collection(db, 'invitations'),
             where('toUserId', '==', user.uid),
-            orderBy('createdAt', 'desc')
+            orderBy('createdAt', 'desc'),
+            limit(50)
         );
         const unsub = onSnapshot(qInvites, (snap) => {
             setInvitations(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -77,7 +78,8 @@ export function ActivityProvider({ children }: { children: ReactNode }) {
         const qNotifs = query(
             collection(db, 'notifications'),
             where('toUserId', '==', user.uid),
-            orderBy('createdAt', 'desc')
+            orderBy('createdAt', 'desc'),
+            limit(50)
         );
         const unsub = onSnapshot(qNotifs, (snap) => {
             setNotifications(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -93,7 +95,8 @@ export function ActivityProvider({ children }: { children: ReactNode }) {
         const qSent = query(
             collection(db, 'invitations'),
             where('fromUser.uid', '==', user.uid),
-            orderBy('createdAt', 'desc')
+            orderBy('createdAt', 'desc'),
+            limit(50)
         );
         const unsub = onSnapshot(qSent, (snap) => {
             setSentInvitations(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -139,18 +142,21 @@ export function ActivityProvider({ children }: { children: ReactNode }) {
         }
     }, [invitations, notifications]);
 
+    // Memoize context value to prevent unnecessary re-renders of consumers
+    const contextValue = useMemo(() => ({
+        isActivityPanelOpen,
+        setActivityPanelOpen,
+        notifications,
+        invitations,
+        sentInvitations,
+        usersMap,
+        selectedResource,
+        setSelectedResource,
+        markAsViewed
+    }), [isActivityPanelOpen, notifications, invitations, sentInvitations, usersMap, selectedResource, markAsViewed]);
+
     return (
-        <ActivityContext.Provider value={{
-            isActivityPanelOpen,
-            setActivityPanelOpen,
-            notifications,
-            invitations,
-            sentInvitations,
-            usersMap,
-            selectedResource,
-            setSelectedResource,
-            markAsViewed
-        }}>
+        <ActivityContext.Provider value={contextValue}>
             {children}
         </ActivityContext.Provider>
     );
