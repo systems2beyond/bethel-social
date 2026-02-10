@@ -13,13 +13,134 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, User, Mail, Phone, Calendar, ArrowRight, ArrowLeft, CheckCircle, MapPin, ShieldCheck, Plus } from "lucide-react";
+import { Loader2, User, Mail, Phone, Calendar, ArrowRight, ArrowLeft, CheckCircle, MapPin, ShieldCheck, Plus, Search } from "lucide-react";
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { toast } from 'sonner';
 import { District, FirestoreUser } from '@/types';
 import { DistrictService } from '@/lib/services/DistrictService';
 import { useAuth } from '@/context/AuthContext';
+import usePlacesAutocomplete, { getGeocode } from 'use-places-autocomplete';
+
+// Helper to parse address components from Google Geocode result
+function parseAddressComponents(components: google.maps.GeocoderAddressComponent[]): {
+    street1: string;
+    city: string;
+    state: string;
+    postalCode: string;
+} {
+    let streetNumber = '';
+    let route = '';
+    let city = '';
+    let state = '';
+    let postalCode = '';
+
+    for (const component of components) {
+        const types = component.types;
+        if (types.includes('street_number')) {
+            streetNumber = component.long_name;
+        } else if (types.includes('route')) {
+            route = component.long_name;
+        } else if (types.includes('locality')) {
+            city = component.long_name;
+        } else if (types.includes('sublocality_level_1') && !city) {
+            city = component.long_name;
+        } else if (types.includes('administrative_area_level_1')) {
+            state = component.short_name; // Use short name for state (e.g., "TX" instead of "Texas")
+        } else if (types.includes('postal_code')) {
+            postalCode = component.long_name;
+        }
+    }
+
+    return {
+        street1: streetNumber ? `${streetNumber} ${route}` : route,
+        city,
+        state,
+        postalCode,
+    };
+}
+
+// Address Autocomplete Component
+interface AddressAutocompleteProps {
+    value: string;
+    onChange: (value: string) => void;
+    onAddressSelect: (parsed: { street1: string; city: string; state: string; postalCode: string }) => void;
+    placeholder?: string;
+    className?: string;
+}
+
+function AddressAutocompleteInput({ value, onChange, onAddressSelect, placeholder, className }: AddressAutocompleteProps) {
+    const {
+        ready,
+        suggestions: { status, data },
+        setValue: setAutocompleteValue,
+        clearSuggestions,
+    } = usePlacesAutocomplete({
+        requestOptions: {
+            types: ['address'],
+            componentRestrictions: { country: 'us' },
+        },
+        debounce: 300,
+        defaultValue: value,
+    });
+
+    // Sync external value with autocomplete
+    useEffect(() => {
+        setAutocompleteValue(value, false);
+    }, [value, setAutocompleteValue]);
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const newValue = e.target.value;
+        onChange(newValue);
+        setAutocompleteValue(newValue);
+    };
+
+    const handleSelect = async (address: string) => {
+        onChange(address);
+        setAutocompleteValue(address, false);
+        clearSuggestions();
+
+        try {
+            const results = await getGeocode({ address });
+            if (results[0]?.address_components) {
+                const parsed = parseAddressComponents(results[0].address_components);
+                // Update street1 with the full street from selection
+                onAddressSelect(parsed);
+            }
+        } catch (error) {
+            console.error('Error geocoding address:', error);
+        }
+    };
+
+    return (
+        <div className="relative">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+                value={value}
+                onChange={handleInputChange}
+                disabled={!ready}
+                placeholder={placeholder || "Start typing an address..."}
+                className={`pl-9 ${className}`}
+            />
+            {status === 'OK' && data.length > 0 && (
+                <div className="absolute z-50 w-full mt-1 overflow-hidden rounded-xl border bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 shadow-xl">
+                    <ul className="max-h-48 overflow-auto py-1">
+                        {data.map(({ place_id, description }) => (
+                            <li
+                                key={place_id}
+                                onClick={() => handleSelect(description)}
+                                className="px-3 py-2 text-sm cursor-pointer hover:bg-gray-100 dark:hover:bg-zinc-700 flex items-start gap-2 transition-colors"
+                            >
+                                <MapPin className="w-4 h-4 mt-0.5 text-purple-500 shrink-0" />
+                                <span className="text-gray-700 dark:text-gray-200">{description}</span>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+        </div>
+    );
+}
 
 interface AddMemberModalProps {
     open: boolean;
@@ -308,11 +429,20 @@ export function AddMemberModal({ open, onOpenChange, districts = [], members = [
                                     <MapPin className="h-4 w-4" /> Address (for geographic district assignment)
                                 </Label>
                                 <div className="space-y-3">
-                                    <Input
-                                        placeholder="Street Address"
-                                        className="rounded-xl border-gray-200 dark:border-zinc-700 bg-white/50 dark:bg-zinc-800/50 hover:bg-white dark:hover:bg-zinc-800 transition-colors duration-200"
+                                    <AddressAutocompleteInput
                                         value={formData.street1}
-                                        onChange={(e) => handleChange('street1', e.target.value)}
+                                        onChange={(value) => handleChange('street1', value)}
+                                        onAddressSelect={(parsed) => {
+                                            setFormData(prev => ({
+                                                ...prev,
+                                                street1: parsed.street1,
+                                                city: parsed.city,
+                                                state: parsed.state,
+                                                postalCode: parsed.postalCode,
+                                            }));
+                                        }}
+                                        placeholder="Start typing address..."
+                                        className="rounded-xl border-gray-200 dark:border-zinc-700 bg-white/50 dark:bg-zinc-800/50 hover:bg-white dark:hover:bg-zinc-800 transition-colors duration-200"
                                     />
                                     <Input
                                         placeholder="Apt, Suite, Unit (Optional)"
