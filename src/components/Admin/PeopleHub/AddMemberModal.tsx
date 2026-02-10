@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -57,6 +57,31 @@ export function AddMemberModal({ open, onOpenChange, districts = [], members = [
         membershipStage: 'active',
         districtId: ''
     });
+
+    // Find matching district based on postal code
+    const matchingDistrict = useMemo(() => {
+        const postalCode = formData.postalCode?.trim();
+        if (!postalCode || postalCode.length < 5) return null;
+
+        // Find a district with geographic bounds that include this ZIP code
+        return districts.find(district => {
+            if (!district.isActive || !district.geographicBounds?.zipCodes) return false;
+            return district.geographicBounds.zipCodes.some(zip =>
+                postalCode.startsWith(zip.trim()) || zip.trim().startsWith(postalCode)
+            );
+        }) || null;
+    }, [formData.postalCode, districts]);
+
+    // Auto-select district when postal code matches a geographic district
+    useEffect(() => {
+        // Only auto-select if:
+        // 1. There's a matching district
+        // 2. No district is currently selected (don't override manual selection)
+        // 3. The postal code is valid (5+ digits)
+        if (matchingDistrict && !formData.districtId && formData.postalCode?.length >= 5) {
+            setFormData(prev => ({ ...prev, districtId: matchingDistrict.id }));
+        }
+    }, [matchingDistrict, formData.districtId, formData.postalCode]);
 
     const handleChange = (field: string, value: string) => {
         setFormData(prev => ({ ...prev, [field]: value }));
@@ -360,6 +385,16 @@ export function AddMemberModal({ open, onOpenChange, districts = [], members = [
                                     <ShieldCheck className="h-4 w-4 text-amber-500" /> Pastoral Care District (Optional)
                                 </Label>
 
+                                {/* Auto-match indicator */}
+                                {matchingDistrict && formData.districtId === matchingDistrict.id && (
+                                    <div className="flex items-center gap-2 mb-3 p-2 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800/50">
+                                        <MapPin className="h-4 w-4 text-green-600 dark:text-green-400" />
+                                        <span className="text-xs text-green-700 dark:text-green-300">
+                                            Auto-matched to <strong>{matchingDistrict.name}</strong> based on ZIP code {formData.postalCode}
+                                        </span>
+                                    </div>
+                                )}
+
                                 {!showCreateDistrict ? (
                                     <div className="space-y-3">
                                         <Select
@@ -375,6 +410,11 @@ export function AddMemberModal({ open, onOpenChange, districts = [], members = [
                                                     <SelectItem key={district.id} value={district.id}>
                                                         <div className="flex items-center gap-2">
                                                             <span>{district.name}</span>
+                                                            {district.geographicBounds?.zipCodes?.length ? (
+                                                                <span className="text-xs text-green-600 dark:text-green-400">
+                                                                    (Geographic)
+                                                                </span>
+                                                            ) : null}
                                                             <span className="text-xs text-muted-foreground">
                                                                 ({district.memberIds?.length || 0} members)
                                                             </span>
