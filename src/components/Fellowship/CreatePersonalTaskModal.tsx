@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { PersonalTask, TaskAttachment } from '@/types';
 import { PersonalTaskService } from '@/lib/services/PersonalTaskService';
 import { TaskAttachmentService } from '@/lib/services/TaskAttachmentService';
-import { GoogleDriveUploadService } from '@/lib/services/GoogleDriveUploadService';
+import { GoogleDriveUploadService, DriveApiError } from '@/lib/services/GoogleDriveUploadService';
 import { TaskFileAttachmentSection, StagedAttachment } from '@/components/Tasks';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -35,7 +35,7 @@ export function CreatePersonalTaskModal({
     task,
     onSuccess
 }: CreatePersonalTaskModalProps) {
-    const { user, userData, googleAccessToken } = useAuth();
+    const { user, userData, googleAccessToken, signInWithGoogle } = useAuth();
     const isEditing = !!task;
 
     // Form State
@@ -92,7 +92,19 @@ export function CreatePersonalTaskModal({
             const tempTaskId = task?.id || `temp-${Date.now()}`;
 
             for (const staged of stagedAttachments) {
-                if (staged.source === 'firebase' && staged.file) {
+                // Skip already-uploaded Drive files (uploaded inline via TaskFileAttachmentSection)
+                if (staged.source === 'google_drive_upload' && staged.uploadedUrl) {
+                    uploadedAttachments.push({
+                        type: staged.type,
+                        url: staged.uploadedUrl,
+                        name: staged.name,
+                        mimeType: staged.file?.type || 'application/octet-stream',
+                        size: staged.size,
+                        source: 'google_drive_upload',
+                        uploadedBy: user.uid,
+                        driveFileId: staged.driveFileId,
+                    } as TaskAttachment);
+                } else if (staged.source === 'firebase' && staged.file) {
                     const uploaded = await TaskAttachmentService.uploadToFirebase(
                         staged.file,
                         'personal',
@@ -108,12 +120,32 @@ export function CreatePersonalTaskModal({
                     );
                     uploadedAttachments.push(driveAttachment);
                 } else if (staged.source === 'google_drive_upload' && staged.file && googleAccessToken) {
-                    const driveResult = await GoogleDriveUploadService.uploadToUserDrive(
-                        staged.file,
-                        googleAccessToken
-                    );
-                    const driveAttachment = GoogleDriveUploadService.toTaskAttachment(driveResult, user.uid);
-                    uploadedAttachments.push(driveAttachment);
+                    try {
+                        const driveResult = await GoogleDriveUploadService.uploadToUserDrive(
+                            staged.file,
+                            googleAccessToken
+                        );
+                        const driveAttachment = GoogleDriveUploadService.toTaskAttachment(driveResult, user.uid);
+                        uploadedAttachments.push(driveAttachment);
+                    } catch (driveError: any) {
+                        if (driveError instanceof DriveApiError && driveError.status === 401) {
+                            console.log('[CreatePersonalTaskModal] Token expired, re-authenticating...');
+                            await signInWithGoogle();
+                            const freshToken = sessionStorage.getItem('googleAccessToken');
+                            if (freshToken) {
+                                const driveResult = await GoogleDriveUploadService.uploadToUserDrive(
+                                    staged.file,
+                                    freshToken
+                                );
+                                const driveAttachment = GoogleDriveUploadService.toTaskAttachment(driveResult, user.uid);
+                                uploadedAttachments.push(driveAttachment);
+                            } else {
+                                throw driveError;
+                            }
+                        } else {
+                            throw driveError;
+                        }
+                    }
                 }
             }
 

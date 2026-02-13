@@ -582,5 +582,58 @@ export const GroupsService = {
                 transaction.delete(memberRef);
             }
         });
+    },
+
+    /**
+     * Get Ministry Groups for a User
+     * Returns groups that are linked to ministries the user belongs to
+     */
+    getMinistryGroups: async (userId: string): Promise<Group[]> => {
+        try {
+            // 1. Get user's ministry memberships
+            const membershipQuery = query(
+                collection(db, 'ministryMembers'),
+                where('userId', '==', userId),
+                where('status', '==', 'active')
+            );
+            const membershipsSnapshot = await getDocs(membershipQuery);
+
+            if (membershipsSnapshot.empty) {
+                return [];
+            }
+
+            const ministryIds = membershipsSnapshot.docs.map(d => d.data().ministryId);
+
+            // 2. Get ministries with linked groups
+            const groups: Group[] = [];
+            const seenGroupIds = new Set<string>();
+
+            for (const ministryId of ministryIds) {
+                try {
+                    const ministryDoc = await getDoc(doc(db, 'ministries', ministryId));
+                    if (ministryDoc.exists()) {
+                        const ministry = ministryDoc.data();
+                        if (ministry.linkedGroupId && !seenGroupIds.has(ministry.linkedGroupId)) {
+                            seenGroupIds.add(ministry.linkedGroupId);
+                            const groupDoc = await getDoc(doc(db, 'groups', ministry.linkedGroupId));
+                            if (groupDoc.exists()) {
+                                const groupData = groupDoc.data();
+                                groups.push({
+                                    ...groupData,
+                                    id: groupDoc.id,
+                                } as Group);
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error(`Error fetching ministry ${ministryId}:`, error);
+                }
+            }
+
+            return groups;
+        } catch (error) {
+            console.error('Error fetching ministry groups:', error);
+            return [];
+        }
     }
 };

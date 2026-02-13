@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { GroupsService } from '@/lib/groups';
 import { Group } from '@/types';
-import { Loader2, Plus, Users, Search, Globe, Lock } from 'lucide-react';
+import { Loader2, Plus, Users, Search, Globe, Lock, Church, Heart } from 'lucide-react';
 import CreateGroupModal from '@/components/Groups/CreateGroupModal';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
@@ -14,7 +14,8 @@ export default function GroupsPage() {
     const [loading, setLoading] = useState(true);
     const [myGroups, setMyGroups] = useState<Group[]>([]);
     const [publicGroups, setPublicGroups] = useState<Group[]>([]);
-    const [activeTab, setActiveTab] = useState<'my_groups' | 'discover'>('my_groups');
+    const [ministryGroups, setMinistryGroups] = useState<Group[]>([]);
+    const [activeTab, setActiveTab] = useState<'my_groups' | 'ministry' | 'discover'>('my_groups');
     const [invites, setInvites] = useState<Group[]>([]);
     const [processingInvite, setProcessingInvite] = useState<string | null>(null);
     const [inviteError, setInviteError] = useState<string | null>(null);
@@ -28,12 +29,14 @@ export default function GroupsPage() {
 
             try {
                 // Fetch groups first (Critical path)
-                const [userGrps, pubGrps] = await Promise.all([
+                const [userGrps, pubGrps, ministryGrps] = await Promise.all([
                     GroupsService.getUserGroups(user.uid),
-                    GroupsService.getPublicGroups()
+                    GroupsService.getPublicGroups(),
+                    GroupsService.getMinistryGroups(user.uid)
                 ]);
                 setMyGroups(userGrps);
                 setPublicGroups(pubGrps);
+                setMinistryGroups(ministryGrps);
             } catch (error) {
                 console.error('Failed to fetch groups', error);
             } finally {
@@ -168,6 +171,18 @@ export default function GroupsPage() {
                     My Groups
                 </button>
                 <button
+                    onClick={() => setActiveTab('ministry')}
+                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'ministry'
+                        ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                        }`}
+                >
+                    <span className="flex items-center gap-1.5">
+                        <Heart className="w-3.5 h-3.5" />
+                        Ministry Groups
+                    </span>
+                </button>
+                <button
                     onClick={() => setActiveTab('discover')}
                     className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'discover'
                         ? 'border-blue-500 text-blue-600 dark:text-blue-400'
@@ -282,6 +297,33 @@ export default function GroupsPage() {
                                     <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">Your Groups</h2>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                                         {myGroups.map(group => (
+                                            <GroupCard key={group.id} group={group} />
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {activeTab === 'ministry' && (
+                        <div>
+                            {ministryGroups.length === 0 ? (
+                                <div className="text-center py-20 bg-gray-50 dark:bg-zinc-800/30 rounded-2xl border border-dashed border-gray-200 dark:border-zinc-700">
+                                    <div className="w-16 h-16 bg-rose-50 dark:bg-rose-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <Church className="w-8 h-8 text-rose-500 dark:text-rose-400" />
+                                    </div>
+                                    <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-1">
+                                        No ministry groups yet
+                                    </h3>
+                                    <p className="text-gray-500 dark:text-gray-400 mb-6 text-sm max-w-sm mx-auto">
+                                        Join a ministry to see its discussion group here. Ministry leaders can link groups to their ministries.
+                                    </p>
+                                </div>
+                            ) : (
+                                <div>
+                                    <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">Your Ministry Groups</h2>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        {ministryGroups.map(group => (
                                             <GroupCard key={group.id} group={group} />
                                         ))}
                                     </div>

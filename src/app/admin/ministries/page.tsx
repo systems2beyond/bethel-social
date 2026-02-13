@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import * as Icons from 'lucide-react';
-import { Search, Plus, Users, Settings, Heart, Church, Shield, Loader2, ArrowLeft, CalendarDays, ClipboardList, UserCircle } from 'lucide-react';
+import { Search, Plus, Users, Settings, Heart, Church, Shield, Loader2, ArrowLeft, CalendarDays, ClipboardList, UserCircle, MessageSquare, ExternalLink, UserPlus } from 'lucide-react';
 import { VolunteerNav } from '@/components/Admin/VolunteerNav';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,7 +14,7 @@ import { MetricCard } from '@/components/Admin/PeopleHub/MetricCard';
 import { cn } from '@/lib/utils';
 import { LucideIcon } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { MinistrySelector, MinistryKanban, AssignmentModal } from '@/components/Admin/MinistryManagement';
+import { MinistrySelector, MinistryKanban, AssignmentModal, AddMinistryMembersModal } from '@/components/Admin/MinistryManagement';
 import { useAuth } from '@/context/AuthContext';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -37,6 +37,9 @@ export default function MinistriesPage() {
     // Assignment modal state
     const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
     const [selectedAssignment, setSelectedAssignment] = useState<MinistryAssignment | null>(null);
+
+    // Add Members modal state
+    const [isAddMembersModalOpen, setIsAddMembersModalOpen] = useState(false);
 
     // Member counts for selector
     const [memberCounts, setMemberCounts] = useState<Record<string, number>>({});
@@ -80,36 +83,47 @@ export default function MinistriesPage() {
     }, [ministries, userData?.churchId]);
 
     // Fetch members for selected ministry
+    const fetchMembers = async (ministryId: string) => {
+        setMembersLoading(true);
+        try {
+            const membersQuery = query(
+                collection(db, 'ministryMembers'),
+                where('ministryId', '==', ministryId),
+                where('status', '==', 'active')
+            );
+            const snapshot = await getDocs(membersQuery);
+            const members = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            setMinistryMembers(members);
+        } catch (error) {
+            console.error('Error fetching ministry members:', error);
+            setMinistryMembers([]);
+        } finally {
+            setMembersLoading(false);
+        }
+    };
+
     useEffect(() => {
         if (!selectedMinistry?.id) {
             setMinistryMembers([]);
             return;
         }
-
-        const fetchMembers = async () => {
-            setMembersLoading(true);
-            try {
-                const membersQuery = query(
-                    collection(db, 'ministryMembers'),
-                    where('ministryId', '==', selectedMinistry.id),
-                    where('status', '==', 'active')
-                );
-                const snapshot = await getDocs(membersQuery);
-                const members = snapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                }));
-                setMinistryMembers(members);
-            } catch (error) {
-                console.error('Error fetching ministry members:', error);
-                setMinistryMembers([]);
-            } finally {
-                setMembersLoading(false);
-            }
-        };
-
-        fetchMembers();
+        fetchMembers(selectedMinistry.id);
     }, [selectedMinistry?.id]);
+
+    // Handler to refresh members after adding
+    const handleMemberAdded = () => {
+        if (selectedMinistry?.id) {
+            fetchMembers(selectedMinistry.id);
+            // Also update the member count
+            setMemberCounts(prev => ({
+                ...prev,
+                [selectedMinistry.id]: (prev[selectedMinistry.id] || 0) + 1
+            }));
+        }
+    };
 
     const openCreateMinistry = () => {
         setSelectedMinistry(null);
@@ -281,6 +295,16 @@ export default function MinistriesPage() {
                             )}>
                                 {selectedMinistry.active ? 'Active' : 'Inactive'}
                             </div>
+                            {/* Team Chat Button */}
+                            {selectedMinistry.linkedGroupId && (
+                                <Link href={`/groups/${selectedMinistry.linkedGroupId}`} target="_blank">
+                                    <Button variant="outline" size="sm" className="text-blue-600 border-blue-200 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-900/50 dark:hover:bg-blue-900/20">
+                                        <MessageSquare className="w-4 h-4 mr-2" />
+                                        Team Chat
+                                        <ExternalLink className="w-3 h-3 ml-1.5 opacity-50" />
+                                    </Button>
+                                </Link>
+                            )}
                         </div>
 
                         {/* Tabs */}
@@ -354,12 +378,14 @@ export default function MinistriesPage() {
                                             <p className="text-sm text-muted-foreground mb-4">
                                                 Add members to this ministry to get started.
                                             </p>
-                                            <Link href={`/admin/ministries/${selectedMinistry.id}`}>
-                                                <Button size="sm" variant="outline">
-                                                    <Plus className="w-4 h-4 mr-1" />
-                                                    Add Members
-                                                </Button>
-                                            </Link>
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => setIsAddMembersModalOpen(true)}
+                                            >
+                                                <UserPlus className="w-4 h-4 mr-1" />
+                                                Add Members
+                                            </Button>
                                         </div>
                                     ) : (
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -389,14 +415,16 @@ export default function MinistriesPage() {
                                         </div>
                                     )}
 
-                                    {/* Link to full management */}
+                                    {/* Add Members Button */}
                                     <div className="mt-6 pt-6 border-t border-gray-100 dark:border-zinc-800">
-                                        <Link href={`/admin/ministries/${selectedMinistry.id}`}>
-                                            <Button variant="outline" className="w-full">
-                                                Manage Team & Roles
-                                                <Icons.ArrowRight className="w-4 h-4 ml-2" />
-                                            </Button>
-                                        </Link>
+                                        <Button
+                                            variant="outline"
+                                            className="w-full"
+                                            onClick={() => setIsAddMembersModalOpen(true)}
+                                        >
+                                            <UserPlus className="w-4 h-4 mr-2" />
+                                            Add Members
+                                        </Button>
                                     </div>
                                 </div>
                             </TabsContent>
@@ -452,6 +480,17 @@ export default function MinistriesPage() {
                     }}
                     ministry={selectedMinistry}
                     assignment={selectedAssignment}
+                />
+            )}
+
+            {/* Add Members Modal */}
+            {selectedMinistry && (
+                <AddMinistryMembersModal
+                    isOpen={isAddMembersModalOpen}
+                    onClose={() => setIsAddMembersModalOpen(false)}
+                    ministry={selectedMinistry}
+                    existingMemberIds={ministryMembers.map(m => m.userId)}
+                    onMemberAdded={handleMemberAdded}
                 />
             )}
         </div>
