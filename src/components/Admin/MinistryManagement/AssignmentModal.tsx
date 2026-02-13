@@ -200,7 +200,7 @@ export function AssignmentModal({
                 status: assigneeId ? 'assigned' : 'backlog',
                 stageId: stageId || stages[0]?.id || '',
                 dueDate: dueDate ? new Date(dueDate) : undefined,
-                attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
+                attachments: uploadedAttachments,
                 isArchived: false
             };
 
@@ -466,6 +466,7 @@ export function AssignmentModal({
                                     <Switch
                                         checked={sendDM}
                                         onCheckedChange={setSendDM}
+                                        className="data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-gray-300 dark:data-[state=unchecked]:bg-zinc-600"
                                     />
                                 </div>
 
@@ -481,6 +482,7 @@ export function AssignmentModal({
                                         <Switch
                                             checked={postToGroup}
                                             onCheckedChange={setPostToGroup}
+                                            className="data-[state=checked]:bg-purple-600 data-[state=unchecked]:bg-gray-300 dark:data-[state=unchecked]:bg-zinc-600"
                                         />
                                     </div>
                                 )}
