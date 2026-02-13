@@ -219,7 +219,7 @@ export const MinistryAssignmentService = {
             fromUser: {
                 uid: fromUser.uid,
                 displayName: fromUser.displayName,
-                photoURL: fromUser.photoURL
+                photoURL: fromUser.photoURL || null
             },
             type: 'ministry_assignment',
             title: titleMap[actionType],
@@ -245,7 +245,10 @@ export const MinistryAssignmentService = {
 
         const postRef = await addDoc(collection(db, 'groups', groupId, 'posts'), {
             content,
-            author,
+            author: {
+                ...author,
+                avatarUrl: author.avatarUrl || null
+            },
             timestamp: Date.now(),
             createdAt: serverTimestamp(),
             isPinned: false,
@@ -313,7 +316,7 @@ export const MinistryAssignmentService = {
             author: {
                 id: fromUser.uid,
                 name: fromUser.displayName,
-                avatarUrl: fromUser.photoURL
+                avatarUrl: fromUser.photoURL || null
             },
             content: `**Task Assigned**: ${assignment.title}${assignment.description ? `\n\n${assignment.description}` : ''}${assignment.dueDate ? `\n\nDue: ${new Date(assignment.dueDate.seconds * 1000).toLocaleDateString()}` : ''}`,
             type: 'task_assignment',
