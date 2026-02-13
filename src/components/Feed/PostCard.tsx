@@ -3,7 +3,7 @@
 import React from 'react';
 import { Post } from '@/types';
 import { motion } from 'framer-motion';
-import { Heart, MessageCircle, Share2, Facebook, Youtube, Pin, Sparkles, Play, Trash2, FileText, Download, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Facebook, Youtube, Pin, Sparkles, Play, Trash2, FileText, Download, ChevronLeft, ChevronRight, ClipboardCheck } from 'lucide-react';
 import { CommentsSection } from './CommentsSection';
 import { PostOptionsMenu } from './PostOptionsMenu';
 import { useRouter } from 'next/navigation';
@@ -27,6 +27,7 @@ interface PostCardProps {
 import { useFeed } from '@/context/FeedContext';
 import { useLightbox } from '@/context/LightboxContext';
 import { useBible } from '@/context/BibleContext';
+import { TaskStatusUpdateModal } from '@/components/Groups/TaskStatusUpdateModal';
 
 
 
@@ -246,6 +247,12 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
     const [likeCount, setLikeCount] = React.useState(post.likes || 0);
     const [commentCount, setCommentCount] = React.useState(post.comments || 0);
     const [showComments, setShowComments] = React.useState(false);
+    const [showStatusModal, setShowStatusModal] = React.useState(false);
+
+    // Check if this is a ministry assignment post
+    const isAssignmentPost = (post as any).metadata?.type === 'ministry_assignment';
+    const assignmentId = (post as any).metadata?.assignmentId;
+    const assignmentStatus = (post as any).metadata?.status;
 
     // Derived Video State
     const legacyVideo = (post.type === 'youtube' || post.type === 'video') ? { type: post.type, url: post.mediaUrl!, thumbnail: post.thumbnailUrl } : null;
@@ -603,6 +610,16 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
                     <span className="text-sm font-medium">Ask AI</span>
                 </button>
 
+                {/* Update Status Button for Assignment Posts */}
+                {isAssignmentPost && assignmentId && (
+                    <button
+                        onClick={() => setShowStatusModal(true)}
+                        className="flex items-center space-x-2 text-orange-600 hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300 transition-colors bg-orange-50 dark:bg-orange-900/20 px-3 py-1.5 rounded-full"
+                    >
+                        <ClipboardCheck className="w-4 h-4" />
+                        <span className="text-sm font-medium">Update Status</span>
+                    </button>
+                )}
 
             </div>
 
@@ -617,6 +634,18 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
                     </div>
                 )
             }
+
+            {/* Task Status Update Modal */}
+            {isAssignmentPost && assignmentId && (
+                <TaskStatusUpdateModal
+                    isOpen={showStatusModal}
+                    onClose={() => setShowStatusModal(false)}
+                    assignmentId={assignmentId}
+                    currentStatus={assignmentStatus}
+                    taskTitle={post.content?.split('\n')[0]?.replace('**New Assignment**: ', '')}
+                    onSuccess={() => triggerRefresh()}
+                />
+            )}
         </motion.div >
     );
 };

@@ -2,11 +2,12 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { useActivity } from '@/context/ActivityContext';
 import { useSearchParams } from 'next/navigation';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, deleteDoc, setDoc, increment, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { Comment } from '@/types'; // Using Comment type for Messages as structure is similar
-import { User, Send, MessageCircle, Heart, X, Smile, ChevronLeft, Video, Copy, Check } from 'lucide-react';
+import { User, Send, MessageCircle, Heart, X, Smile, ChevronLeft, Video, Copy, Check, BookOpen } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import EmojiPicker, { EmojiClickData, Theme } from 'emoji-picker-react';
 import { cn } from '@/lib/utils'; // Assuming cn utility is available or remove if not
@@ -22,6 +23,7 @@ type Message = Comment;
 
 export const MessageThread: React.FC<MessageThreadProps> = ({ conversationId, onMessageSent }) => {
     const { user, userData } = useAuth();
+    const { setSelectedResource } = useActivity();
     const [editingMessage, setEditingMessage] = useState<string | null>(null);
     const [editContent, setEditContent] = useState('');
     const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
@@ -306,6 +308,73 @@ export const MessageThread: React.FC<MessageThreadProps> = ({ conversationId, on
                                 ) : (
                                     <div className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words">
                                         <VerseLink text={message.content} />
+                                    </div>
+                                )}
+
+                                {/* Media Attachments (Images/Videos) */}
+                                {((message as any).mediaUrl || (message as any).attachments?.length > 0) && (
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                        {(message as any).mediaUrl && (
+                                            <img
+                                                src={(message as any).mediaUrl}
+                                                alt="Shared media"
+                                                className="max-w-xs rounded-xl border border-gray-200 dark:border-zinc-700 cursor-pointer hover:opacity-90 transition-opacity"
+                                                onClick={() => window.open((message as any).mediaUrl, '_blank')}
+                                            />
+                                        )}
+                                        {(message as any).attachments?.filter((a: any) => !a.type?.startsWith('image/') || (message as any).mediaUrl !== a.url).map((attachment: any, idx: number) => (
+                                            <div key={idx} className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-zinc-800 rounded-lg border border-gray-200 dark:border-zinc-700">
+                                                {attachment.type?.startsWith('video/') ? (
+                                                    <Video className="w-4 h-4 text-purple-500" />
+                                                ) : attachment.type?.startsWith('image/') ? (
+                                                    <img src={attachment.url} alt={attachment.name} className="w-12 h-12 rounded object-cover" />
+                                                ) : null}
+                                                <a
+                                                    href={attachment.url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline truncate max-w-[150px]"
+                                                >
+                                                    {attachment.name || 'View attachment'}
+                                                </a>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* Attached Note Card */}
+                                {(message as any).attachedNoteId && (
+                                    <div className="mt-2 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800 rounded-2xl max-w-sm">
+                                        <div className="flex items-center gap-3 mb-3">
+                                            <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center">
+                                                <BookOpen className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                                            </div>
+                                            <div>
+                                                <p className="text-sm font-bold text-gray-900 dark:text-gray-100">Attached Note</p>
+                                                <p className="text-xs text-gray-500">Shared with you</p>
+                                            </div>
+                                        </div>
+                                        <div className="mb-3">
+                                            <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                                                {(message as any).attachedNoteTitle || 'Untitled Note'}
+                                            </p>
+                                        </div>
+                                        <button
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                setSelectedResource({
+                                                    id: (message as any).attachedNoteId,
+                                                    resourceId: (message as any).attachedNoteId,
+                                                    title: (message as any).attachedNoteTitle,
+                                                    content: (message as any).attachedNoteContent,
+                                                    type: 'note',
+                                                    fromUser: message.author // Pass author for context if needed
+                                                });
+                                            }}
+                                            className="block w-full text-center py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold rounded-xl shadow-lg shadow-amber-500/20 transition-all active:scale-[0.98]"
+                                        >
+                                            Open Note
+                                        </button>
                                     </div>
                                 )}
 

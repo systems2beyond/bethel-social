@@ -21,6 +21,7 @@ import { District, FirestoreUser } from '@/types';
 import { DistrictService } from '@/lib/services/DistrictService';
 import { useAuth } from '@/context/AuthContext';
 import usePlacesAutocomplete, { getGeocode } from 'use-places-autocomplete';
+import { useLoadScript, Libraries } from '@react-google-maps/api';
 
 // Helper to parse address components from Google Geocode result
 function parseAddressComponents(components: google.maps.GeocoderAddressComponent[]): {
@@ -69,7 +70,40 @@ interface AddressAutocompleteProps {
     className?: string;
 }
 
-function AddressAutocompleteInput({ value, onChange, onAddressSelect, placeholder, className }: AddressAutocompleteProps) {
+const libraries: Libraries = ['places'];
+
+function AddressAutocompleteWrapper(props: AddressAutocompleteProps) {
+    const { isLoaded, loadError } = useLoadScript({
+        googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
+        libraries,
+    });
+
+    if (loadError) {
+        return <Input
+            value={props.value}
+            onChange={(e) => props.onChange(e.target.value)}
+            placeholder={props.placeholder || "Enter address manually"}
+            className={`pl-3 ${props.className}`}
+        />;
+    }
+
+    if (!isLoaded) {
+        return (
+            <div className="relative">
+                <Loader2 className="absolute left-3 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />
+                <Input
+                    disabled
+                    placeholder="Loading address search..."
+                    className={`pl-9 ${props.className}`}
+                />
+            </div>
+        );
+    }
+
+    return <AddressAutocompleteInner {...props} />;
+}
+
+function AddressAutocompleteInner({ value, onChange, onAddressSelect, placeholder, className }: AddressAutocompleteProps) {
     const {
         ready,
         suggestions: { status, data },
@@ -429,7 +463,7 @@ export function AddMemberModal({ open, onOpenChange, districts = [], members = [
                                     <MapPin className="h-4 w-4" /> Address (for geographic district assignment)
                                 </Label>
                                 <div className="space-y-3">
-                                    <AddressAutocompleteInput
+                                    <AddressAutocompleteWrapper
                                         value={formData.street1}
                                         onChange={(value) => handleChange('street1', value)}
                                         onAddressSelect={(parsed) => {

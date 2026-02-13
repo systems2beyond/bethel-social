@@ -285,6 +285,30 @@ export interface Attachment {
     size: number;
 }
 
+// =========================================
+// Task Attachment Types (for Ministry Tasks & Personal Tasks)
+// =========================================
+
+export type TaskAttachmentSource = 'firebase' | 'google_drive_link' | 'google_drive_upload';
+
+export interface TaskAttachment extends Attachment {
+    // Storage source tracking
+    source: TaskAttachmentSource;
+    uploadedBy: string;
+    uploadedAt: any; // Firestore Timestamp
+
+    // Google Drive specific (optional)
+    driveFileId?: string;
+    driveOwnerEmail?: string;
+    isPublicLink?: boolean;
+    thumbnailUrl?: string;
+}
+
+// For member completion files on ministry assignments
+export interface CompletionAttachment extends TaskAttachment {
+    attachmentContext: 'assignment' | 'completion';
+}
+
 export type GroupPrivacy = 'public' | 'private';
 export type GroupType = 'ministry' | 'community';
 export type GroupRole = 'admin' | 'moderator' | 'member';
@@ -869,6 +893,116 @@ export interface MinistryRole {
     description?: string;
     requiresBackgroundCheck: boolean;
     requiredTraining?: string[]; // Training IDs
+}
+
+// =========================================
+// Ministry Assignment System (Asana-style)
+// =========================================
+
+export type MinistryAssignmentStatus =
+    | 'backlog'
+    | 'assigned'
+    | 'in_progress'
+    | 'review'
+    | 'completed'
+    | 'blocked';
+
+export interface MinistryAssignment {
+    id: string;
+    churchId: string;
+    ministryId: string;
+
+    // Task Details
+    title: string;
+    description?: string;
+    priority: 'low' | 'normal' | 'high' | 'urgent';
+
+    // People
+    assignedToId?: string;
+    assignedToName?: string;
+    assignedById: string;
+    assignedByName: string;
+
+    // Pipeline
+    status: MinistryAssignmentStatus;
+    stageId: string;
+
+    // Dates
+    dueDate?: any; // Firestore Timestamp
+    serviceSessionId?: string; // For service-specific tasks
+
+    // Integration
+    linkedScrollId?: string; // Fellowship collaboration
+    linkedGroupPostId?: string; // Posted to ministry group
+    dmConversationId?: string; // DM thread for updates
+
+    // File Attachments
+    attachments?: TaskAttachment[]; // Leader's attached files
+    completionAttachments?: CompletionAttachment[]; // Member's completion files
+    completionNotes?: string; // Member's notes when completing
+
+    // Tracking
+    completedAt?: any;
+    completedBy?: string;
+    createdAt: any;
+    updatedAt: any;
+    isArchived: boolean;
+}
+
+export interface MinistryPipelineBoard {
+    id: string;
+    ministryId: string;
+    churchId: string;
+    name: string;
+    stages: MinistryPipelineStage[];
+    isDefault: boolean;
+    createdAt: any;
+    updatedAt: any;
+}
+
+export interface MinistryPipelineStage {
+    id: string;
+    name: string;
+    color: string;
+    order: number;
+    icon?: string;
+    autoNotify?: boolean; // Notify assignee when task enters this stage
+}
+
+export const DEFAULT_MINISTRY_STAGES: Omit<MinistryPipelineStage, 'id'>[] = [
+    { name: 'Backlog', order: 0, color: '#6B7280', icon: 'Inbox' },
+    { name: 'Assigned', order: 1, color: '#3B82F6', icon: 'UserPlus', autoNotify: true },
+    { name: 'In Progress', order: 2, color: '#F59E0B', icon: 'PlayCircle' },
+    { name: 'Review', order: 3, color: '#8B5CF6', icon: 'Eye' },
+    { name: 'Completed', order: 4, color: '#10B981', icon: 'CheckCircle' }
+];
+
+// =========================================
+// Personal Tasks (for Fellowship My Tasks)
+// =========================================
+
+export interface PersonalTask {
+    id: string;
+    userId: string;
+    churchId?: string;
+
+    // Task Details
+    title: string;
+    description?: string;
+    priority: 'low' | 'normal' | 'high';
+    status: 'todo' | 'in_progress' | 'done';
+
+    // Dates
+    dueDate?: any; // Firestore Timestamp
+
+    // File Attachments
+    attachments?: TaskAttachment[];
+
+    // Metadata
+    createdAt: any;
+    updatedAt: any;
+    completedAt?: any;
+    isArchived: boolean;
 }
 
 // =========================================

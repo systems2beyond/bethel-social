@@ -1,18 +1,23 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Search, Plus, Users, Settings, Music, BookOpen, Heart, Coffee, Shield, Church } from 'lucide-react';
 import * as Icons from 'lucide-react';
+import { Search, Plus, Users, Settings, Heart, Church, Shield, Loader2, ArrowLeft, CalendarDays, ClipboardList, UserCircle } from 'lucide-react';
 import { VolunteerNav } from '@/components/Admin/VolunteerNav';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useMinistry } from '@/context/MinistryContext';
 import { MinistryModal } from '@/components/Admin/MinistryModal';
-import { Ministry } from '@/types';
+import { Ministry, MinistryAssignment } from '@/types';
 import { MetricCard } from '@/components/Admin/PeopleHub/MetricCard';
 import { cn } from '@/lib/utils';
 import { LucideIcon } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { MinistrySelector, MinistryKanban, AssignmentModal } from '@/components/Admin/MinistryManagement';
+import { useAuth } from '@/context/AuthContext';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 // Helper to get dynamic icons
 const getIcon = (iconName?: string): LucideIcon => {
@@ -22,79 +27,179 @@ const getIcon = (iconName?: string): LucideIcon => {
 };
 
 export default function MinistriesPage() {
+    const { userData } = useAuth();
     const { ministries, loading, addMinistry, updateMinistry } = useMinistry();
     const [searchTerm, setSearchTerm] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedMinistry, setSelectedMinistry] = useState<Ministry | null>(null);
+    const [activeTab, setActiveTab] = useState('members');
 
-    const filteredMinistries = ministries.filter((m) =>
-        m.name.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    // Assignment modal state
+    const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
+    const [selectedAssignment, setSelectedAssignment] = useState<MinistryAssignment | null>(null);
 
-    const openCreate = () => {
+    // Member counts for selector
+    const [memberCounts, setMemberCounts] = useState<Record<string, number>>({});
+
+    // Ministry members for the selected ministry
+    const [ministryMembers, setMinistryMembers] = useState<any[]>([]);
+    const [membersLoading, setMembersLoading] = useState(false);
+
+    // Auto-select first ministry
+    useEffect(() => {
+        if (!selectedMinistry && ministries.length > 0) {
+            setSelectedMinistry(ministries[0]);
+        }
+    }, [ministries, selectedMinistry]);
+
+    // Fetch member counts for all ministries
+    useEffect(() => {
+        if (!userData?.churchId) return;
+
+        const fetchMemberCounts = async () => {
+            const counts: Record<string, number> = {};
+            for (const ministry of ministries) {
+                try {
+                    const membersQuery = query(
+                        collection(db, 'ministryMembers'),
+                        where('ministryId', '==', ministry.id),
+                        where('status', '==', 'active')
+                    );
+                    const snapshot = await getDocs(membersQuery);
+                    counts[ministry.id] = snapshot.size;
+                } catch (error) {
+                    counts[ministry.id] = 0;
+                }
+            }
+            setMemberCounts(counts);
+        };
+
+        if (ministries.length > 0) {
+            fetchMemberCounts();
+        }
+    }, [ministries, userData?.churchId]);
+
+    // Fetch members for selected ministry
+    useEffect(() => {
+        if (!selectedMinistry?.id) {
+            setMinistryMembers([]);
+            return;
+        }
+
+        const fetchMembers = async () => {
+            setMembersLoading(true);
+            try {
+                const membersQuery = query(
+                    collection(db, 'ministryMembers'),
+                    where('ministryId', '==', selectedMinistry.id),
+                    where('status', '==', 'active')
+                );
+                const snapshot = await getDocs(membersQuery);
+                const members = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+                setMinistryMembers(members);
+            } catch (error) {
+                console.error('Error fetching ministry members:', error);
+                setMinistryMembers([]);
+            } finally {
+                setMembersLoading(false);
+            }
+        };
+
+        fetchMembers();
+    }, [selectedMinistry?.id]);
+
+    const openCreateMinistry = () => {
         setSelectedMinistry(null);
         setIsModalOpen(true);
     };
 
-    const openEdit = (ministry: Ministry) => {
-        setSelectedMinistry(ministry);
-        setIsModalOpen(true);
+    const openEditMinistry = () => {
+        if (selectedMinistry) {
+            setIsModalOpen(true);
+        }
     };
 
-    const handleCreate = async (data: Partial<Ministry>) => {
+    const handleCreateMinistry = async (data: Partial<Ministry>) => {
         await addMinistry(data as Omit<Ministry, 'id' | 'createdAt' | 'updatedAt'>);
         setIsModalOpen(false);
     };
 
-    const handleUpdate = async (data: Partial<Ministry>) => {
+    const handleUpdateMinistry = async (data: Partial<Ministry>) => {
         if (selectedMinistry) {
             await updateMinistry(selectedMinistry.id, data);
         }
         setIsModalOpen(false);
     };
 
+    // Assignment handlers
+    const openCreateAssignment = () => {
+        setSelectedAssignment(null);
+        setIsAssignmentModalOpen(true);
+    };
+
+    const openEditAssignment = (assignment: MinistryAssignment) => {
+        setSelectedAssignment(assignment);
+        setIsAssignmentModalOpen(true);
+    };
+
+    // Metrics calculations
+    const totalMembers = Object.values(memberCounts).reduce((a, b) => a + b, 0);
+    const activeMinistries = ministries.filter(m => m.active).length;
+
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-zinc-950">
-            {/* Sticky Header - Copper Style */}
+            {/* Sticky Header */}
             <div className="sticky top-0 z-10 bg-white dark:bg-zinc-900 border-b border-gray-100 dark:border-zinc-800 shadow-sm">
                 <div className="max-w-7xl mx-auto px-6 py-4">
                     <div className="flex items-center justify-between">
-                        {/* Left: Back + Title */}
+                        {/* Left: Back + Title + Ministry Selector */}
                         <div className="flex items-center gap-4">
                             <Link
                                 href="/admin"
                                 className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
                             >
-                                <Icons.ArrowLeft className="w-5 h-5 text-muted-foreground" />
+                                <ArrowLeft className="w-5 h-5 text-muted-foreground" />
                             </Link>
-                            <div>
+                            <div className="flex items-center gap-4">
                                 <div className="flex items-center gap-2">
                                     <div className="p-1.5 rounded-lg bg-gradient-to-br from-rose-500 to-pink-600">
                                         <Heart className="h-4 w-4 text-white" />
                                     </div>
                                     <h1 className="text-xl font-bold text-foreground">Ministries</h1>
-                                    <Button variant="outline" size="sm" onClick={openCreate} className="ml-2 h-7 px-2">
-                                        <Plus className="w-3 h-3 mr-1" /> New
-                                    </Button>
                                 </div>
-                                <p className="text-sm text-muted-foreground mt-0.5">
-                                    Manage your church ministries and team structures
-                                </p>
+
+                                {/* Ministry Selector Dropdown */}
+                                {!loading && ministries.length > 0 && (
+                                    <MinistrySelector
+                                        ministries={ministries}
+                                        selectedMinistry={selectedMinistry}
+                                        onSelectMinistry={setSelectedMinistry}
+                                        memberCounts={memberCounts}
+                                    />
+                                )}
                             </div>
                         </div>
 
                         {/* Right: Actions */}
                         <div className="flex items-center gap-2">
-                            <Button variant="ghost" size="sm">
-                                <Icons.Settings className="h-4 w-4 mr-2" />
-                                Settings
+                            <Button variant="outline" size="sm" onClick={openCreateMinistry} className="h-8">
+                                <Plus className="w-3 h-3 mr-1" /> New Ministry
                             </Button>
+                            {selectedMinistry && (
+                                <Button variant="ghost" size="sm" onClick={openEditMinistry}>
+                                    <Settings className="h-4 w-4 mr-2" />
+                                    Edit
+                                </Button>
+                            )}
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div className="max-w-7xl mx-auto px-6 py-8 space-y-8">
+            <div className="max-w-7xl mx-auto px-6 py-8 space-y-6">
                 {/* Navigation Tabs */}
                 <VolunteerNav />
 
@@ -105,8 +210,16 @@ export default function MinistriesPage() {
                         value={ministries.length.toString()}
                         icon={Church}
                         description="Active ministry teams"
-                        change="+1"
-                        trend="up"
+                        change={`${activeMinistries} active`}
+                        trend="neutral"
+                    />
+                    <MetricCard
+                        title="Total Members"
+                        value={totalMembers.toString()}
+                        icon={Users}
+                        description="Across all ministries"
+                        change={selectedMinistry ? `${memberCounts[selectedMinistry.id] || 0} in ${selectedMinistry.name}` : ''}
+                        trend="neutral"
                     />
                     <MetricCard
                         title="Active Roles"
@@ -116,130 +229,231 @@ export default function MinistriesPage() {
                         change="+3"
                         trend="up"
                     />
-                    <MetricCard
-                        title="Drafts/Inactive"
-                        value={ministries.filter(m => !m.active).length.toString()}
-                        icon={Settings}
-                        description="Requires attention"
-                        change="0"
-                        trend="neutral"
-                    />
                 </div>
 
-                {/* Search & Filters */}
-                <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-white dark:bg-zinc-900 p-4 rounded-xl border border-gray-100 dark:border-zinc-800">
-                    <div className="relative w-full md:w-96">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                        <Input
-                            placeholder="Search ministries..."
-                            className="pl-10 h-10 bg-gray-50/50 dark:bg-zinc-950/50 border-none ring-1 ring-gray-200 dark:ring-zinc-800"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                    </div>
-                </div>
-
-                {/* Grid */}
+                {/* Loading State */}
                 {loading ? (
                     <div className="flex flex-col items-center justify-center py-20 animate-pulse">
-                        <Icons.Loader2 className="h-8 w-8 text-emerald-500 animate-spin mb-4" />
+                        <Loader2 className="h-8 w-8 text-emerald-500 animate-spin mb-4" />
                         <p className="text-muted-foreground">Loading ministries...</p>
                     </div>
-                ) : filteredMinistries.length === 0 ? (
+                ) : ministries.length === 0 ? (
+                    /* Empty State */
                     <div className="text-center py-20 bg-white dark:bg-zinc-900 rounded-xl border border-dashed border-gray-300 dark:border-zinc-800">
                         <Users className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                         <h3 className="text-lg font-medium text-foreground">No ministries found</h3>
                         <p className="text-muted-foreground mb-6">Get started by creating your first ministry team.</p>
-                        <Button onClick={openCreate} variant="outline" className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 h-10">
+                        <Button onClick={openCreateMinistry} variant="outline" className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 h-10">
                             <Plus className="w-4 h-4 mr-2" />
                             Create Ministry
                         </Button>
                     </div>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-20">
-                        {filteredMinistries.map((ministry) => {
-                            const MinistryIcon = getIcon(ministry.icon);
-                            return (
-                                <div
-                                    key={ministry.id}
-                                    className={cn(
-                                        "group relative bg-white dark:bg-zinc-900 rounded-2xl border border-gray-100 dark:border-zinc-800",
-                                        "hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden",
-                                        "flex flex-col h-full"
-                                    )}
-                                >
-                                    {/* Accent Border */}
+                ) : selectedMinistry ? (
+                    /* Tabbed Interface for Selected Ministry */
+                    <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-gray-100 dark:border-zinc-800 overflow-hidden">
+                        {/* Ministry Header */}
+                        <div className="px-6 py-4 border-b border-gray-100 dark:border-zinc-800 flex items-center gap-4">
+                            {(() => {
+                                const MinistryIcon = getIcon(selectedMinistry.icon);
+                                return (
                                     <div
-                                        className="h-1.5 w-full opacity-70 group-hover:opacity-100 transition-opacity"
-                                        style={{ backgroundColor: ministry.color || '#10b981' }}
-                                    />
+                                        className="p-3 rounded-xl"
+                                        style={{ backgroundColor: `${selectedMinistry.color}15` }}
+                                    >
+                                        <MinistryIcon
+                                            className="w-6 h-6"
+                                            style={{ color: selectedMinistry.color }}
+                                        />
+                                    </div>
+                                );
+                            })()}
+                            <div className="flex-1">
+                                <h2 className="text-lg font-bold text-foreground">{selectedMinistry.name}</h2>
+                                <p className="text-sm text-muted-foreground line-clamp-1">
+                                    {selectedMinistry.description || 'No description provided'}
+                                </p>
+                            </div>
+                            <div className={cn(
+                                "px-3 py-1 rounded-full text-xs font-semibold",
+                                selectedMinistry.active
+                                    ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300'
+                                    : 'bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400'
+                            )}>
+                                {selectedMinistry.active ? 'Active' : 'Inactive'}
+                            </div>
+                        </div>
 
-                                    <div className="p-6 flex-1 flex flex-col">
-                                        <div className="flex justify-between items-start mb-6">
-                                            <div
-                                                className="p-3.5 rounded-2xl bg-gray-50 dark:bg-zinc-800 text-gray-700 dark:text-gray-300 group-hover:scale-110 transition-transform duration-300"
-                                                style={{ boxShadow: `0 8px 16px -4px ${ministry.color}20` }}
-                                            >
-                                                <MinistryIcon className="w-6 h-6" style={{ color: ministry.color }} />
-                                            </div>
-                                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <Button
-                                                    variant="secondary"
-                                                    size="icon"
-                                                    className="h-8 w-8 rounded-full bg-white dark:bg-zinc-800 shadow-sm"
-                                                    onClick={() => openEdit(ministry)}
-                                                >
-                                                    <Settings className="w-4 h-4 text-muted-foreground hover:text-foreground" />
-                                                </Button>
-                                            </div>
+                        {/* Tabs */}
+                        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                            <div className="px-6 border-b border-gray-100 dark:border-zinc-800">
+                                <TabsList className="h-12 bg-transparent border-none p-0 gap-1">
+                                    <TabsTrigger
+                                        value="members"
+                                        className={cn(
+                                            "h-12 px-4 rounded-none border-b-2 border-transparent data-[state=active]:border-orange-500",
+                                            "data-[state=active]:bg-transparent data-[state=active]:shadow-none",
+                                            "text-muted-foreground data-[state=active]:text-foreground font-semibold"
+                                        )}
+                                    >
+                                        <UserCircle className="w-4 h-4 mr-2" />
+                                        Members
+                                        <span className="ml-2 px-2 py-0.5 text-xs bg-gray-100 dark:bg-zinc-800 rounded-full">
+                                            {memberCounts[selectedMinistry.id] || 0}
+                                        </span>
+                                    </TabsTrigger>
+                                    <TabsTrigger
+                                        value="tasks"
+                                        className={cn(
+                                            "h-12 px-4 rounded-none border-b-2 border-transparent data-[state=active]:border-orange-500",
+                                            "data-[state=active]:bg-transparent data-[state=active]:shadow-none",
+                                            "text-muted-foreground data-[state=active]:text-foreground font-semibold"
+                                        )}
+                                    >
+                                        <ClipboardList className="w-4 h-4 mr-2" />
+                                        Tasks
+                                    </TabsTrigger>
+                                    <TabsTrigger
+                                        value="schedule"
+                                        className={cn(
+                                            "h-12 px-4 rounded-none border-b-2 border-transparent data-[state=active]:border-orange-500",
+                                            "data-[state=active]:bg-transparent data-[state=active]:shadow-none",
+                                            "text-muted-foreground data-[state=active]:text-foreground font-semibold"
+                                        )}
+                                    >
+                                        <CalendarDays className="w-4 h-4 mr-2" />
+                                        Schedule
+                                    </TabsTrigger>
+                                </TabsList>
+                            </div>
+
+                            {/* Members Tab */}
+                            <TabsContent value="members" className="m-0">
+                                <div className="p-6">
+                                    {/* Search */}
+                                    <div className="mb-6">
+                                        <div className="relative w-full max-w-sm">
+                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                                            <Input
+                                                placeholder="Search members..."
+                                                className="pl-10 h-10 bg-gray-50/50 dark:bg-zinc-950/50 border-gray-200 dark:border-zinc-700"
+                                                value={searchTerm}
+                                                onChange={(e) => setSearchTerm(e.target.value)}
+                                            />
                                         </div>
+                                    </div>
 
-                                        <h3 className="text-xl font-bold tracking-tight text-foreground mb-2 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
-                                            {ministry.name}
-                                        </h3>
-                                        <p className="text-sm text-muted-foreground mb-6 line-clamp-2 min-h-[40px] leading-relaxed">
-                                            {ministry.description || 'No description provided.'}
-                                        </p>
-
-                                        <div className="mt-auto space-y-4 pt-6 border-t border-gray-50 dark:border-zinc-800/50">
-                                            <div className="flex items-center justify-between text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                                                <span className="flex items-center gap-1.5">
-                                                    <Users className="w-3.5 h-3.5" />
-                                                    {ministry.roles?.length || 0} Open Roles
-                                                </span>
-                                                <span className={cn(
-                                                    "px-2.5 py-1 rounded-full text-[10px]",
-                                                    ministry.active
-                                                        ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-100 dark:ring-emerald-800'
-                                                        : 'bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400'
-                                                )}>
-                                                    {ministry.active ? 'Active' : 'Inactive'}
-                                                </span>
-                                            </div>
-                                            <Link href={`/admin/ministries/${ministry.id}`} className="block">
-                                                <Button className="w-full h-11 bg-emerald-50 dark:bg-emerald-900/10 hover:bg-emerald-100 dark:hover:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border-none font-semibold group/btn relative overflow-hidden">
-                                                    <span className="relative z-10 flex items-center justify-center gap-2">
-                                                        Manage Team
-                                                        <Plus className="w-4 h-4 group-hover/btn:rotate-90 transition-transform" />
-                                                    </span>
+                                    {/* Members List */}
+                                    {membersLoading ? (
+                                        <div className="flex items-center justify-center py-12">
+                                            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                                        </div>
+                                    ) : ministryMembers.length === 0 ? (
+                                        <div className="text-center py-12 border-2 border-dashed border-gray-200 dark:border-zinc-700 rounded-xl">
+                                            <Users className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                                            <h3 className="font-semibold text-foreground mb-1">No members yet</h3>
+                                            <p className="text-sm text-muted-foreground mb-4">
+                                                Add members to this ministry to get started.
+                                            </p>
+                                            <Link href={`/admin/ministries/${selectedMinistry.id}`}>
+                                                <Button size="sm" variant="outline">
+                                                    <Plus className="w-4 h-4 mr-1" />
+                                                    Add Members
                                                 </Button>
                                             </Link>
                                         </div>
+                                    ) : (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                            {ministryMembers
+                                                .filter(m =>
+                                                    m.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                                    m.role?.toLowerCase().includes(searchTerm.toLowerCase())
+                                                )
+                                                .map((member) => (
+                                                    <div
+                                                        key={member.id}
+                                                        className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-zinc-800/50 rounded-xl border border-gray-100 dark:border-zinc-700/50"
+                                                    >
+                                                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-400 to-rose-500 flex items-center justify-center text-white font-bold text-sm">
+                                                            {member.name?.charAt(0) || '?'}
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="font-semibold text-foreground truncate">
+                                                                {member.name || 'Unknown'}
+                                                            </p>
+                                                            <p className="text-xs text-muted-foreground truncate">
+                                                                {member.role || 'Member'}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                        </div>
+                                    )}
+
+                                    {/* Link to full management */}
+                                    <div className="mt-6 pt-6 border-t border-gray-100 dark:border-zinc-800">
+                                        <Link href={`/admin/ministries/${selectedMinistry.id}`}>
+                                            <Button variant="outline" className="w-full">
+                                                Manage Team & Roles
+                                                <Icons.ArrowRight className="w-4 h-4 ml-2" />
+                                            </Button>
+                                        </Link>
                                     </div>
                                 </div>
-                            );
-                        })}
+                            </TabsContent>
+
+                            {/* Tasks Tab - Kanban Board */}
+                            <TabsContent value="tasks" className="m-0 h-[calc(100vh-400px)] min-h-[500px]">
+                                <MinistryKanban
+                                    ministry={selectedMinistry}
+                                    onCreateAssignment={openCreateAssignment}
+                                    onEditAssignment={openEditAssignment}
+                                />
+                            </TabsContent>
+
+                            {/* Schedule Tab */}
+                            <TabsContent value="schedule" className="m-0">
+                                <div className="p-6">
+                                    <div className="text-center py-12 border-2 border-dashed border-gray-200 dark:border-zinc-700 rounded-xl">
+                                        <CalendarDays className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                                        <h3 className="font-semibold text-foreground mb-1">Schedule Coming Soon</h3>
+                                        <p className="text-sm text-muted-foreground">
+                                            Service scheduling and rotation management will be available here.
+                                        </p>
+                                    </div>
+                                </div>
+                            </TabsContent>
+                        </Tabs>
+                    </div>
+                ) : (
+                    /* No Ministry Selected */
+                    <div className="text-center py-20 bg-white dark:bg-zinc-900 rounded-xl border border-gray-100 dark:border-zinc-800">
+                        <Heart className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                        <h3 className="text-lg font-medium text-foreground">Select a Ministry</h3>
+                        <p className="text-muted-foreground">Choose a ministry from the dropdown to view details.</p>
                     </div>
                 )}
-
-                <MinistryModal
-                    isOpen={isModalOpen}
-                    onClose={() => setIsModalOpen(false)}
-                    ministry={selectedMinistry}
-                    onSave={selectedMinistry ? handleUpdate : handleCreate}
-                />
             </div>
+
+            {/* Ministry Create/Edit Modal */}
+            <MinistryModal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                ministry={selectedMinistry}
+                onSave={selectedMinistry && !isModalOpen ? handleUpdateMinistry : handleCreateMinistry}
+            />
+
+            {/* Assignment Create/Edit Modal */}
+            {selectedMinistry && (
+                <AssignmentModal
+                    isOpen={isAssignmentModalOpen}
+                    onClose={() => {
+                        setIsAssignmentModalOpen(false);
+                        setSelectedAssignment(null);
+                    }}
+                    ministry={selectedMinistry}
+                    assignment={selectedAssignment}
+                />
+            )}
         </div>
     );
-
 }

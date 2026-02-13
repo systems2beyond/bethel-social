@@ -20,7 +20,7 @@ export function GlobalLayoutComponents() {
                     isOpen={!!selectedResource}
                     onClose={() => setSelectedResource(null)}
                     title={selectedResource.title || selectedResource.resourceTitle || 'Untitled Scroll'}
-                    content={selectedResource.previewContent || '<p>No preview content available.</p>'}
+                    content={selectedResource.content || selectedResource.previewContent || '<p>No preview content available.</p>'}
                     type="scroll"
                     meetingId={selectedResource.resourceId || selectedResource.meetingId}
                     collaborationId={selectedResource.resourceId || selectedResource.meetingId}

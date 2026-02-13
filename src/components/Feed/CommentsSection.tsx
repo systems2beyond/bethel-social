@@ -8,6 +8,7 @@ import { ShareMenu } from './ShareMenu';
 import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, deleteDoc, setDoc, increment, getDoc, updateDoc } from 'firebase/firestore';
 import { Post, Comment } from '@/types';
 import { User, Send, MessageCircle, Heart, X, Smile } from 'lucide-react';
+import { MinistryAssignmentService } from '@/lib/services/MinistryAssignmentService';
 import { formatDistanceToNow } from 'date-fns';
 import EmojiPicker, { EmojiClickData, Theme } from 'emoji-picker-react';
 
@@ -145,6 +146,36 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({ post, onCommen
             await updateDoc(getPostRef(), {
                 comments: increment(1)
             });
+
+            // Check for task status commands in ministry assignment posts
+            const postMetadata = (post as any).metadata;
+            if (postMetadata?.type === 'ministry_assignment' && postMetadata?.assignmentId) {
+                const lowerComment = newComment.toLowerCase().trim();
+                let newStatus: string | null = null;
+
+                // Parse command patterns
+                if (lowerComment.includes('@done') || lowerComment.includes('@complete') || lowerComment.includes('@completed')) {
+                    newStatus = 'completed';
+                } else if (lowerComment.includes('@progress') || lowerComment.includes('@inprogress') || lowerComment.includes('@working')) {
+                    newStatus = 'in_progress';
+                } else if (lowerComment.includes('@review')) {
+                    newStatus = 'review';
+                } else if (lowerComment.includes('@backlog')) {
+                    newStatus = 'backlog';
+                }
+
+                // Update assignment status if command found
+                if (newStatus) {
+                    try {
+                        await MinistryAssignmentService.updateAssignment(postMetadata.assignmentId, {
+                            status: newStatus as any
+                        });
+                        console.log(`[CommentsSection] Updated assignment ${postMetadata.assignmentId} to ${newStatus}`);
+                    } catch (error) {
+                        console.error('[CommentsSection] Error updating assignment status:', error);
+                    }
+                }
+            }
 
             if (onCommentAdded) {
                 onCommentAdded();

@@ -40,6 +40,7 @@ import { FamilyModal } from '@/components/Admin/PeopleHub/FamilyModal';
 import { AssignDistrictModal } from '@/components/Admin/PeopleHub/AssignDistrictModal';
 import { DistrictService } from '@/lib/services/DistrictService';
 import { toast } from 'sonner';
+import { MessageDistrictModal } from '@/components/Admin/PeopleHub/MessageDistrictModal';
 
 // Stats card component
 const StatCard = ({ label, value, color, icon: Icon }: { label: string; value: number; color: string; icon: any }) => (
@@ -62,7 +63,7 @@ const StatCard = ({ label, value, color, icon: Icon }: { label: string; value: n
 );
 
 // Life Event Card
-const LifeEventCard = ({ event, memberName, priority }: { event: any; memberName: string; priority: string }) => {
+const LifeEventCard = ({ event, memberName, priority, onClick }: { event: any; memberName: string; priority: string; onClick?: () => void }) => {
     const priorityColors = {
         urgent: 'bg-red-500',
         high: 'bg-orange-500',
@@ -71,7 +72,13 @@ const LifeEventCard = ({ event, memberName, priority }: { event: any; memberName
     };
 
     return (
-        <div className="flex items-start gap-3 p-3 rounded-xl bg-gray-50 dark:bg-zinc-800/50 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors">
+        <div
+            onClick={onClick}
+            className={cn(
+                "flex items-start gap-3 p-3 rounded-xl bg-gray-50 dark:bg-zinc-800/50 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors",
+                onClick && "cursor-pointer"
+            )}
+        >
             <div className={cn("w-2 h-2 rounded-full mt-2", priorityColors[priority as keyof typeof priorityColors] || priorityColors.normal)} />
             <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
@@ -116,6 +123,8 @@ export default function DistrictCRMPage() {
     // Assign District Modal State
     const [isAssignDistrictModalOpen, setIsAssignDistrictModalOpen] = useState(false);
     const [selectedMemberForAssignDistrict, setSelectedMemberForAssignDistrict] = useState<FirestoreUser | null>(null);
+
+    const [showMessageAllModal, setShowMessageAllModal] = useState(false);
 
     // Check if user is admin (can see all districts) - case-insensitive check
     const userRole = userData?.role?.toLowerCase();
@@ -411,7 +420,8 @@ export default function DistrictCRMPage() {
                             </Button>
                             <Button
                                 size="sm"
-                                className="rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white shadow-md"
+                                onClick={() => setShowMessageAllModal(true)}
+                                className="rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white shadow-md active:scale-95 transition-all"
                             >
                                 <MessageSquare className="h-4 w-4 mr-2" />
                                 Message All
@@ -458,6 +468,7 @@ export default function DistrictCRMPage() {
                                                 event={event}
                                                 memberName={member?.displayName || event.memberName || 'Unknown'}
                                                 priority={event.priority}
+                                                onClick={() => handleViewProfile(event.memberId)}
                                             />
                                         );
                                     })}
@@ -604,6 +615,14 @@ export default function DistrictCRMPage() {
                 member={selectedMemberForAssignDistrict}
                 districts={availableDistricts}
                 onSuccess={refreshData}
+            />
+            {/* Message District Modal */}
+            <MessageDistrictModal
+                open={showMessageAllModal}
+                onOpenChange={setShowMessageAllModal}
+                recipients={members}
+                districtName={district?.name || 'District'}
+                onSuccess={() => setShowMessageAllModal(false)}
             />
         </div>
     );

@@ -111,6 +111,7 @@ export { ingestContent, scheduledWebsiteCrawl, ingestSocialPost } from './ai/kno
 export * from './ai/comments';
 export * from './ai/meetings';
 export { onMeetingCreated } from './notifications';
+export { sendPushNotification } from './notifications/push';
 export * from './meeting'; // Export meeting functions
 
 

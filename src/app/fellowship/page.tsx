@@ -3,7 +3,7 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Users, BookOpen, MessageSquare, Plus, Calendar, Trash2, Bell, Share2, X, ChevronRight } from 'lucide-react';
+import { Users, BookOpen, MessageSquare, Plus, Calendar, Trash2, Bell, Share2, X, ChevronRight, ClipboardList } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useBible } from '@/context/BibleContext';
 import MeetingList from '@/components/Fellowship/MeetingList';
@@ -15,6 +15,8 @@ import { cn } from '@/lib/utils';
 import { useActivity } from '@/context/ActivityContext';
 import { EmptyState } from '@/components/Fellowship/EmptyState';
 import { DirectMessages } from '@/components/Fellowship/DirectMessages';
+import { MyTasksView } from '@/components/Fellowship/MyTasksView';
+import { MinistryProvider } from '@/context/MinistryContext';
 
 function FellowshipContent() {
     const { user } = useAuth();
@@ -24,7 +26,7 @@ function FellowshipContent() {
         selectedResource
     } = useActivity();
 
-    const [activeTab, setActiveTab] = useState<'gatherings' | 'studies' | 'community'>('gatherings');
+    const [activeTab, setActiveTab] = useState<'gatherings' | 'studies' | 'community' | 'tasks'>('gatherings');
     const [sentInvitations, setSentInvitations] = useState<any[]>([]);
     const [usersMap, setUsersMap] = useState<Record<string, any>>({}); // Cache for user details
 
@@ -43,7 +45,7 @@ function FellowshipContent() {
 
     React.useEffect(() => {
         const tab = searchParams.get('tab');
-        if (tab === 'gatherings' || tab === 'studies' || tab === 'community') {
+        if (tab === 'gatherings' || tab === 'studies' || tab === 'community' || tab === 'tasks') {
             setActiveTab(tab);
         }
     }, [searchParams]);
@@ -162,6 +164,12 @@ function FellowshipContent() {
                             onClick={() => setActiveTab('community')}
                             icon={<MessageSquare className="w-4 h-4" />}
                             label="Inbox"
+                        />
+                        <TabButton
+                            active={activeTab === 'tasks'}
+                            onClick={() => setActiveTab('tasks')}
+                            icon={<ClipboardList className="w-4 h-4" />}
+                            label="My Tasks"
                         />
                     </motion.div>
                 </div>
@@ -355,6 +363,20 @@ function FellowshipContent() {
                                 className="h-full"
                             >
                                 <DirectMessages />
+                            </motion.div>
+                        )}
+
+                        {activeTab === 'tasks' && (
+                            <motion.div
+                                key="tasks"
+                                initial={{ opacity: 0, y: 20, filter: 'blur(10px)' }}
+                                animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                                exit={{ opacity: 0, y: -20, filter: 'blur(10px)' }}
+                                transition={{ duration: 0.4, ease: "easeOut" }}
+                            >
+                                <MinistryProvider>
+                                    <MyTasksView userId={user?.uid} />
+                                </MinistryProvider>
                             </motion.div>
                         )}
                     </AnimatePresence>
