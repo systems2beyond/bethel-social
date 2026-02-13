@@ -96,18 +96,23 @@ export function AssignmentModal({
     const loadData = async () => {
         setLoadingData(true);
         try {
-            // Load ministry members (users who are serving in this ministry)
-            const usersSnapshot = await getDocs(collection(db, 'users'));
-            const allUsers = usersSnapshot.docs.map(doc => ({
-                uid: doc.id,
-                ...doc.data()
-            })) as FirestoreUser[];
-
-            // Filter to members serving in this ministry
-            const ministryMembers = allUsers.filter(u =>
-                u.servingIn?.some(s => s.ministryId === ministry.id && s.status === 'active') ||
-                u.volunteerProfile?.ministries?.includes(ministry.id)
+            // Load ministry members from ministryMembers collection
+            const membersQuery = query(
+                collection(db, 'ministryMembers'),
+                where('ministryId', '==', ministry.id),
+                where('status', '==', 'active')
             );
+            const membersSnapshot = await getDocs(membersQuery);
+            const ministryMembers = membersSnapshot.docs.map(doc => {
+                const data = doc.data();
+                return {
+                    uid: data.userId,
+                    displayName: data.name || 'Unknown',
+                    email: data.email || '',
+                    photoURL: data.photoURL || null,
+                    role: data.role || 'Member'
+                } as FirestoreUser;
+            });
             setMembers(ministryMembers);
 
             // Load pipeline stages
@@ -345,15 +350,37 @@ export function AssignmentModal({
                                     onValueChange={(v) => setAssigneeId(v === '__unassigned__' ? '' : v)}
                                 >
                                     <SelectTrigger className="rounded-xl">
-                                        <SelectValue placeholder="Select member" />
+                                        <SelectValue placeholder="Select member">
+                                            {assigneeId && members.find(m => m.uid === assigneeId)?.displayName}
+                                        </SelectValue>
                                     </SelectTrigger>
-                                    <SelectContent className="rounded-xl">
-                                        <SelectItem value="__unassigned__">Unassigned</SelectItem>
-                                        {members.map(member => (
-                                            <SelectItem key={member.uid} value={member.uid || `member-${member.uid}`}>
-                                                {member.displayName}
-                                            </SelectItem>
-                                        ))}
+                                    <SelectContent className="rounded-xl max-h-[200px]">
+                                        <SelectItem value="__unassigned__">
+                                            <span className="text-muted-foreground">Unassigned</span>
+                                        </SelectItem>
+                                        {members.length === 0 ? (
+                                            <div className="px-2 py-3 text-sm text-muted-foreground text-center">
+                                                No members in this ministry yet.
+                                                <br />
+                                                <span className="text-xs">Add members first to assign tasks.</span>
+                                            </div>
+                                        ) : (
+                                            members.slice(0, 10).map(member => (
+                                                <SelectItem key={member.uid} value={member.uid}>
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-orange-400 to-rose-500 flex items-center justify-center text-white text-xs font-bold">
+                                                            {member.displayName?.charAt(0) || '?'}
+                                                        </div>
+                                                        <div className="flex flex-col">
+                                                            <span className="font-medium">{member.displayName}</span>
+                                                            {(member as any).role && (member as any).role !== 'Member' && (
+                                                                <span className="text-xs text-muted-foreground">{(member as any).role}</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </SelectItem>
+                                            ))
+                                        )}
                                     </SelectContent>
                                 </Select>
                             </div>
