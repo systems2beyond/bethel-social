@@ -150,14 +150,14 @@ export function AssignmentCard({
                         </div>
                     </div>
 
-                    {/* More button */}
-                    <div className="relative">
+                    {/* More button - always visible with background for mobile/tablet */}
+                    <div className="relative flex-shrink-0">
                         <button
                             onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); setShowStageSubmenu(false); }}
                             aria-label="More options"
-                            className="p-1 px-1.5 hover:bg-gray-100 dark:hover:bg-zinc-700 rounded-lg transition-colors text-gray-400 hover:text-gray-600"
+                            className="p-2 bg-gray-100 dark:bg-zinc-700 hover:bg-gray-200 dark:hover:bg-zinc-600 rounded-lg transition-colors text-gray-600 dark:text-zinc-300"
                         >
-                            <MoreHorizontal className="w-4 h-4" />
+                            <MoreHorizontal className="w-5 h-5" />
                         </button>
 
                         {showMenu && (
