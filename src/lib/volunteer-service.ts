@@ -81,8 +81,8 @@ export class VolunteerService {
                 status: 'active',
                 churchId: ministry.churchId,
                 tags: ['ministry', 'volunteer'],
-                memberCount: 0, // Leader will join later
-                createdBy: 'system', // or passed userId
+                memberCount: ministry.leaderId ? 1 : 0,
+                createdBy: ministry.leaderId || 'system',
                 createdAt: serverTimestamp(),
                 lastActivityAt: serverTimestamp(),
                 settings: {
@@ -99,6 +99,29 @@ export class VolunteerService {
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp()
             });
+
+            // 3. Add leader as ministry member (if leaderId provided)
+            if (ministry.leaderId) {
+                await addDoc(collection(db, 'ministryMembers'), {
+                    ministryId: docRef.id,
+                    userId: ministry.leaderId,
+                    name: ministry.leaderName || 'Leader',
+                    role: 'Leader',
+                    status: 'active',
+                    joinedAt: serverTimestamp(),
+                    addedBy: ministry.leaderId
+                });
+
+                // Also add leader to the linked group
+                await addDoc(collection(db, 'groupMembers'), {
+                    groupId: groupRef.id,
+                    memberId: ministry.leaderId,
+                    role: 'admin',
+                    status: 'active',
+                    joinedAt: serverTimestamp()
+                });
+            }
+
             return docRef.id;
         } catch (error) {
             console.error('Error creating ministry:', error);

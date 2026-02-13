@@ -340,14 +340,17 @@ export function AssignmentModal({
                                     <User className="w-3 h-3" />
                                     Assign To
                                 </Label>
-                                <Select value={assigneeId} onValueChange={setAssigneeId}>
+                                <Select
+                                    value={assigneeId || '__unassigned__'}
+                                    onValueChange={(v) => setAssigneeId(v === '__unassigned__' ? '' : v)}
+                                >
                                     <SelectTrigger className="rounded-xl">
                                         <SelectValue placeholder="Select member" />
                                     </SelectTrigger>
                                     <SelectContent className="rounded-xl">
-                                        <SelectItem value="">Unassigned</SelectItem>
+                                        <SelectItem value="__unassigned__">Unassigned</SelectItem>
                                         {members.map(member => (
-                                            <SelectItem key={member.uid} value={member.uid}>
+                                            <SelectItem key={member.uid} value={member.uid || `member-${member.uid}`}>
                                                 {member.displayName}
                                             </SelectItem>
                                         ))}
@@ -402,7 +405,7 @@ export function AssignmentModal({
                                         <SelectValue placeholder="Select stage" />
                                     </SelectTrigger>
                                     <SelectContent className="rounded-xl">
-                                        {stages.map(stage => (
+                                        {stages.filter(s => s.id).map(stage => (
                                             <SelectItem key={stage.id} value={stage.id}>
                                                 <div className="flex items-center gap-2">
                                                     <div

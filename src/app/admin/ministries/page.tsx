@@ -415,17 +415,6 @@ export default function MinistriesPage() {
                                         </div>
                                     )}
 
-                                    {/* Add Members Button */}
-                                    <div className="mt-6 pt-6 border-t border-gray-100 dark:border-zinc-800">
-                                        <Button
-                                            variant="outline"
-                                            className="w-full"
-                                            onClick={() => setIsAddMembersModalOpen(true)}
-                                        >
-                                            <UserPlus className="w-4 h-4 mr-2" />
-                                            Add Members
-                                        </Button>
-                                    </div>
                                 </div>
                             </TabsContent>
 

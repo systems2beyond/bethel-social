@@ -586,10 +586,12 @@ export const GroupsService = {
 
     /**
      * Get Ministry Groups for a User
-     * Returns groups that are linked to ministries the user belongs to
+     * Returns groups that are linked to ministries the user belongs to (as member OR leader)
      */
     getMinistryGroups: async (userId: string): Promise<Group[]> => {
         try {
+            const ministryIds = new Set<string>();
+
             // 1. Get user's ministry memberships
             const membershipQuery = query(
                 collection(db, 'ministryMembers'),
@@ -597,14 +599,21 @@ export const GroupsService = {
                 where('status', '==', 'active')
             );
             const membershipsSnapshot = await getDocs(membershipQuery);
+            membershipsSnapshot.docs.forEach(d => ministryIds.add(d.data().ministryId));
 
-            if (membershipsSnapshot.empty) {
+            // 2. Get ministries where user is leader (may not be in ministryMembers)
+            const leaderQuery = query(
+                collection(db, 'ministries'),
+                where('leaderId', '==', userId)
+            );
+            const leaderSnapshot = await getDocs(leaderQuery);
+            leaderSnapshot.docs.forEach(d => ministryIds.add(d.id));
+
+            if (ministryIds.size === 0) {
                 return [];
             }
 
-            const ministryIds = membershipsSnapshot.docs.map(d => d.data().ministryId);
-
-            // 2. Get ministries with linked groups
+            // 3. Get ministries with linked groups
             const groups: Group[] = [];
             const seenGroupIds = new Set<string>();
 

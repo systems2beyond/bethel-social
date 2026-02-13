@@ -39,7 +39,8 @@ export const UsersService = {
                         uid: doc.id,
                         displayName: doc.data().displayName || 'Unknown',
                         photoURL: doc.data().photoURL,
-                        email: doc.data().email
+                        email: doc.data().email,
+                        churchId: doc.data().churchId
                     });
                 });
             }
@@ -66,7 +67,8 @@ export const UsersService = {
                             uid: doc.id,
                             displayName: doc.data().displayName || 'Unknown',
                             photoURL: doc.data().photoURL,
-                            email: doc.data().email
+                            email: doc.data().email,
+                            churchId: doc.data().churchId
                         });
                     }
                 });

@@ -5,15 +5,14 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { Heart, Users, Calendar, ArrowLeft } from 'lucide-react';
+import { Heart, Users } from 'lucide-react';
 
 export function VolunteerNav() {
     const pathname = usePathname();
 
     const links = [
         { href: '/admin/ministries', label: 'Ministries', icon: Heart },
-        { href: '/admin/volunteers', label: 'Directory', icon: Users },
-        { href: '/admin/schedule', label: 'Schedule', icon: Calendar },
+        { href: '/admin/volunteers', label: 'Volunteers', icon: Users },
     ];
 
     return (
