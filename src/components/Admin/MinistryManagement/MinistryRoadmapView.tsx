@@ -204,9 +204,16 @@ export function MinistryRoadmapView({
             {/* Milestones Grid */}
             <div className="p-6">
                 {milestones.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                        <Target className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                        <p className="text-sm">No milestones yet. Add your first milestone to start tracking progress.</p>
+                    <div className="text-center py-8">
+                        <Target className="w-8 h-8 mx-auto mb-2 text-muted-foreground opacity-50" />
+                        <p className="text-sm text-muted-foreground mb-4">No milestones yet. Add your first milestone to start tracking progress.</p>
+                        <button
+                            onClick={onCreateMilestone}
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium shadow-md shadow-indigo-500/20 active:translate-y-0.5 transition-all"
+                        >
+                            <Plus className="w-4 h-4" />
+                            Add First Milestone
+                        </button>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
