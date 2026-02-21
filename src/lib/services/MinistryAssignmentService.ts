@@ -345,6 +345,23 @@ export const MinistryAssignmentService = {
     },
 
     /**
+     * Get assignments for a specific service session
+     */
+    async getAssignmentsByService(serviceId: string): Promise<MinistryAssignment[]> {
+        const q = query(
+            collection(db, ASSIGNMENTS_COLLECTION),
+            where('serviceSessionId', '==', serviceId),
+            where('isArchived', '==', false)
+        );
+
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        })) as MinistryAssignment[];
+    },
+
+    /**
      * Get assignments by status
      */
     async getAssignmentsByStatus(
