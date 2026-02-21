@@ -15,7 +15,6 @@ import {
     parseISO
 } from 'date-fns';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Loader2, Plus } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Ministry, MinistryAssignment, MinistryService } from '@/types';
 import { MinistryAssignmentService } from '@/lib/services/MinistryAssignmentService';
 import { VolunteerSchedulingService } from '@/lib/services/VolunteerSchedulingService';
@@ -134,42 +133,56 @@ export function MinistryCalendar({
         <div className="bg-white dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-xl overflow-hidden shadow-sm">
             {/* Calendar Header */}
             <div className="px-6 py-4 border-b border-gray-100 dark:border-zinc-800 flex items-center justify-between bg-gray-50/50 dark:bg-zinc-900/50">
+                {/* Left: Title and Navigation */}
                 <div className="flex items-center gap-4">
                     <h2 className="text-xl font-bold flex items-center gap-2 text-foreground">
                         <CalendarIcon className="w-5 h-5 text-emerald-500" />
                         {format(currentDate, 'MMMM yyyy')}
                     </h2>
-                    <div className="flex items-center rounded-lg border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-1">
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={prevMonth}>
-                            <ChevronLeft className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" className="h-7 px-3 text-sm font-medium" onClick={today}>
+                    <div className="flex items-center rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 shadow-sm">
+                        <button
+                            onClick={prevMonth}
+                            className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-l-lg transition-colors"
+                        >
+                            <ChevronLeft className="w-4 h-4 text-zinc-600 dark:text-zinc-400" />
+                        </button>
+                        <button
+                            onClick={today}
+                            className="px-3 py-1.5 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors border-x border-zinc-200 dark:border-zinc-700"
+                        >
                             Today
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={nextMonth}>
-                            <ChevronRight className="w-4 h-4" />
-                        </Button>
+                        </button>
+                        <button
+                            onClick={nextMonth}
+                            className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-r-lg transition-colors"
+                        >
+                            <ChevronRight className="w-4 h-4 text-zinc-600 dark:text-zinc-400" />
+                        </button>
                     </div>
                 </div>
-                {/* Legend */}
-                <div className="flex items-center gap-6 text-sm text-muted-foreground">
-                    <div className="flex items-center gap-1.5">
-                        <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
-                        <span>Tasks</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                        <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                        <span>Services</span>
+
+                {/* Right: Legend and Add Service */}
+                <div className="flex items-center gap-6">
+                    {/* Legend */}
+                    <div className="flex items-center gap-5 text-sm text-zinc-500 dark:text-zinc-400">
+                        <div className="flex items-center gap-1.5">
+                            <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                            <span>Tasks</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                            <span>Services</span>
+                        </div>
                     </div>
 
                     {/* Add Service Button */}
-                    <Button
-                        size="sm"
+                    <button
                         onClick={() => onCreateService?.()}
-                        className="ml-2 h-8 bg-indigo-600 hover:bg-indigo-700 text-white"
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium shadow-md shadow-emerald-500/20 active:translate-y-0.5 transition-all"
                     >
-                        <Plus className="w-4 h-4 mr-1.5" /> Add Service
-                    </Button>
+                        <Plus className="w-4 h-4" />
+                        Add Service
+                    </button>
                 </div>
             </div>
 

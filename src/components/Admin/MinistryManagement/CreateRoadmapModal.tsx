@@ -1,23 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogDescription,
-    DialogFooter,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/context/AuthContext';
 import { RoadmapService } from '@/lib/services/RoadmapService';
 import { Ministry, MinistryRoadmap } from '@/types';
 import { toast } from 'sonner';
-import { Map, Loader2, Calendar } from 'lucide-react';
+import { Map, Loader2, Calendar, X } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
 interface CreateRoadmapModalProps {
@@ -33,7 +21,7 @@ export function CreateRoadmapModal({
     ministry,
     roadmapToEdit
 }: CreateRoadmapModalProps) {
-    const { userData } = useAuth();
+    const { user, userData } = useAuth();
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Form State
@@ -76,7 +64,11 @@ export function CreateRoadmapModal({
             toast.error('Please enter a roadmap title');
             return;
         }
-        if (!userData) {
+        // Use user.uid (Firebase Auth) as primary, fallback to userData.uid
+        const userId = user?.uid || userData?.uid;
+        const userName = userData?.displayName || user?.displayName || 'Unknown';
+
+        if (!userId) {
             toast.error('You must be logged in');
             return;
         }
@@ -87,20 +79,20 @@ export function CreateRoadmapModal({
                 ministryId: ministry.id,
                 churchId: ministry.churchId,
                 title: title.trim(),
-                description: description.trim() || undefined,
-                startDate: startDate ? parseISO(`${startDate}T12:00:00`) : undefined,
-                targetEndDate: targetEndDate ? parseISO(`${targetEndDate}T12:00:00`) : undefined,
+                ...(description.trim() && { description: description.trim() }),
+                ...(startDate && { startDate: parseISO(`${startDate}T12:00:00`) }),
+                ...(targetEndDate && { targetEndDate: parseISO(`${targetEndDate}T12:00:00`) }),
                 status: 'active' as const,
-                createdBy: userData.uid,
-                createdByName: userData.displayName || 'Unknown'
+                createdBy: userId,
+                createdByName: userName
             };
 
             if (roadmapToEdit) {
                 await RoadmapService.updateRoadmap(roadmapToEdit.id, {
                     title: roadmapData.title,
-                    description: roadmapData.description,
-                    startDate: roadmapData.startDate,
-                    targetEndDate: roadmapData.targetEndDate
+                    ...(description.trim() && { description: description.trim() }),
+                    ...(startDate && { startDate: parseISO(`${startDate}T12:00:00`) }),
+                    ...(targetEndDate && { targetEndDate: parseISO(`${targetEndDate}T12:00:00`) }),
                 });
                 toast.success('Roadmap updated');
             } else {
@@ -119,89 +111,112 @@ export function CreateRoadmapModal({
 
     const isEditing = !!roadmapToEdit;
 
+    if (!isOpen) return null;
+
     return (
-        <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <div className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-md shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+
+                {/* Header */}
+                <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between bg-zinc-50/50 dark:bg-zinc-900/50">
+                    <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
                         <Map className="w-5 h-5 text-indigo-500" />
                         {isEditing ? 'Edit Roadmap' : 'Create Roadmap'}
-                    </DialogTitle>
-                    <DialogDescription>
+                    </h2>
+                    <button
+                        onClick={onClose}
+                        className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-full transition-colors"
+                    >
+                        <X className="w-5 h-5 text-zinc-500" />
+                    </button>
+                </div>
+
+                {/* Form */}
+                <div className="p-6 space-y-5">
+                    <p className="text-sm text-zinc-500 dark:text-zinc-400 -mt-2">
                         {isEditing
                             ? 'Update your ministry roadmap details.'
                             : 'Create a strategic roadmap to plan and track your ministry goals.'
                         }
-                    </DialogDescription>
-                </DialogHeader>
+                    </p>
 
-                <div className="space-y-4 py-4">
                     {/* Title */}
-                    <div className="space-y-2">
-                        <Label htmlFor="title">Roadmap Title *</Label>
-                        <Input
-                            id="title"
+                    <div>
+                        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                            Roadmap Title *
+                        </label>
+                        <input
+                            type="text"
                             placeholder="e.g. 2026 Ministry Vision"
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
+                            className="w-full px-4 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
                         />
                     </div>
 
                     {/* Description */}
-                    <div className="space-y-2">
-                        <Label htmlFor="description">Description</Label>
-                        <Textarea
-                            id="description"
+                    <div>
+                        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                            Description
+                        </label>
+                        <textarea
                             placeholder="Describe the goals and vision for this roadmap..."
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
                             rows={3}
+                            className="w-full px-4 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all resize-none"
                         />
                     </div>
 
                     {/* Dates */}
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="startDate" className="flex items-center gap-1">
+                        <div>
+                            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1 flex items-center gap-1">
                                 <Calendar className="w-3.5 h-3.5" />
                                 Start Date
-                            </Label>
-                            <Input
-                                id="startDate"
+                            </label>
+                            <input
                                 type="date"
                                 value={startDate}
                                 onChange={(e) => setStartDate(e.target.value)}
+                                className="w-full px-4 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
                             />
                         </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="targetEndDate" className="flex items-center gap-1">
+                        <div>
+                            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1 flex items-center gap-1">
                                 <Calendar className="w-3.5 h-3.5" />
                                 Target End Date
-                            </Label>
-                            <Input
-                                id="targetEndDate"
+                            </label>
+                            <input
                                 type="date"
                                 value={targetEndDate}
                                 onChange={(e) => setTargetEndDate(e.target.value)}
+                                className="w-full px-4 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
                             />
                         </div>
                     </div>
                 </div>
 
-                <DialogFooter>
-                    <Button variant="outline" onClick={onClose} disabled={isSubmitting}>
+                {/* Footer */}
+                <div className="px-6 py-4 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 flex justify-end gap-3">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        disabled={isSubmitting}
+                        className="px-4 py-2 rounded-lg text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors font-medium"
+                    >
                         Cancel
-                    </Button>
-                    <Button
+                    </button>
+                    <button
                         onClick={handleSave}
                         disabled={isSubmitting}
-                        className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                        className="px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-500/20 active:translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-medium"
                     >
-                        {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                        {isEditing ? 'Save Changes' : 'Create Roadmap'}
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+                        {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                        {isSubmitting ? 'Saving...' : isEditing ? 'Save Changes' : 'Create Roadmap'}
+                    </button>
+                </div>
+            </div>
+        </div>
     );
 }

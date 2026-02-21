@@ -563,21 +563,18 @@ export default function MinistriesPage() {
 
                             {/* Schedule Tab */}
                             <TabsContent value="schedule" className="m-0 bg-gray-50/30 dark:bg-zinc-950/30">
-                                <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 p-6">
-                                    <div className="xl:col-span-3">
-                                        <MinistryCalendar ministry={selectedMinistry} />
-                                    </div>
-                                    <div className="xl:col-span-1">
-                                        <div className="sticky top-24">
-                                            <MinistryRoadmapView
-                                                ministry={selectedMinistry}
-                                                onCreateRoadmap={openCreateRoadmap}
-                                                onEditRoadmap={openEditRoadmap}
-                                                onCreateMilestone={openCreateMilestone}
-                                                onEditMilestone={openEditMilestone}
-                                            />
-                                        </div>
-                                    </div>
+                                <div className="space-y-6 p-6">
+                                    {/* Calendar */}
+                                    <MinistryCalendar ministry={selectedMinistry} />
+
+                                    {/* Ministry Roadmap - Full Width Below */}
+                                    <MinistryRoadmapView
+                                        ministry={selectedMinistry}
+                                        onCreateRoadmap={openCreateRoadmap}
+                                        onEditRoadmap={openEditRoadmap}
+                                        onCreateMilestone={openCreateMilestone}
+                                        onEditMilestone={openEditMilestone}
+                                    />
                                 </div>
                             </TabsContent>
                         </Tabs>

@@ -32,7 +32,7 @@ export function MyScheduleView() {
             setLoading(true);
             try {
                 // Subscribe to user's schedules
-                unsubSchedules = VolunteerSchedulingService.subscribeToUserSchedules(
+                unsubSchedules = VolunteerSchedulingService.subscribeToMySchedules(
                     userData.uid,
                     async (baseSchedules) => {
                         // Augment schedules with full Service and Ministry details
