@@ -151,12 +151,24 @@ export function MinistryCalendar({
                         </Button>
                     </div>
                 </div>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-blue-500"></div> Tasks</div>
-                    <div className="flex items-center gap-1.5 ml-3"><div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div> Services</div>
+                {/* Legend */}
+                <div className="flex items-center gap-6 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-1.5">
+                        <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                        <span>Tasks</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                        <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                        <span>Services</span>
+                    </div>
 
-                    <Button size="sm" onClick={() => onCreateService?.()} className="ml-4 h-8 bg-emerald-600 hover:bg-emerald-700 text-white">
-                        <Plus className="w-3.5 h-3.5 mr-1" /> Add Service
+                    {/* Add Service Button */}
+                    <Button
+                        size="sm"
+                        onClick={() => onCreateService?.()}
+                        className="ml-2 h-8 bg-indigo-600 hover:bg-indigo-700 text-white"
+                    >
+                        <Plus className="w-4 h-4 mr-1.5" /> Add Service
                     </Button>
                 </div>
             </div>

@@ -7,3 +7,6 @@ export { MinistryCalendar } from './MinistryCalendar';
 export { CreateServiceModal } from './CreateServiceModal';
 export { ScheduleVolunteerModal } from './ScheduleVolunteerModal';
 export { MyScheduleView } from './MyScheduleView';
+export { MinistryRoadmapView } from './MinistryRoadmapView';
+export { CreateRoadmapModal } from './CreateRoadmapModal';
+export { CreateMilestoneModal } from './CreateMilestoneModal';

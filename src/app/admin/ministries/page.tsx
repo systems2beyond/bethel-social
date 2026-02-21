@@ -14,7 +14,9 @@ import { MetricCard } from '@/components/Admin/PeopleHub/MetricCard';
 import { cn } from '@/lib/utils';
 import { LucideIcon } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { MinistrySelector, MinistryKanban, AssignmentModal, AddMinistryMembersModal, MinistryCalendar, MyScheduleView } from '@/components/Admin/MinistryManagement';
+import { MinistrySelector, MinistryKanban, AssignmentModal, AddMinistryMembersModal, MinistryCalendar, MinistryRoadmapView, CreateRoadmapModal, CreateMilestoneModal } from '@/components/Admin/MinistryManagement';
+import { MinistryRoadmap, RoadmapMilestone } from '@/types';
+import { RoadmapService } from '@/lib/services/RoadmapService';
 import { useAuth } from '@/context/AuthContext';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -44,6 +46,13 @@ export default function MinistriesPage() {
 
     // Add Members modal state
     const [isAddMembersModalOpen, setIsAddMembersModalOpen] = useState(false);
+
+    // Roadmap modal state
+    const [isRoadmapModalOpen, setIsRoadmapModalOpen] = useState(false);
+    const [roadmapToEdit, setRoadmapToEdit] = useState<MinistryRoadmap | null>(null);
+    const [isMilestoneModalOpen, setIsMilestoneModalOpen] = useState(false);
+    const [milestoneToEdit, setMilestoneToEdit] = useState<RoadmapMilestone | null>(null);
+    const [activeRoadmap, setActiveRoadmap] = useState<MinistryRoadmap | null>(null);
 
     // Member counts for selector
     const [memberCounts, setMemberCounts] = useState<Record<string, number>>({});
@@ -129,6 +138,15 @@ export default function MinistriesPage() {
         fetchMembers(selectedMinistry.id);
     }, [selectedMinistry?.id]);
 
+    // Fetch active roadmap for selected ministry
+    useEffect(() => {
+        if (!selectedMinistry?.id) {
+            setActiveRoadmap(null);
+            return;
+        }
+        RoadmapService.getActiveRoadmap(selectedMinistry.id).then(setActiveRoadmap);
+    }, [selectedMinistry?.id]);
+
     // Handler to refresh members after adding
     const handleMemberAdded = () => {
         if (selectedMinistry?.id) {
@@ -205,6 +223,41 @@ export default function MinistriesPage() {
     const openEditAssignment = (assignment: MinistryAssignment) => {
         setSelectedAssignment(assignment);
         setIsAssignmentModalOpen(true);
+    };
+
+    // Roadmap handlers
+    const openCreateRoadmap = () => {
+        setRoadmapToEdit(null);
+        setIsRoadmapModalOpen(true);
+    };
+
+    const openEditRoadmap = (roadmap: MinistryRoadmap) => {
+        setRoadmapToEdit(roadmap);
+        setIsRoadmapModalOpen(true);
+    };
+
+    const openCreateMilestone = () => {
+        setMilestoneToEdit(null);
+        setIsMilestoneModalOpen(true);
+    };
+
+    const openEditMilestone = (milestone: RoadmapMilestone) => {
+        setMilestoneToEdit(milestone);
+        setIsMilestoneModalOpen(true);
+    };
+
+    const handleRoadmapModalClose = () => {
+        setIsRoadmapModalOpen(false);
+        setRoadmapToEdit(null);
+        // Refresh active roadmap
+        if (selectedMinistry?.id) {
+            RoadmapService.getActiveRoadmap(selectedMinistry.id).then(setActiveRoadmap);
+        }
+    };
+
+    const handleMilestoneModalClose = () => {
+        setIsMilestoneModalOpen(false);
+        setMilestoneToEdit(null);
     };
 
     // Metrics calculations
@@ -514,10 +567,15 @@ export default function MinistriesPage() {
                                     <div className="xl:col-span-3">
                                         <MinistryCalendar ministry={selectedMinistry} />
                                     </div>
-                                    <div className="xl:col-span-1 border-t xl:border-t-0 xl:border-l border-gray-100 dark:border-zinc-800 pt-6 xl:pt-0 xl:pl-6">
+                                    <div className="xl:col-span-1">
                                         <div className="sticky top-24">
-                                            <h3 className="font-semibold text-foreground mb-4">My Schedule</h3>
-                                            <MyScheduleView />
+                                            <MinistryRoadmapView
+                                                ministry={selectedMinistry}
+                                                onCreateRoadmap={openCreateRoadmap}
+                                                onEditRoadmap={openEditRoadmap}
+                                                onCreateMilestone={openCreateMilestone}
+                                                onEditMilestone={openEditMilestone}
+                                            />
                                         </div>
                                     </div>
                                 </div>
@@ -563,6 +621,26 @@ export default function MinistriesPage() {
                     ministry={selectedMinistry}
                     existingMemberIds={ministryMembers.map(m => m.userId)}
                     onMemberAdded={handleMemberAdded}
+                />
+            )}
+
+            {/* Roadmap Create/Edit Modal */}
+            {selectedMinistry && (
+                <CreateRoadmapModal
+                    isOpen={isRoadmapModalOpen}
+                    onClose={handleRoadmapModalClose}
+                    ministry={selectedMinistry}
+                    roadmapToEdit={roadmapToEdit || undefined}
+                />
+            )}
+
+            {/* Milestone Create/Edit Modal */}
+            {selectedMinistry && activeRoadmap && (
+                <CreateMilestoneModal
+                    isOpen={isMilestoneModalOpen}
+                    onClose={handleMilestoneModalClose}
+                    roadmap={activeRoadmap}
+                    milestoneToEdit={milestoneToEdit || undefined}
                 />
             )}
         </div>

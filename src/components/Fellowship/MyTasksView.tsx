@@ -3,9 +3,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useMinistry } from '@/context/MinistryContext';
-import { MinistryAssignment, PersonalTask, Ministry } from '@/types';
+import { MinistryAssignment, PersonalTask, Ministry, VolunteerSchedule, MinistryService } from '@/types';
 import { MinistryAssignmentService } from '@/lib/services/MinistryAssignmentService';
 import { PersonalTaskService } from '@/lib/services/PersonalTaskService';
+import { VolunteerSchedulingService } from '@/lib/services/VolunteerSchedulingService';
 import {
     TaskCard,
     UnifiedTask,
@@ -14,9 +15,10 @@ import {
 } from './TaskCard';
 import { CreatePersonalTaskModal } from './CreatePersonalTaskModal';
 import { cn } from '@/lib/utils';
-import { Plus, Loader2, ClipboardList, Church, User, Clock, CheckCircle, Filter, Inbox } from 'lucide-react';
+import { Plus, Loader2, ClipboardList, Church, User, Clock, CheckCircle, Filter, Inbox, Calendar, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { isPast, isToday, addDays } from 'date-fns';
+import { isPast, isToday, addDays, format } from 'date-fns';
+import { toast } from 'sonner';
 
 type FilterType = 'all' | 'ministry' | 'personal' | 'due_soon' | 'completed';
 
@@ -32,10 +34,13 @@ export function MyTasksView({ userId }: MyTasksViewProps) {
     // State
     const [ministryAssignments, setMinistryAssignments] = useState<MinistryAssignment[]>([]);
     const [personalTasks, setPersonalTasks] = useState<PersonalTask[]>([]);
+    const [volunteerSchedules, setVolunteerSchedules] = useState<(VolunteerSchedule & { serviceDetails?: MinistryService; ministryDetails?: Ministry })[]>([]);
     const [loading, setLoading] = useState(true);
+    const [schedulesLoading, setSchedulesLoading] = useState(true);
     const [activeFilter, setActiveFilter] = useState<FilterType>('all');
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [editingTask, setEditingTask] = useState<PersonalTask | null>(null);
+    const [processingScheduleId, setProcessingScheduleId] = useState<string | null>(null);
 
     // Create ministry lookup map
     const ministryMap = useMemo(() => {
@@ -76,6 +81,43 @@ export function MyTasksView({ userId }: MyTasksViewProps) {
             if (unsubPersonal) unsubPersonal();
         };
     }, [effectiveUserId]);
+
+    // Subscribe to volunteer schedules
+    useEffect(() => {
+        if (!effectiveUserId) {
+            setSchedulesLoading(false);
+            return;
+        }
+
+        setSchedulesLoading(true);
+        const unsubSchedules = VolunteerSchedulingService.subscribeToMySchedules(
+            effectiveUserId,
+            async (schedules) => {
+                // Augment with service and ministry details
+                const augmented = await Promise.all(
+                    schedules.map(async (schedule) => {
+                        const serviceDetails = await VolunteerSchedulingService.getService(schedule.serviceId);
+                        const ministryDetails = ministryMap[schedule.ministryId];
+                        return {
+                            ...schedule,
+                            serviceDetails: serviceDetails || undefined,
+                            ministryDetails
+                        };
+                    })
+                );
+                // Sort by service date (closest first)
+                augmented.sort((a, b) => {
+                    const aDate = a.serviceDetails?.date?.toDate?.() || a.serviceDetails?.date?.seconds ? new Date(a.serviceDetails.date.seconds * 1000) : new Date(0);
+                    const bDate = b.serviceDetails?.date?.toDate?.() || b.serviceDetails?.date?.seconds ? new Date(b.serviceDetails.date.seconds * 1000) : new Date(0);
+                    return aDate.getTime() - bDate.getTime();
+                });
+                setVolunteerSchedules(augmented);
+                setSchedulesLoading(false);
+            }
+        );
+
+        return () => unsubSchedules();
+    }, [effectiveUserId, ministryMap]);
 
     // Convert to unified tasks
     const unifiedTasks: UnifiedTask[] = useMemo(() => {
@@ -216,6 +258,28 @@ export function MyTasksView({ userId }: MyTasksViewProps) {
         // For ministry tasks, could open a detail modal in the future
     };
 
+    // Handle volunteer schedule response
+    const handleScheduleResponse = async (scheduleId: string, response: 'accepted' | 'declined') => {
+        setProcessingScheduleId(scheduleId);
+        try {
+            await VolunteerSchedulingService.updateScheduleStatus(scheduleId, response);
+            toast.success(response === 'accepted' ? 'Shift accepted!' : 'Shift declined');
+        } catch (error) {
+            console.error('Error updating schedule:', error);
+            toast.error('Failed to update shift');
+        } finally {
+            setProcessingScheduleId(null);
+        }
+    };
+
+    // Filter schedules to show pending and upcoming accepted
+    const pendingSchedules = volunteerSchedules.filter(s => s.status === 'pending');
+    const upcomingSchedules = volunteerSchedules.filter(s => {
+        if (s.status !== 'accepted') return false;
+        const serviceDate = s.serviceDetails?.date?.toDate?.() || (s.serviceDetails?.date?.seconds ? new Date(s.serviceDetails.date.seconds * 1000) : null);
+        return serviceDate && serviceDate >= new Date();
+    });
+
     const filters: { key: FilterType; label: string; icon: React.ReactNode }[] = [
         { key: 'all', label: 'All', icon: <Inbox className="w-3.5 h-3.5" /> },
         { key: 'ministry', label: 'Ministry', icon: <Church className="w-3.5 h-3.5" /> },
@@ -240,6 +304,136 @@ export function MyTasksView({ userId }: MyTasksViewProps) {
 
     return (
         <div className="space-y-6">
+            {/* Upcoming Shifts Section */}
+            {(pendingSchedules.length > 0 || upcomingSchedules.length > 0) && (
+                <div className="bg-white dark:bg-zinc-800/50 rounded-2xl border border-gray-100 dark:border-zinc-700/50 overflow-hidden">
+                    <div className="px-4 py-3 border-b border-gray-100 dark:border-zinc-700/50 bg-amber-50/50 dark:bg-amber-900/10">
+                        <div className="flex items-center gap-2">
+                            <Calendar className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                            <h3 className="font-semibold text-sm text-amber-800 dark:text-amber-300">
+                                Upcoming Shifts
+                            </h3>
+                            {pendingSchedules.length > 0 && (
+                                <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-amber-200 dark:bg-amber-800 text-amber-800 dark:text-amber-200">
+                                    {pendingSchedules.length} pending
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                    <div className="divide-y divide-gray-100 dark:divide-zinc-700/50">
+                        {/* Pending Shifts First */}
+                        {pendingSchedules.map(schedule => {
+                            const serviceDate = schedule.serviceDetails?.date?.toDate?.() || (schedule.serviceDetails?.date?.seconds ? new Date(schedule.serviceDetails.date.seconds * 1000) : null);
+                            return (
+                                <div key={schedule.id} className="p-4 bg-amber-50/30 dark:bg-amber-900/5">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className="relative flex h-2 w-2">
+                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                                                </span>
+                                                <span className="text-xs font-medium text-amber-600 dark:text-amber-400 uppercase">
+                                                    Response Needed
+                                                </span>
+                                            </div>
+                                            <h4 className="font-semibold text-foreground truncate">
+                                                {schedule.serviceDetails?.name || 'Service'}
+                                            </h4>
+                                            <p className="text-sm text-muted-foreground">
+                                                {serviceDate ? format(serviceDate, 'EEE, MMM d, yyyy') : 'Date TBD'}
+                                                {schedule.serviceDetails?.startTime && ` · ${schedule.serviceDetails.startTime}`}
+                                                {schedule.serviceDetails?.endTime && ` - ${schedule.serviceDetails.endTime}`}
+                                            </p>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-zinc-700 text-gray-600 dark:text-zinc-300">
+                                                    {schedule.role}
+                                                </span>
+                                                {schedule.ministryDetails && (
+                                                    <span
+                                                        className="text-xs px-2 py-0.5 rounded-full"
+                                                        style={{
+                                                            backgroundColor: `${schedule.ministryDetails.color}20`,
+                                                            color: schedule.ministryDetails.color
+                                                        }}
+                                                    >
+                                                        {schedule.ministryDetails.name}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="h-8 text-red-600 border-red-200 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-900/20"
+                                                onClick={() => handleScheduleResponse(schedule.id, 'declined')}
+                                                disabled={processingScheduleId === schedule.id}
+                                            >
+                                                <X className="w-4 h-4" />
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white"
+                                                onClick={() => handleScheduleResponse(schedule.id, 'accepted')}
+                                                disabled={processingScheduleId === schedule.id}
+                                            >
+                                                {processingScheduleId === schedule.id ? (
+                                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                                ) : (
+                                                    <Check className="w-4 h-4" />
+                                                )}
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+
+                        {/* Accepted Upcoming Shifts */}
+                        {upcomingSchedules.map(schedule => {
+                            const serviceDate = schedule.serviceDetails?.date?.toDate?.() || (schedule.serviceDetails?.date?.seconds ? new Date(schedule.serviceDetails.date.seconds * 1000) : null);
+                            return (
+                                <div key={schedule.id} className="p-4">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="flex-1 min-w-0">
+                                            <h4 className="font-semibold text-foreground truncate">
+                                                {schedule.serviceDetails?.name || 'Service'}
+                                            </h4>
+                                            <p className="text-sm text-muted-foreground">
+                                                {serviceDate ? format(serviceDate, 'EEE, MMM d, yyyy') : 'Date TBD'}
+                                                {schedule.serviceDetails?.startTime && ` · ${schedule.serviceDetails.startTime}`}
+                                                {schedule.serviceDetails?.endTime && ` - ${schedule.serviceDetails.endTime}`}
+                                            </p>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-zinc-700 text-gray-600 dark:text-zinc-300">
+                                                    {schedule.role}
+                                                </span>
+                                                {schedule.ministryDetails && (
+                                                    <span
+                                                        className="text-xs px-2 py-0.5 rounded-full"
+                                                        style={{
+                                                            backgroundColor: `${schedule.ministryDetails.color}20`,
+                                                            color: schedule.ministryDetails.color
+                                                        }}
+                                                    >
+                                                        {schedule.ministryDetails.name}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+                                            <CheckCircle className="w-4 h-4" />
+                                            <span className="text-xs font-medium">Accepted</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">

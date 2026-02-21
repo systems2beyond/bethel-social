@@ -986,6 +986,7 @@ export interface MinistryAssignment {
     linkedScrollId?: string; // Fellowship collaboration
     linkedGroupPostId?: string; // Posted to ministry group
     dmConversationId?: string; // DM thread for updates
+    milestoneId?: string; // Optional link to roadmap milestone
 
     // File Attachments
     attachments?: TaskAttachment[]; // Leader's attached files
@@ -1027,6 +1028,51 @@ export const DEFAULT_MINISTRY_STAGES: Omit<MinistryPipelineStage, 'id'>[] = [
     { name: 'Review', order: 3, color: '#8B5CF6', icon: 'Eye' },
     { name: 'Completed', order: 4, color: '#10B981', icon: 'CheckCircle' }
 ];
+
+// =========================================
+// Ministry Roadmap (Strategic Planning)
+// =========================================
+
+export type RoadmapStatus = 'active' | 'completed' | 'archived';
+export type MilestoneStatus = 'not_started' | 'in_progress' | 'completed';
+
+// Ministry Roadmap - high-level strategic plan for a ministry
+export interface MinistryRoadmap {
+    id: string;
+    ministryId: string;
+    churchId: string;
+    title: string; // "2026 Worship Ministry Vision"
+    description?: string;
+    startDate?: any; // Firestore Timestamp
+    targetEndDate?: any;
+    status: RoadmapStatus;
+    createdBy: string;
+    createdByName: string;
+    createdAt: any;
+    updatedAt: any;
+}
+
+// Milestone within a roadmap
+export interface RoadmapMilestone {
+    id: string;
+    roadmapId: string;
+    ministryId: string; // Denormalized for easier queries
+    title: string; // "Launch new choir"
+    description?: string;
+    targetDate?: any; // Firestore Timestamp
+    status: MilestoneStatus;
+    order: number; // For sorting milestones
+    createdAt: any;
+    updatedAt: any;
+}
+
+// Progress info for a milestone (computed, not stored)
+export interface MilestoneProgress {
+    milestoneId: string;
+    totalTasks: number;
+    completedTasks: number;
+    percent: number; // 0-100
+}
 
 // =========================================
 // Personal Tasks (for Fellowship My Tasks)
