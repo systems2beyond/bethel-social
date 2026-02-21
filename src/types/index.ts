@@ -895,6 +895,27 @@ export interface MinistryRole {
     requiredTraining?: string[]; // Training IDs
 }
 
+export interface MinistryMember {
+    id: string;
+    ministryId: string;
+    userId: string;
+    name: string;
+    email?: string;
+    photoURL?: string;
+    role: 'Leader' | 'Member' | 'Coordinator';
+    status: 'active' | 'inactive' | 'removed';
+
+    // Audit fields
+    joinedAt: any; // Timestamp
+    addedBy: string;
+    addedByName?: string;
+
+    // Removal audit (populated when status = 'removed')
+    removedAt?: any; // Timestamp
+    removedBy?: string;
+    removedByName?: string;
+}
+
 // =========================================
 // Ministry Assignment System (Asana-style)
 // =========================================

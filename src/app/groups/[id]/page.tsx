@@ -44,7 +44,24 @@ export default function GroupDetailsPage() {
 
                 // Only fetch membership if logged in
                 if (user) {
-                    const memberData = await GroupsService.getGroupMembership(id, user.uid);
+                    let memberData = await GroupsService.getGroupMembership(id, user.uid);
+
+                    // If user is not a member and group is private, sync all ministry members to the group
+                    // This handles existing ministry members who weren't auto-added
+                    if (!memberData && groupData.privacy === 'private') {
+                        // Sync ALL ministry members to the group (not just this user)
+                        const syncedCount = await GroupsService.syncMinistryMembersToGroup(id);
+                        if (syncedCount > 0) {
+                            // Refresh membership after sync
+                            memberData = await GroupsService.getGroupMembership(id, user.uid);
+                            // Refresh the group to get updated member count
+                            const refreshedGroup = await GroupsService.getGroup(id);
+                            if (refreshedGroup) {
+                                setGroup(refreshedGroup);
+                            }
+                        }
+                    }
+
                     setMembership(memberData);
                 }
             } catch (err) {

@@ -6,8 +6,9 @@ import { X, Search, UserPlus, Loader2, Users, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { UsersService, UserProfile } from '@/lib/users';
 import { useAuth } from '@/context/AuthContext';
-import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { GroupsService } from '@/lib/groups';
 
 interface AddMinistryMembersModalProps {
     isOpen: boolean;
@@ -86,8 +87,19 @@ export function AddMinistryMembersModal({
                 role: 'Member',
                 status: 'active',
                 joinedAt: serverTimestamp(),
-                addedBy: userData?.uid || null
+                addedBy: userData?.uid || null,
+                addedByName: userData?.displayName || 'Unknown'
             });
+
+            // Also add to the ministry's linked group (for Team Chat access)
+            if (ministry.linkedGroupId) {
+                try {
+                    await GroupsService.addMemberDirectly(ministry.linkedGroupId, user.uid, 'member');
+                } catch (groupError) {
+                    // Don't fail the whole operation if group add fails
+                    console.error('Failed to add to linked group:', groupError);
+                }
+            }
 
             // Mark as added
             setAddedUsers(prev => new Set(prev).add(user.uid));

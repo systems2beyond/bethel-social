@@ -585,6 +585,55 @@ export const GroupsService = {
     },
 
     /**
+     * Add Member Directly (for ministry integration)
+     * Adds a user to a group immediately with 'active' status
+     * Used when adding members to ministries with linked groups
+     */
+    addMemberDirectly: async (
+        groupId: string,
+        userId: string,
+        role: GroupRole = 'member'
+    ): Promise<void> => {
+        const groupRef = doc(db, GROUPS_COLLECTION, groupId);
+        const memberRef = doc(db, GROUPS_COLLECTION, groupId, 'members', userId);
+
+        await runTransaction(db, async (transaction) => {
+            const groupDoc = await transaction.get(groupRef);
+            if (!groupDoc.exists()) throw new Error("Group does not exist");
+
+            const memberDoc = await transaction.get(memberRef);
+            if (memberDoc.exists()) {
+                // Already a member, just update status to active if needed
+                const data = memberDoc.data();
+                if (data.status !== 'active') {
+                    transaction.update(memberRef, {
+                        status: 'active',
+                        role,
+                        joinedAt: serverTimestamp()
+                    });
+                    transaction.update(groupRef, {
+                        memberCount: increment(1)
+                    });
+                }
+                return; // Already active member, no action needed
+            }
+
+            // Add new member
+            transaction.set(memberRef, {
+                userId,
+                groupId,
+                role,
+                status: 'active',
+                joinedAt: serverTimestamp()
+            });
+
+            transaction.update(groupRef, {
+                memberCount: increment(1)
+            });
+        });
+    },
+
+    /**
      * Get Ministry Groups for a User
      * Returns groups that are linked to ministries the user belongs to (as member OR leader)
      */
@@ -643,6 +692,118 @@ export const GroupsService = {
         } catch (error) {
             console.error('Error fetching ministry groups:', error);
             return [];
+        }
+    },
+
+    /**
+     * Auto-join a group if the user is a member of the ministry linked to this group.
+     * This handles the case where ministry members were added before the auto-join feature.
+     * Returns true if the user was auto-joined, false otherwise.
+     */
+    autoJoinIfMinistryMember: async (groupId: string, userId: string): Promise<boolean> => {
+        try {
+            // First, find the ministry that has this group as its linkedGroupId
+            const ministryQuery = query(
+                collection(db, 'ministries'),
+                where('linkedGroupId', '==', groupId)
+            );
+            const ministrySnapshot = await getDocs(ministryQuery);
+
+            if (ministrySnapshot.empty) {
+                // No ministry linked to this group
+                return false;
+            }
+
+            const ministry = ministrySnapshot.docs[0];
+            const ministryId = ministry.id;
+            const ministryData = ministry.data();
+
+            // Check if user is the ministry leader
+            if (ministryData.leaderId === userId) {
+                // Auto-add the leader to the group
+                await GroupsService.addMemberDirectly(groupId, userId, 'admin');
+                return true;
+            }
+
+            // Check if user is a member of this ministry
+            const memberQuery = query(
+                collection(db, 'ministryMembers'),
+                where('ministryId', '==', ministryId),
+                where('userId', '==', userId),
+                where('status', '==', 'active')
+            );
+            const memberSnapshot = await getDocs(memberQuery);
+
+            if (!memberSnapshot.empty) {
+                // User is a ministry member, auto-add them to the group
+                await GroupsService.addMemberDirectly(groupId, userId, 'member');
+                return true;
+            }
+
+            return false;
+        } catch (error) {
+            console.error('Error in autoJoinIfMinistryMember:', error);
+            return false;
+        }
+    },
+
+    /**
+     * Sync ALL ministry members to the linked group.
+     * This ensures the group member list matches the ministry member list.
+     * Returns the number of members synced.
+     */
+    syncMinistryMembersToGroup: async (groupId: string): Promise<number> => {
+        try {
+            // Find the ministry linked to this group
+            const ministryQuery = query(
+                collection(db, 'ministries'),
+                where('linkedGroupId', '==', groupId)
+            );
+            const ministrySnapshot = await getDocs(ministryQuery);
+
+            if (ministrySnapshot.empty) {
+                return 0;
+            }
+
+            const ministry = ministrySnapshot.docs[0];
+            const ministryId = ministry.id;
+            const ministryData = ministry.data();
+            let syncedCount = 0;
+
+            // Add the ministry leader as admin (if exists)
+            if (ministryData.leaderId) {
+                try {
+                    await GroupsService.addMemberDirectly(groupId, ministryData.leaderId, 'admin');
+                    syncedCount++;
+                } catch {
+                    // Already a member, that's fine
+                }
+            }
+
+            // Get all active ministry members
+            const membersQuery = query(
+                collection(db, 'ministryMembers'),
+                where('ministryId', '==', ministryId),
+                where('status', '==', 'active')
+            );
+            const membersSnapshot = await getDocs(membersQuery);
+
+            // Add each ministry member to the group
+            for (const memberDoc of membersSnapshot.docs) {
+                const memberData = memberDoc.data();
+                try {
+                    const role = memberData.role === 'Leader' ? 'admin' : 'member';
+                    await GroupsService.addMemberDirectly(groupId, memberData.userId, role as any);
+                    syncedCount++;
+                } catch {
+                    // Already a member, that's fine
+                }
+            }
+
+            return syncedCount;
+        } catch (error) {
+            console.error('Error syncing ministry members to group:', error);
+            return 0;
         }
     }
 };

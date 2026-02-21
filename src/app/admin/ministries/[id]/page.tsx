@@ -15,6 +15,7 @@ import { MemberTable } from '@/components/Admin/MinistryCRM/MemberTable';
 import * as Icons from 'lucide-react';
 import Link from 'next/link';
 import { canAccessVolunteerManagement } from '@/lib/permissions';
+import { toast } from 'sonner';
 
 export default function MinistryDetailPage() {
     const params = useParams();
@@ -74,18 +75,15 @@ export default function MinistryDetailPage() {
         loadMembers();
     }, [ministry, userData?.churchId]);
 
-    // 3. Permission Check
+    // 3. Permission Check - ministry leaders can only access ministries they lead
     useEffect(() => {
         if (!loadingMembers && ministry && userData) {
-            // Need ministry object to check if user is leader if strictly scoped
-            // But canAccessVolunteerManagement takes (user, ministryId)
-            if (!canAccessVolunteerManagement(userData, ministryId)) {
-                // Redirect or show access denied
-                // router.push('/admin'); // Uncomment to enforce
-                console.warn("Access Denied: User is not authorized for this ministry view.");
+            if (!canAccessVolunteerManagement(userData, ministry)) {
+                toast.error('You do not have access to this ministry');
+                router.push('/admin/ministries');
             }
         }
-    }, [ministry, userData, loadingMembers, ministryId]);
+    }, [ministry, userData, loadingMembers, router]);
 
     if (!ministry) {
         return <div className="min-h-screen bg-gray-50 flex items-center justify-center">Loading...</div>;

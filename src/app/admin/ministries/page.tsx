@@ -1,15 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import * as Icons from 'lucide-react';
-import { Search, Plus, Users, Settings, Heart, Church, Shield, Loader2, ArrowLeft, CalendarDays, ClipboardList, UserCircle, MessageSquare, ExternalLink, UserPlus } from 'lucide-react';
+import { Search, Plus, Users, Settings, Heart, Church, Shield, Loader2, ArrowLeft, CalendarDays, ClipboardList, UserCircle, MessageSquare, ExternalLink, UserPlus, MoreHorizontal, UserMinus, Crown } from 'lucide-react';
 import { VolunteerNav } from '@/components/Admin/VolunteerNav';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useMinistry } from '@/context/MinistryContext';
 import { MinistryModal } from '@/components/Admin/MinistryModal';
-import { Ministry, MinistryAssignment } from '@/types';
+import { Ministry, MinistryAssignment, MinistryMember } from '@/types';
 import { MetricCard } from '@/components/Admin/PeopleHub/MetricCard';
 import { cn } from '@/lib/utils';
 import { LucideIcon } from 'lucide-react';
@@ -18,6 +18,10 @@ import { MinistrySelector, MinistryKanban, AssignmentModal, AddMinistryMembersMo
 import { useAuth } from '@/context/AuthContext';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { isAdminOrPastoralStaff } from '@/lib/permissions';
+import { VolunteerService } from '@/lib/volunteer-service';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { toast } from 'sonner';
 
 // Helper to get dynamic icons
 const getIcon = (iconName?: string): LucideIcon => {
@@ -48,12 +52,24 @@ export default function MinistriesPage() {
     const [ministryMembers, setMinistryMembers] = useState<any[]>([]);
     const [membersLoading, setMembersLoading] = useState(false);
 
-    // Auto-select first ministry
-    useEffect(() => {
-        if (!selectedMinistry && ministries.length > 0) {
-            setSelectedMinistry(ministries[0]);
+    // Filter ministries based on user role - non-admins only see ministries they lead
+    const accessibleMinistries = useMemo(() => {
+        if (isAdminOrPastoralStaff(userData?.role)) {
+            return ministries;
         }
-    }, [ministries, selectedMinistry]);
+        // Ministry leaders only see ministries where they are the leader
+        return ministries.filter(m => m.leaderId === userData?.uid);
+    }, [ministries, userData?.role, userData?.uid]);
+
+    // Check if current user is admin
+    const isAdmin = isAdminOrPastoralStaff(userData?.role);
+
+    // Auto-select first accessible ministry
+    useEffect(() => {
+        if (!selectedMinistry && accessibleMinistries.length > 0) {
+            setSelectedMinistry(accessibleMinistries[0]);
+        }
+    }, [accessibleMinistries, selectedMinistry]);
 
     // Fetch member counts for all ministries
     useEffect(() => {
@@ -148,6 +164,38 @@ export default function MinistriesPage() {
         setIsModalOpen(false);
     };
 
+    // Handler to remove a member from the ministry
+    const handleRemoveMember = async (member: MinistryMember) => {
+        // Prevent leaders from removing themselves
+        if (member.userId === selectedMinistry?.leaderId) {
+            toast.error('Ministry leaders cannot remove themselves. Transfer leadership first.');
+            return;
+        }
+
+        if (!confirm(`Remove ${member.name} from ${selectedMinistry?.name}?`)) return;
+
+        try {
+            await VolunteerService.removeMember(
+                member.id,
+                userData!.uid,
+                userData!.displayName || 'Unknown'
+            );
+            toast.success(`Removed ${member.name} from ministry`);
+            // Refresh members list
+            if (selectedMinistry?.id) {
+                fetchMembers(selectedMinistry.id);
+                // Update member count
+                setMemberCounts(prev => ({
+                    ...prev,
+                    [selectedMinistry.id]: Math.max(0, (prev[selectedMinistry.id] || 1) - 1)
+                }));
+            }
+        } catch (error) {
+            console.error('Error removing member:', error);
+            toast.error('Failed to remove member');
+        }
+    };
+
     // Assignment handlers
     const openCreateAssignment = () => {
         setSelectedAssignment(null);
@@ -186,9 +234,9 @@ export default function MinistriesPage() {
                                 </div>
 
                                 {/* Ministry Selector Dropdown */}
-                                {!loading && ministries.length > 0 && (
+                                {!loading && accessibleMinistries.length > 0 && (
                                     <MinistrySelector
-                                        ministries={ministries}
+                                        ministries={accessibleMinistries}
                                         selectedMinistry={selectedMinistry}
                                         onSelectMinistry={setSelectedMinistry}
                                         memberCounts={memberCounts}
@@ -199,10 +247,12 @@ export default function MinistriesPage() {
 
                         {/* Right: Actions */}
                         <div className="flex items-center gap-2">
-                            <Button variant="outline" size="sm" onClick={openCreateMinistry} className="h-8">
-                                <Plus className="w-3 h-3 mr-1" /> New Ministry
-                            </Button>
-                            {selectedMinistry && (
+                            {isAdmin && (
+                                <Button variant="outline" size="sm" onClick={openCreateMinistry} className="h-8">
+                                    <Plus className="w-3 h-3 mr-1" /> New Ministry
+                                </Button>
+                            )}
+                            {selectedMinistry && isAdmin && (
                                 <Button variant="ghost" size="sm" onClick={openEditMinistry}>
                                     <Settings className="h-4 w-4 mr-2" />
                                     Edit
@@ -397,19 +447,50 @@ export default function MinistriesPage() {
                                                 .map((member) => (
                                                     <div
                                                         key={member.id}
-                                                        className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-zinc-800/50 rounded-xl border border-gray-100 dark:border-zinc-700/50"
+                                                        className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-zinc-800/50 rounded-xl border border-gray-100 dark:border-zinc-700/50 group"
                                                     >
                                                         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-400 to-rose-500 flex items-center justify-center text-white font-bold text-sm">
                                                             {member.name?.charAt(0) || '?'}
                                                         </div>
                                                         <div className="flex-1 min-w-0">
-                                                            <p className="font-semibold text-foreground truncate">
-                                                                {member.name || 'Unknown'}
-                                                            </p>
+                                                            <div className="flex items-center gap-2">
+                                                                <p className="font-semibold text-foreground truncate">
+                                                                    {member.name || 'Unknown'}
+                                                                </p>
+                                                                {member.userId === selectedMinistry?.leaderId && (
+                                                                    <span title="Ministry Leader">
+                                                                        <Crown className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                             <p className="text-xs text-muted-foreground truncate">
                                                                 {member.role || 'Member'}
                                                             </p>
                                                         </div>
+                                                        {/* Remove member dropdown - visible on hover or always on mobile */}
+                                                        <DropdownMenu>
+                                                            <DropdownMenuTrigger asChild>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className="h-8 w-8 opacity-0 group-hover:opacity-100 md:opacity-100 transition-opacity bg-gray-100 dark:bg-zinc-700"
+                                                                >
+                                                                    <MoreHorizontal className="w-4 h-4" />
+                                                                </Button>
+                                                            </DropdownMenuTrigger>
+                                                            <DropdownMenuContent align="end">
+                                                                <DropdownMenuItem
+                                                                    onClick={() => handleRemoveMember(member as MinistryMember)}
+                                                                    className="text-red-600 dark:text-red-400"
+                                                                    disabled={member.userId === selectedMinistry?.leaderId}
+                                                                >
+                                                                    <UserMinus className="w-4 h-4 mr-2" />
+                                                                    {member.userId === selectedMinistry?.leaderId
+                                                                        ? 'Cannot remove leader'
+                                                                        : 'Remove from Ministry'}
+                                                                </DropdownMenuItem>
+                                                            </DropdownMenuContent>
+                                                        </DropdownMenu>
                                                     </div>
                                                 ))}
                                         </div>

@@ -23,7 +23,9 @@ import {
     X,
     Users,
     Trash2,
-    ShieldCheck
+    ShieldCheck,
+    Crown,
+    UserPlus
 } from "lucide-react";
 import {
     DropdownMenu,
@@ -32,6 +34,9 @@ import {
     DropdownMenuLabel,
     DropdownMenuSeparator,
     DropdownMenuTrigger,
+    DropdownMenuSub,
+    DropdownMenuSubContent,
+    DropdownMenuSubTrigger,
 } from "@/components/ui/dropdown-menu";
 import { FirestoreUser, Ministry, District } from "@/types";
 import { formatDistanceToNow } from "date-fns";
@@ -47,8 +52,10 @@ import { FamilyService } from '@/lib/services/FamilyService';
 import { DistrictService } from '@/lib/services/DistrictService';
 import { useMinistry } from '@/context/MinistryContext';
 import { toast } from "sonner";
-import { doc, updateDoc, arrayUnion, arrayRemove, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, arrayUnion, arrayRemove, serverTimestamp, addDoc, collection, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { VolunteerService } from '@/lib/volunteer-service';
+import { GroupsService } from '@/lib/groups';
 
 interface MemberTableProps {
     members: FirestoreUser[];
@@ -126,14 +133,20 @@ export const MemberTable: React.FC<MemberTableProps> = ({
         }
     };
 
-    const handleAddMinistry = async (memberId: string, ministry: Ministry) => {
+    const handleAddMinistry = async (memberId: string, ministry: Ministry, asLeader: boolean = false) => {
         try {
+            const member = members.find(m => m.uid === memberId);
+            if (!member) return;
+
             const userRef = doc(db, 'users', memberId);
+            const role = asLeader ? 'leader' : 'member';
+
+            // Use new Date() instead of serverTimestamp() for arrayUnion
             const newServingIn = {
                 ministryId: ministry.id,
                 ministryName: ministry.name,
-                role: 'member' as const,
-                startDate: serverTimestamp(),
+                role: role as 'member' | 'leader' | 'coordinator',
+                startDate: new Date(),
                 status: 'active' as const
             };
 
@@ -141,7 +154,45 @@ export const MemberTable: React.FC<MemberTableProps> = ({
                 servingIn: arrayUnion(newServingIn)
             });
 
-            toast.success(`Added to ${ministry.name}`);
+            // Also add to ministryMembers collection for consistency
+            await addDoc(collection(db, 'ministryMembers'), {
+                ministryId: ministry.id,
+                userId: memberId,
+                name: member.displayName,
+                email: member.email,
+                photoURL: member.photoURL || null,
+                role: asLeader ? 'Leader' : 'Member',
+                status: 'active',
+                joinedAt: serverTimestamp(),
+                addedBy: null,
+                addedByName: 'Admin (Directory)'
+            });
+
+            // Also add to the ministry's linked group (for Team Chat access)
+            if (ministry.linkedGroupId) {
+                try {
+                    await GroupsService.addMemberDirectly(
+                        ministry.linkedGroupId,
+                        memberId,
+                        asLeader ? 'admin' : 'member'
+                    );
+                } catch (groupError) {
+                    // Don't fail the whole operation if group add fails
+                    console.error('Failed to add to linked group:', groupError);
+                }
+            }
+
+            // If assigning as leader, also update the ministry document
+            if (asLeader) {
+                await VolunteerService.updateMinistry(ministry.id, {
+                    leaderId: memberId,
+                    leaderName: member.displayName
+                });
+                toast.success(`${member.displayName} is now the leader of ${ministry.name}`);
+            } else {
+                toast.success(`Added to ${ministry.name}`);
+            }
+
             if (onRoleUpdate) onRoleUpdate();
         } catch (error) {
             console.error('Failed to add ministry:', error);
@@ -319,20 +370,34 @@ export const MemberTable: React.FC<MemberTableProps> = ({
                                                 <Plus className="h-3 w-3" />
                                             </Button>
                                         </DropdownMenuTrigger>
-                                        <DropdownMenuContent className="rounded-xl shadow-lg border border-gray-200/50 dark:border-zinc-700/50">
+                                        <DropdownMenuContent className="rounded-xl shadow-lg border border-gray-200/50 dark:border-zinc-700/50 min-w-[200px]">
                                             <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground">Add to Ministry</DropdownMenuLabel>
                                             <DropdownMenuSeparator />
                                             {ministries && ministries.length > 0 ? (
                                                 ministries
                                                     .filter(m => !member.servingIn?.some(s => s.ministryId === m.id))
                                                     .map(ministry => (
-                                                        <DropdownMenuItem
-                                                            key={ministry.id}
-                                                            onClick={() => handleAddMinistry(member.uid, ministry)}
-                                                            className="cursor-pointer"
-                                                        >
-                                                            {ministry.name}
-                                                        </DropdownMenuItem>
+                                                        <DropdownMenuSub key={ministry.id}>
+                                                            <DropdownMenuSubTrigger className="cursor-pointer">
+                                                                {ministry.name}
+                                                            </DropdownMenuSubTrigger>
+                                                            <DropdownMenuSubContent className="rounded-xl shadow-lg border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 min-w-[160px]">
+                                                                <DropdownMenuItem
+                                                                    onClick={() => handleAddMinistry(member.uid, ministry, false)}
+                                                                    className="cursor-pointer"
+                                                                >
+                                                                    <UserPlus className="w-4 h-4 mr-2" />
+                                                                    Add as Member
+                                                                </DropdownMenuItem>
+                                                                <DropdownMenuItem
+                                                                    onClick={() => handleAddMinistry(member.uid, ministry, true)}
+                                                                    className="cursor-pointer text-amber-600 dark:text-amber-400"
+                                                                >
+                                                                    <Crown className="w-4 h-4 mr-2" />
+                                                                    Assign as Leader
+                                                                </DropdownMenuItem>
+                                                            </DropdownMenuSubContent>
+                                                        </DropdownMenuSub>
                                                     ))
                                             ) : (
                                                 <DropdownMenuItem disabled>

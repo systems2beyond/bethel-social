@@ -1,5 +1,5 @@
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject, listAll } from 'firebase/storage';
-import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { app, db } from '@/lib/firebase';
 import { TaskAttachment, TaskAttachmentSource } from '@/types';
 
@@ -91,7 +91,7 @@ export class TaskAttachmentService {
                 size: file.size,
                 source: 'firebase' as TaskAttachmentSource,
                 uploadedBy: userId,
-                uploadedAt: serverTimestamp()
+                uploadedAt: new Date()
             };
 
             console.log('[TaskAttachmentService] Uploaded file:', file.name, 'to', storagePath);
@@ -133,7 +133,7 @@ export class TaskAttachmentService {
             size: 0, // Would be fetched from API
             source: 'google_drive_link' as TaskAttachmentSource,
             uploadedBy: userId,
-            uploadedAt: serverTimestamp(),
+            uploadedAt: new Date(),
             driveFileId: fileId,
             isPublicLink: true
         };

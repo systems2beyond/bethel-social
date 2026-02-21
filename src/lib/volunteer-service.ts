@@ -6,6 +6,7 @@ import {
     updateDoc,
     addDoc,
     deleteDoc,
+    setDoc,
     query,
     where,
     orderBy,
@@ -112,10 +113,11 @@ export class VolunteerService {
                     addedBy: ministry.leaderId
                 });
 
-                // Also add leader to the linked group
-                await addDoc(collection(db, 'groupMembers'), {
+                // Also add leader to the linked group (using subcollection pattern)
+                const groupMemberRef = doc(db, 'groups', groupRef.id, 'members', ministry.leaderId);
+                await setDoc(groupMemberRef, {
+                    userId: ministry.leaderId,
                     groupId: groupRef.id,
-                    memberId: ministry.leaderId,
                     role: 'admin',
                     status: 'active',
                     joinedAt: serverTimestamp()
@@ -162,6 +164,50 @@ export class VolunteerService {
             });
         } catch (error) {
             console.error('Error adding ministry role:', error);
+            throw error;
+        }
+    }
+
+    // =========================================
+    // Ministry Member Management
+    // =========================================
+
+    /**
+     * Remove a member from a ministry (soft delete with audit trail)
+     */
+    static async removeMember(
+        memberId: string,
+        removedByUserId: string,
+        removedByName: string
+    ): Promise<void> {
+        try {
+            const memberRef = doc(db, 'ministryMembers', memberId);
+            await updateDoc(memberRef, {
+                status: 'removed',
+                removedBy: removedByUserId,
+                removedByName: removedByName,
+                removedAt: serverTimestamp()
+            });
+        } catch (error) {
+            console.error('Error removing ministry member:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Reactivate a removed member
+     */
+    static async reactivateMember(memberId: string): Promise<void> {
+        try {
+            const memberRef = doc(db, 'ministryMembers', memberId);
+            await updateDoc(memberRef, {
+                status: 'active',
+                removedBy: null,
+                removedByName: null,
+                removedAt: null
+            });
+        } catch (error) {
+            console.error('Error reactivating ministry member:', error);
             throw error;
         }
     }

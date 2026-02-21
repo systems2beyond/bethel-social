@@ -1,14 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
 import { Ministry, MinistryRole } from '@/types';
-import { Loader2, Plus, Trash2, X } from 'lucide-react';
-import * as Icons from 'lucide-react';
+import { Loader2, Plus, Trash2, X, Users } from 'lucide-react';
 
 interface MinistryModalProps {
     isOpen: boolean;
@@ -84,108 +78,155 @@ export function MinistryModal({ isOpen, onClose, ministry, onSave }: MinistryMod
         setFormData(prev => ({ ...prev, roles: newRoles }));
     };
 
-    return (
-        <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                    <DialogTitle>{ministry ? 'Edit Ministry' : 'Create New Ministry'}</DialogTitle>
-                </DialogHeader>
+    if (!isOpen) return null;
 
-                <form onSubmit={handleSubmit} className="space-y-6">
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <div className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-xl shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
+
+                {/* Header */}
+                <div className="px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between bg-zinc-50/50 dark:bg-zinc-900/50 shrink-0">
+                    <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                        <Users className="w-5 h-5 text-indigo-500" />
+                        {ministry ? 'Edit Ministry' : 'Create New Ministry'}
+                    </h2>
+                    <button
+                        onClick={onClose}
+                        className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-full transition-colors"
+                    >
+                        <X className="w-5 h-5 text-zinc-500" />
+                    </button>
+                </div>
+
+                {/* Form */}
+                <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto flex-1">
+
+                    {/* Name and Color */}
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label>Ministry Name</Label>
-                            <Input
+                        <div>
+                            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                                Ministry Name
+                            </label>
+                            <input
+                                type="text"
                                 required
                                 value={formData.name}
                                 onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
                                 placeholder="e.g. Worship Team"
+                                className="w-full px-4 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
                             />
                         </div>
-                        <div className="space-y-2">
-                            <Label>Color</Label>
-                            <div className="flex items-center space-x-2">
-                                <Input
+                        <div>
+                            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                                Color
+                            </label>
+                            <div className="flex items-center gap-2">
+                                <input
                                     type="color"
                                     value={formData.color}
                                     onChange={e => setFormData(prev => ({ ...prev, color: e.target.value }))}
-                                    className="w-12 h-10 p-1"
+                                    className="w-12 h-10 p-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 cursor-pointer"
                                 />
-                                <Input
+                                <input
+                                    type="text"
                                     value={formData.color}
                                     onChange={e => setFormData(prev => ({ ...prev, color: e.target.value }))}
-                                    placeholder="#000000"
+                                    placeholder="#3b82f6"
+                                    className="flex-1 px-4 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
                                 />
                             </div>
                         </div>
                     </div>
 
-                    <div className="space-y-2">
-                        <Label>Description</Label>
-                        <Textarea
+                    {/* Description */}
+                    <div>
+                        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                            Description
+                        </label>
+                        <textarea
                             value={formData.description}
                             onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))}
                             placeholder="Describe this ministry..."
+                            rows={3}
+                            className="w-full px-4 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all resize-none"
                         />
                     </div>
 
-                    <div className="space-y-4">
+                    {/* Roles */}
+                    <div className="space-y-3">
                         <div className="flex items-center justify-between">
-                            <Label className="text-base">Roles & Positions</Label>
-                            <Button type="button" variant="outline" size="sm" onClick={addRole}>
-                                <Plus className="w-4 h-4 mr-2" /> Add Role
-                            </Button>
+                            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                                Roles & Positions
+                            </label>
+                            <button
+                                type="button"
+                                onClick={addRole}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                            >
+                                <Plus className="w-4 h-4" /> Add Role
+                            </button>
                         </div>
 
-                        <div className="space-y-3">
+                        <div className="space-y-2">
                             {formData.roles?.map((role, index) => (
-                                <div key={role.id} className="flex items-start space-x-3 bg-gray-50 p-3 rounded-lg border">
+                                <div key={role.id} className="flex items-start gap-3 p-3 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700">
                                     <div className="flex-1 space-y-2">
-                                        <Input
+                                        <input
+                                            type="text"
                                             placeholder="Role Name (e.g. Vocalist)"
                                             value={role.name}
                                             onChange={e => updateRole(index, { name: e.target.value })}
                                             required
+                                            className="w-full px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all text-sm"
                                         />
-                                        <div className="flex items-center space-x-2">
+                                        <div className="flex items-center gap-2">
                                             <input
                                                 type="checkbox"
                                                 id={`check-${role.id}`}
                                                 checked={role.requiresBackgroundCheck}
                                                 onChange={e => updateRole(index, { requiresBackgroundCheck: e.target.checked })}
-                                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                className="rounded border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-indigo-600 focus:ring-indigo-500"
                                             />
-                                            <label htmlFor={`check-${role.id}`} className="text-sm text-gray-600">
+                                            <label htmlFor={`check-${role.id}`} className="text-xs text-zinc-500 dark:text-zinc-400">
                                                 Requires Background Check
                                             </label>
                                         </div>
                                     </div>
-                                    <Button
+                                    <button
                                         type="button"
-                                        variant="ghost"
-                                        size="sm"
                                         onClick={() => removeRole(index)}
-                                        className="text-red-500 hover:text-red-700"
+                                        className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                                     >
                                         <Trash2 className="w-4 h-4" />
-                                    </Button>
+                                    </button>
                                 </div>
                             ))}
                             {(!formData.roles || formData.roles.length === 0) && (
-                                <p className="text-sm text-gray-500 italic">No roles defined yet.</p>
+                                <p className="text-sm text-zinc-500 dark:text-zinc-400 italic py-2">No roles defined yet.</p>
                             )}
                         </div>
                     </div>
-
-                    <div className="flex justify-end space-x-2 pt-4">
-                        <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-                        <Button type="submit" disabled={loading}>
-                            {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                            Save Ministry
-                        </Button>
-                    </div>
                 </form>
-            </DialogContent>
-        </Dialog>
+
+                {/* Footer Actions */}
+                <div className="px-6 py-4 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 flex justify-end gap-3 shrink-0">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="px-4 py-2 rounded-lg text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors font-medium"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        onClick={handleSubmit}
+                        disabled={loading}
+                        className="px-6 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-500/20 active:translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-medium"
+                    >
+                        {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                        {loading ? 'Saving...' : 'Save Ministry'}
+                    </button>
+                </div>
+            </div>
+        </div>
     );
 }

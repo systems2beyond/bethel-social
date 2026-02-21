@@ -1,24 +1,32 @@
 
-import { FirestoreUser } from "@/types";
+import { FirestoreUser, Ministry } from "@/types";
 
-export const canAccessPeopleHub = (role?: string): boolean => {
+/**
+ * Check if a role has admin or pastoral staff privileges
+ */
+export const isAdminOrPastoralStaff = (role?: string): boolean => {
     if (!role) return false;
     return ['super_admin', 'admin', 'pastoral_staff'].includes(role);
 };
 
-export const canAccessVolunteerManagement = (user: FirestoreUser, ministryId?: string): boolean => {
+export const canAccessPeopleHub = (role?: string): boolean => {
+    return isAdminOrPastoralStaff(role);
+};
+
+/**
+ * Check if a user can access volunteer/ministry management for a specific ministry
+ * - Admins/pastoral staff have global access
+ * - Ministry leaders only have access to ministries they lead (leaderId === user.uid)
+ */
+export const canAccessVolunteerManagement = (user: FirestoreUser, ministry?: Ministry | null): boolean => {
     if (!user.role) return false;
 
     // High-level roles have global access
-    if (['super_admin', 'admin', 'pastoral_staff'].includes(user.role)) return true;
+    if (isAdminOrPastoralStaff(user.role)) return true;
 
-    // Ministry leaders have scoped access
-    if (user.role === 'ministry_leader' && ministryId) {
-        // Check if user leads this specific ministry
-        // This assumes user.servingIn is populated or we check against the ministry document leaderId
-        // For now, we return true if they are a ministry leader and a ministryID is present, 
-        // real validation should happen data-side or with a more complex check if we have the ministry object
-        return true;
+    // Ministry leaders have scoped access - only to ministries they lead
+    if (user.role === 'ministry_leader' && ministry) {
+        return ministry.leaderId === user.uid;
     }
 
     return false;
