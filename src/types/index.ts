@@ -286,6 +286,36 @@ export interface Attachment {
 }
 
 // =========================================
+// Phase 9: Ministry Scheduling Types
+// =========================================
+
+export interface MinistryService {
+    id: string;
+    ministryId: string;
+    name: string; // e.g. "Sunday Morning Service Feb 25"
+    date: any; // Firestore Timestamp
+    startTime: string; // e.g. "09:00 AM" (or we can just use the date timestamp if it includes time)
+    endTime: string; // e.g. "11:00 AM"
+    description?: string;
+    createdBy: string;
+    createdAt: any; // Firestore Timestamp
+    updatedAt: any; // Firestore Timestamp
+}
+
+export interface VolunteerSchedule {
+    id: string;
+    serviceId: string;
+    ministryId: string; // denormalized for easier querying
+    userId: string;
+    role: string; // e.g. "Usher", "Greeter", "Sound Tech"
+    status: 'pending' | 'accepted' | 'declined';
+    statusUpdatedAt?: any; // null until they accept/decline
+    notes?: string;
+    createdBy: string;
+    createdAt: any; // Firestore Timestamp
+}
+
+// =========================================
 // Task Attachment Types (for Ministry Tasks & Personal Tasks)
 // =========================================
 

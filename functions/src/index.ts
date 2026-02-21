@@ -155,4 +155,5 @@ export { saveEvent } from './admin/events';
 export * from './communications';
 export { onEventWritten as eventGroupAutomation, onRegistrationCreated as eventGroupJoin } from './triggers/events';
 export { onPostCreated as notifyOnPost, onSermonCreated as notifyOnSermon, onMessageCreated as notifyOnMessage } from './triggers/notifications';
+export { onVolunteerScheduled } from './triggers/scheduling';
 

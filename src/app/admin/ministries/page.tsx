@@ -14,7 +14,7 @@ import { MetricCard } from '@/components/Admin/PeopleHub/MetricCard';
 import { cn } from '@/lib/utils';
 import { LucideIcon } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { MinistrySelector, MinistryKanban, AssignmentModal, AddMinistryMembersModal } from '@/components/Admin/MinistryManagement';
+import { MinistrySelector, MinistryKanban, AssignmentModal, AddMinistryMembersModal, MinistryCalendar, MyScheduleView } from '@/components/Admin/MinistryManagement';
 import { useAuth } from '@/context/AuthContext';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -509,14 +509,16 @@ export default function MinistriesPage() {
                             </TabsContent>
 
                             {/* Schedule Tab */}
-                            <TabsContent value="schedule" className="m-0">
-                                <div className="p-6">
-                                    <div className="text-center py-12 border-2 border-dashed border-gray-200 dark:border-zinc-700 rounded-xl">
-                                        <CalendarDays className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-                                        <h3 className="font-semibold text-foreground mb-1">Schedule Coming Soon</h3>
-                                        <p className="text-sm text-muted-foreground">
-                                            Service scheduling and rotation management will be available here.
-                                        </p>
+                            <TabsContent value="schedule" className="m-0 bg-gray-50/30 dark:bg-zinc-950/30">
+                                <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 p-6">
+                                    <div className="xl:col-span-3">
+                                        <MinistryCalendar ministry={selectedMinistry} />
+                                    </div>
+                                    <div className="xl:col-span-1 border-t xl:border-t-0 xl:border-l border-gray-100 dark:border-zinc-800 pt-6 xl:pt-0 xl:pl-6">
+                                        <div className="sticky top-24">
+                                            <h3 className="font-semibold text-foreground mb-4">My Schedule</h3>
+                                            <MyScheduleView />
+                                        </div>
                                     </div>
                                 </div>
                             </TabsContent>

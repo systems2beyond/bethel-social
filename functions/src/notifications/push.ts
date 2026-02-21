@@ -106,6 +106,8 @@ function getNotificationUrl(notification: Record<string, any>): string {
             return '/fellowship?tab=studies';
         case 'event_reminder':
             return notification.eventId ? `/events/${notification.eventId}` : '/events';
+        case 'volunteer_schedule':
+            return '/admin/ministries';
         default:
             return '/notifications';
     }

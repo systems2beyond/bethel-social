@@ -3,3 +3,7 @@ export { MinistryKanban } from './MinistryKanban';
 export { MinistrySelector } from './MinistrySelector';
 export { AssignmentModal } from './AssignmentModal';
 export { AddMinistryMembersModal } from './AddMinistryMembersModal';
+export { MinistryCalendar } from './MinistryCalendar';
+export { CreateServiceModal } from './CreateServiceModal';
+export { ScheduleVolunteerModal } from './ScheduleVolunteerModal';
+export { MyScheduleView } from './MyScheduleView';
