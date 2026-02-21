@@ -252,6 +252,10 @@ export function CreateServiceModal({
             toast.error('Please select a date');
             return;
         }
+        if (!user?.uid) {
+            toast.error('You must be logged in to create a service');
+            return;
+        }
 
         setIsSubmitting(true);
         try {
@@ -279,7 +283,7 @@ export function CreateServiceModal({
                     startTime,
                     endTime,
                     description: description.trim(),
-                    createdBy: userData!.uid
+                    createdBy: user.uid
                 });
 
                 // Fetch the created service and switch to edit mode
