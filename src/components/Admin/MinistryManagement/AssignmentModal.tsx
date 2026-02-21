@@ -2,11 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { MinistryAssignment, MinistryPipelineStage, FirestoreUser, Ministry, TaskAttachment } from '@/types';
+import { MinistryAssignment, MinistryPipelineStage, FirestoreUser, Ministry, TaskAttachment, RoadmapMilestone } from '@/types';
 import { MinistryAssignmentService } from '@/lib/services/MinistryAssignmentService';
 import { TaskAttachmentService } from '@/lib/services/TaskAttachmentService';
 import { TaskFileAttachmentSection, StagedAttachment } from '@/components/Tasks';
 import { MinistryPipelineBoardService } from '@/lib/services/MinistryPipelineBoardService';
+import { RoadmapService } from '@/lib/services/RoadmapService';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -20,7 +21,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Loader2, ClipboardList, Calendar, User, Flag, Send, MessageSquare, Users, Paperclip } from 'lucide-react';
+import { Loader2, ClipboardList, Calendar, User, Flag, Send, MessageSquare, Users, Paperclip, Target } from 'lucide-react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { cn } from '@/lib/utils';
@@ -50,6 +51,7 @@ export function AssignmentModal({
     const [assigneeId, setAssigneeId] = useState<string>('');
     const [dueDate, setDueDate] = useState('');
     const [stageId, setStageId] = useState('');
+    const [milestoneId, setMilestoneId] = useState('');
 
     // Options
     const [postToGroup, setPostToGroup] = useState(false);
@@ -62,6 +64,7 @@ export function AssignmentModal({
     // Data
     const [members, setMembers] = useState<FirestoreUser[]>([]);
     const [stages, setStages] = useState<MinistryPipelineStage[]>([]);
+    const [milestones, setMilestones] = useState<RoadmapMilestone[]>([]);
     const [loading, setLoading] = useState(false);
     const [loadingData, setLoadingData] = useState(true);
 
@@ -80,6 +83,7 @@ export function AssignmentModal({
             setPriority(assignment.priority);
             setAssigneeId(assignment.assignedToId || '');
             setStageId(assignment.stageId || '');
+            setMilestoneId(assignment.milestoneId || '');
             setAttachments(assignment.attachments || []);
             if (assignment.dueDate) {
                 const date = assignment.dueDate?.toDate ? assignment.dueDate.toDate() :
@@ -123,6 +127,15 @@ export function AssignmentModal({
                     setStageId(board.stages[0].id);
                 }
             }
+
+            // Load milestones from active roadmap
+            const activeRoadmap = await RoadmapService.getActiveRoadmap(ministry.id);
+            if (activeRoadmap) {
+                const roadmapMilestones = await RoadmapService.getRoadmapMilestones(activeRoadmap.id);
+                setMilestones(roadmapMilestones);
+            } else {
+                setMilestones([]);
+            }
         } catch (error) {
             console.error('Error loading data:', error);
         } finally {
@@ -136,6 +149,7 @@ export function AssignmentModal({
         setPriority('normal');
         setAssigneeId('');
         setDueDate('');
+        setMilestoneId('');
         setPostToGroup(false);
         setSendDM(true);
         setAttachments([]);
@@ -200,6 +214,7 @@ export function AssignmentModal({
                 status: assigneeId ? 'assigned' : 'backlog',
                 stageId: stageId || stages[0]?.id || '',
                 ...(dueDate && { dueDate: new Date(dueDate) }),
+                ...(milestoneId && { milestoneId }),
                 attachments: uploadedAttachments,
                 isArchived: false
             };
@@ -447,6 +462,48 @@ export function AssignmentModal({
                                 </Select>
                             </div>
                         </div>
+
+                        {/* Milestone (only show if roadmap has milestones) */}
+                        {milestones.length > 0 && (
+                            <div className="space-y-2">
+                                <Label className="text-xs uppercase tracking-wider font-bold text-muted-foreground flex items-center gap-2">
+                                    <Target className="w-3 h-3" />
+                                    Link to Milestone
+                                    <span className="text-xs font-normal text-muted-foreground/60">(optional)</span>
+                                </Label>
+                                <Select
+                                    value={milestoneId || '__none__'}
+                                    onValueChange={(v) => setMilestoneId(v === '__none__' ? '' : v)}
+                                >
+                                    <SelectTrigger className="rounded-xl">
+                                        <SelectValue placeholder="No milestone">
+                                            {milestoneId && milestones.find(m => m.id === milestoneId)?.title}
+                                        </SelectValue>
+                                    </SelectTrigger>
+                                    <SelectContent className="rounded-xl">
+                                        <SelectItem value="__none__">
+                                            <span className="text-muted-foreground">No milestone</span>
+                                        </SelectItem>
+                                        {milestones.map(milestone => (
+                                            <SelectItem key={milestone.id} value={milestone.id}>
+                                                <div className="flex items-center gap-2">
+                                                    <div className={cn(
+                                                        "w-2 h-2 rounded-full",
+                                                        milestone.status === 'completed' ? 'bg-green-500' :
+                                                        milestone.status === 'in_progress' ? 'bg-amber-500' :
+                                                        'bg-gray-400'
+                                                    )} />
+                                                    {milestone.title}
+                                                </div>
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <p className="text-xs text-muted-foreground">
+                                    Link this task to a roadmap milestone to track progress
+                                </p>
+                            </div>
+                        )}
 
                         {/* Integration Options */}
                         {assigneeId && !isEditing && (
