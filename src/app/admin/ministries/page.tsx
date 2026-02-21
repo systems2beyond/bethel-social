@@ -14,7 +14,7 @@ import { MetricCard } from '@/components/Admin/PeopleHub/MetricCard';
 import { cn } from '@/lib/utils';
 import { LucideIcon } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { MinistrySelector, MinistryKanban, AssignmentModal, AddMinistryMembersModal, MinistryCalendar, MinistryRoadmapView, CreateRoadmapModal, CreateMilestoneModal } from '@/components/Admin/MinistryManagement';
+import { MinistrySelector, MinistryKanban, AssignmentModal, AddMinistryMembersModal, MinistryCalendar, MinistryRoadmapView, CreateRoadmapModal, CreateMilestoneModal, CreateServiceModal } from '@/components/Admin/MinistryManagement';
 import { MinistryRoadmap, RoadmapMilestone } from '@/types';
 import { RoadmapService } from '@/lib/services/RoadmapService';
 import { useAuth } from '@/context/AuthContext';
@@ -53,6 +53,11 @@ export default function MinistriesPage() {
     const [isMilestoneModalOpen, setIsMilestoneModalOpen] = useState(false);
     const [milestoneToEdit, setMilestoneToEdit] = useState<RoadmapMilestone | null>(null);
     const [activeRoadmap, setActiveRoadmap] = useState<MinistryRoadmap | null>(null);
+
+    // Service modal state
+    const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
+    const [serviceInitialDate, setServiceInitialDate] = useState<Date | undefined>(undefined);
+    const [serviceToEdit, setServiceToEdit] = useState<any>(null);
 
     // Member counts for selector
     const [memberCounts, setMemberCounts] = useState<Record<string, number>>({});
@@ -258,6 +263,25 @@ export default function MinistriesPage() {
     const handleMilestoneModalClose = () => {
         setIsMilestoneModalOpen(false);
         setMilestoneToEdit(null);
+    };
+
+    // Service handlers
+    const openCreateService = (date?: Date) => {
+        setServiceToEdit(null);
+        setServiceInitialDate(date);
+        setIsServiceModalOpen(true);
+    };
+
+    const openEditService = (service: any) => {
+        setServiceToEdit(service);
+        setServiceInitialDate(undefined);
+        setIsServiceModalOpen(true);
+    };
+
+    const handleServiceModalClose = () => {
+        setIsServiceModalOpen(false);
+        setServiceToEdit(null);
+        setServiceInitialDate(undefined);
     };
 
     // Metrics calculations
@@ -565,7 +589,12 @@ export default function MinistriesPage() {
                             <TabsContent value="schedule" className="m-0 bg-gray-50/30 dark:bg-zinc-950/30">
                                 <div className="space-y-6 p-6">
                                     {/* Calendar */}
-                                    <MinistryCalendar ministry={selectedMinistry} />
+                                    <MinistryCalendar
+                                        ministry={selectedMinistry}
+                                        onCreateService={openCreateService}
+                                        onEditService={openEditService}
+                                        onEditAssignment={openEditAssignment}
+                                    />
 
                                     {/* Ministry Roadmap - Full Width Below */}
                                     <MinistryRoadmapView
@@ -638,6 +667,17 @@ export default function MinistriesPage() {
                     onClose={handleMilestoneModalClose}
                     roadmap={activeRoadmap}
                     milestoneToEdit={milestoneToEdit || undefined}
+                />
+            )}
+
+            {/* Service Create/Edit Modal */}
+            {selectedMinistry && (
+                <CreateServiceModal
+                    isOpen={isServiceModalOpen}
+                    onClose={handleServiceModalClose}
+                    ministry={selectedMinistry}
+                    initialDate={serviceInitialDate}
+                    serviceToEdit={serviceToEdit || undefined}
                 />
             )}
         </div>

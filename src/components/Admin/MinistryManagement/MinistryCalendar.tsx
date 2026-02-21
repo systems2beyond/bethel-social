@@ -221,8 +221,8 @@ export function MinistryCalendar({
                                 )}>
                                     {format(day, 'd')}
                                 </span>
-                                {/* Add button appears on hover */}
-                                <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                                {/* Add button - always visible for touch, brighter on hover */}
+                                <div className="opacity-30 group-hover:opacity-100 transition-opacity">
                                     <Plus className="w-4 h-4 text-emerald-500" />
                                 </div>
                             </div>
