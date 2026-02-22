@@ -282,6 +282,13 @@ export function LocalActivitySidebar({ className }: { className?: string }) {
         }
 
         if (type === 'message') {
+            // Check if this is a task-related DM (created when task was assigned)
+            if (item.lastMessage?.includes('Task:') || item.lastMessage?.includes('**Task Assigned**')) {
+                console.log('Task-related DM detected, navigating to My Tasks');
+                router.push('/fellowship?tab=tasks');
+                setIsExpanded(false);
+                return;
+            }
             router.push(`/fellowship?tab=community&conversationId=${item.id}&messageId=${item.lastMessageId || ''}`);
             setIsExpanded(false);
             return;
