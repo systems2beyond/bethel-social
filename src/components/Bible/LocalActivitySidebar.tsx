@@ -269,8 +269,17 @@ export function LocalActivitySidebar({ className }: { className?: string }) {
     };
 
     const handleItemClick = async (item: any, type: 'invite' | 'notification' | 'message') => {
-        console.log('handleItemClick called:', { item, type });
+        console.log('handleItemClick called:', { item, type, itemType: item.type });
         markAsViewed(item.id, type);
+
+        // For Ministry Assignment notifications - navigate to My Tasks
+        // Check early to ensure it takes priority
+        if (item.type === 'ministry_assignment') {
+            console.log('Navigating to My Tasks for ministry_assignment');
+            router.push('/fellowship?tab=tasks');
+            setIsExpanded(false);
+            return;
+        }
 
         if (type === 'message') {
             router.push(`/fellowship?tab=community&conversationId=${item.id}&messageId=${item.lastMessageId || ''}`);
@@ -284,13 +293,6 @@ export function LocalActivitySidebar({ className }: { className?: string }) {
                 const url = `/groups/${item.groupId}${item.postId ? `?postId=${item.postId}` : ''}`;
                 router.push(url);
             }
-            setIsExpanded(false);
-            return;
-        }
-
-        // For Ministry Assignment notifications - navigate to My Tasks
-        if (item.type === 'ministry_assignment') {
-            router.push('/fellowship?tab=tasks');
             setIsExpanded(false);
             return;
         }
