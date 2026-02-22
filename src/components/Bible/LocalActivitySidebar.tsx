@@ -211,15 +211,8 @@ export function LocalActivitySidebar({ className }: { className?: string }) {
         ];
 
         allItems.sort((a, b) => {
-            const getDate = (d: any) => {
-                if (!d) return new Date(0);
-                if (typeof d === 'number') return new Date(d);
-                if (d?.toDate) return d.toDate();
-                if (d instanceof Date) return d;
-                return new Date(0);
-            };
-            const dateA = getDate(a.createdAt);
-            const dateB = getDate(b.createdAt);
+            const dateA = toDate(a.createdAt);
+            const dateB = toDate(b.createdAt);
             return dateB.getTime() - dateA.getTime();
         });
 
@@ -1002,7 +995,7 @@ function RecentActivityItem({ item, usersMap, onClick }: { item: any; usersMap: 
                 </p>
                 <span className="text-[8px] text-slate-400 flex items-center gap-1 mt-0.5">
                     <Clock className="w-2 h-2" />
-                    {item.createdAt?.toDate ? formatRelativeTime(item.createdAt.toDate()) : 'Just now'}
+                    {formatRelativeTime(toDate(item.createdAt))}
                 </span>
             </div>
 
@@ -1125,10 +1118,10 @@ function ActivityItem({ item, usersMap, type, onClick }: { item: any; usersMap: 
                             ? (item.type === 'group_invite' ? 'Group Invite' : 'Shared Scroll')
                             : 'Update'}
                     </span>
-                    {item.createdAt?.toDate && (
+                    {item.createdAt && (
                         <div className="flex items-center gap-1 text-[8px] text-slate-400 font-medium whitespace-nowrap">
                             <Clock className="w-2 h-2" />
-                            {formatRelativeTime(item.createdAt.toDate())}
+                            {formatRelativeTime(toDate(item.createdAt))}
                         </div>
                     )}
                 </div>
@@ -1164,6 +1157,16 @@ function LoadingState() {
             <p className="text-[10px] text-slate-500 font-bold tracking-widest uppercase">Scanning...</p>
         </div>
     );
+}
+
+// Helper function to convert any date format to Date object
+function toDate(d: any): Date {
+    if (!d) return new Date(0);
+    if (typeof d === 'number') return new Date(d);
+    if (d?.toDate) return d.toDate(); // Firestore Timestamp
+    if (d instanceof Date) return d;
+    if (typeof d === 'string') return new Date(d);
+    return new Date(0);
 }
 
 // Helper function for relative time formatting
