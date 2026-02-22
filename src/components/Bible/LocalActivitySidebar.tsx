@@ -295,6 +295,13 @@ export function LocalActivitySidebar({ className }: { className?: string }) {
             return;
         }
 
+        // For Ministry Assignment notifications - navigate to My Tasks
+        if (item.type === 'ministry_assignment') {
+            router.push('/fellowship?tab=tasks');
+            setIsExpanded(false);
+            return;
+        }
+
         let resolvedContent = item.content || item.noteContent || item.previewContent || '';
         const resourceId = item.noteId || item.resourceId;
 
