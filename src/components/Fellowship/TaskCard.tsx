@@ -278,7 +278,7 @@ export function TaskCard({
                         <DropdownMenuTrigger asChild>
                             <button
                                 onClick={(e) => e.stopPropagation()}
-                                className="p-1 hover:bg-gray-100 dark:hover:bg-zinc-700 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                                className="p-1 hover:bg-gray-100 dark:hover:bg-zinc-700 rounded-lg transition-colors opacity-100 md:opacity-0 md:group-hover:opacity-100"
                             >
                                 <MoreHorizontal className="w-4 h-4 text-gray-400" />
                             </button>

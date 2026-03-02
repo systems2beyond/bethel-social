@@ -2,10 +2,7 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { useAuth } from '@/context/AuthContext';
-import { doc, updateDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import { Play, Radio, XCircle } from 'lucide-react';
+import { Play, Radio } from 'lucide-react';
 import Image from 'next/image';
 import { useBible } from '@/context/BibleContext';
 import { Post } from '@/types';
@@ -15,31 +12,8 @@ interface LiveStreamBannerProps {
     onDismiss?: () => void;
 }
 
-export const LiveStreamBanner = ({ post, onDismiss }: LiveStreamBannerProps) => {
+export const LiveStreamBanner = ({ post }: LiveStreamBannerProps) => {
     const { openVideo } = useBible();
-
-    const { userData } = useAuth();
-    const [isEnding, setIsEnding] = React.useState(false);
-
-    const handleEndLive = async (e: React.MouseEvent) => {
-        e.stopPropagation();
-        if (!confirm('Are you sure you want to end this live stream? This will remove the banner for everyone.')) return;
-
-        setIsEnding(true);
-        try {
-            const postRef = doc(db, 'posts', post.id);
-            await updateDoc(postRef, {
-                isLive: false,
-                pinned: false
-            });
-            if (onDismiss) onDismiss();
-        } catch (error) {
-            console.error('Error ending live stream:', error);
-            alert('Failed to end live stream');
-        } finally {
-            setIsEnding(false);
-        }
-    };
 
     const handleWatch = (e?: React.MouseEvent) => {
         if (e) e.stopPropagation();
@@ -90,16 +64,6 @@ export const LiveStreamBanner = ({ post, onDismiss }: LiveStreamBannerProps) => 
                             <Radio className="w-3 h-3" />
                             Live Now
                         </div>
-                        {(userData?.role === 'admin' || userData?.role === 'super_admin') && (
-                            <button
-                                onClick={handleEndLive}
-                                disabled={isEnding}
-                                className="px-3 py-1 bg-black/30 hover:bg-black/50 backdrop-blur-sm text-white text-xs rounded-lg transition-colors flex items-center gap-2 border border-white/10 z-10"
-                            >
-                                <XCircle className="w-3 h-3" />
-                                {isEnding ? 'Ending...' : 'End Live Stream'}
-                            </button>
-                        )}
                     </div>
 
                     <h2 className="text-2xl md:text-3xl font-bold mb-2 line-clamp-2">

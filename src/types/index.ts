@@ -793,6 +793,64 @@ export interface ConnectFormConfig {
 }
 
 // =========================================
+// Volunteer Form Configuration Types
+// =========================================
+
+export type VolunteerFormFieldType =
+    | 'short_answer'
+    | 'paragraph'
+    | 'name'
+    | 'email'
+    | 'phone'
+    | 'checkbox'
+    | 'select'
+    | 'ministry_interests'
+    | 'availability';
+
+export interface VolunteerFormField {
+    id: string;
+    type: VolunteerFormFieldType;
+    label: string;
+    placeholder?: string;
+    required: boolean;
+    enabled: boolean;
+    options?: string[]; // For select type
+    order: number;
+}
+
+export interface VolunteerFormConfig {
+    id: string;
+    churchId: string;
+
+    // Branding
+    branding: {
+        formTitle: string;
+        tagline: string;
+        logoUrl?: string;
+        primaryColor: string;
+        backgroundColor: string;
+    };
+
+    // Form fields
+    fields: VolunteerFormField[];
+
+    // Success message
+    successMessage: {
+        title: string;
+        subtitle: string;
+    };
+
+    // Settings
+    settings: {
+        enabled: boolean;
+        notifyAdmins: boolean;
+    };
+
+    updatedAt: any;
+    updatedBy: string;
+}
+
+// =========================================
 // Phase 2: Pulpit Dashboard Types
 // =========================================
 
@@ -1221,4 +1279,59 @@ export interface MemberRegistrationSubmission {
     submittedAt: any;
     source: 'qr-code' | 'web' | 'kiosk' | 'manual';
     churchId: string;
+}
+
+// =========================================
+// Volunteer Recruitment Pipeline
+// =========================================
+
+export type VolunteerSignupStatus = 'new' | 'contacted' | 'screening' | 'approved' | 'placed' | 'declined';
+export type VolunteerSignupSource = 'form' | 'rsvp_event' | 'manual';
+
+export interface VolunteerSignup {
+    id: string;
+    churchId: string;
+
+    // Contact Info
+    name: string;
+    email: string;
+    phone?: string;
+
+    // Interests & Availability
+    ministryInterests: string[];  // Ministry names or IDs (optional)
+    skills: string[];
+    availability: {
+        sunday: boolean;
+        monday: boolean;
+        tuesday: boolean;
+        wednesday: boolean;
+        thursday: boolean;
+        friday: boolean;
+        saturday: boolean;
+    };
+    message?: string;  // Additional notes from signup
+
+    // Pipeline Status
+    status: VolunteerSignupStatus;
+    assignedMinistryId?: string;   // When placed, which ministry
+    assignedMinistryName?: string;
+    linkedUserId?: string;         // If they create/have an account
+
+    // Background Check (optional tracking)
+    backgroundCheckStatus?: 'not_started' | 'pending' | 'approved' | 'expired';
+    backgroundCheckDate?: any;
+
+    // Source Tracking
+    source: VolunteerSignupSource;
+    sourceEventId?: string;        // If from RSVP event
+
+    // Admin Notes
+    notes?: string;
+
+    // Audit Trail
+    createdAt: any;
+    updatedAt: any;
+    reviewedBy?: string;
+    reviewedByName?: string;
+    reviewedAt?: any;
 }
