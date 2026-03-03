@@ -3,12 +3,22 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
-import { BookOpen, FileText, Upload, AlertCircle, Loader2, Search, MonitorPlay, ArrowLeft } from 'lucide-react';
+import { BookOpen, FileText, Upload, AlertCircle, Loader2, Search, MonitorPlay, ArrowLeft, BookMarked, Check, Heart } from 'lucide-react';
 import Link from 'next/link';
 import { db } from '@/lib/firebase';
 import { safeTimestamp } from '@/lib/utils';
-import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, where, Timestamp } from 'firebase/firestore';
 import DocumentUploadModal from '@/components/Pulpit/DocumentUploadModal';
+import { LifeEventsCard } from '@/components/Admin/PeopleHub/LifeEventsCard';
+import { LifeEvent } from '@/types';
+import {
+    ServiceVersesService,
+    SessionKey,
+    ServiceVersesData,
+    SERVICE_VERSE_LABELS,
+    SERVICE_VERSE_COLORS,
+    DEFAULT_SERVICE_VERSES_DATA,
+} from '@/lib/services/ServiceVersesService';
 
 interface Note {
     id: string;
@@ -16,6 +26,8 @@ interface Note {
     content: string;
     updatedAt: any;
 }
+
+const SESSION_KEYS: SessionKey[] = ['sundayService', 'bibleStudy', 'sundaySchool'];
 
 export default function PastorCarePage() {
     const { userData, user, loading } = useAuth();
@@ -25,6 +37,22 @@ export default function PastorCarePage() {
     const [notesLoading, setNotesLoading] = useState(true);
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
 
+    // Life Events
+    const [lifeEvents, setLifeEvents] = useState<LifeEvent[]>([]);
+    const [lifeEventsLoading, setLifeEventsLoading] = useState(true);
+
+    // Service Verses
+    const [serviceVerses, setServiceVerses] = useState<ServiceVersesData>(DEFAULT_SERVICE_VERSES_DATA);
+    const [versesTab, setVersesTab] = useState<SessionKey>('sundayService');
+    const [verseInput, setVerseInput] = useState<Record<SessionKey, string>>({
+        sundayService: '',
+        bibleStudy: '',
+        sundaySchool: '',
+    });
+    const [versesSaving, setVersesSaving] = useState(false);
+    const [versesSaved, setVersesSaved] = useState(false);
+
+    // Notes subscription
     useEffect(() => {
         if (!user) return;
 
@@ -44,6 +72,69 @@ export default function PastorCarePage() {
 
         return () => unsubscribe();
     }, [user]);
+
+    // Life Events subscription
+    useEffect(() => {
+        if (!userData?.churchId) return;
+        const q = query(
+            collection(db, 'lifeEvents'),
+            where('churchId', '==', userData.churchId),
+            where('isActive', '==', true),
+            orderBy('createdAt', 'desc')
+        );
+        const unsub = onSnapshot(q, (snap) => {
+            setLifeEvents(snap.docs.map(d => ({ id: d.id, ...d.data() } as LifeEvent)));
+            setLifeEventsLoading(false);
+        });
+        return () => unsub();
+    }, [userData?.churchId]);
+
+    // Service Verses — load existing on mount
+    useEffect(() => {
+        if (!userData?.churchId) return;
+        ServiceVersesService.get(userData.churchId).then((data) => {
+            setServiceVerses(data);
+            setVerseInput({
+                sundayService: data.sundayService.verses.join('\n'),
+                bibleStudy: data.bibleStudy.verses.join('\n'),
+                sundaySchool: data.sundaySchool.verses.join('\n'),
+            });
+        });
+    }, [userData?.churchId]);
+
+    const handleSaveVerses = async () => {
+        if (!userData?.churchId || !user) return;
+        setVersesSaving(true);
+
+        const parseVerses = (raw: string) =>
+            raw.split('\n').map(v => v.trim()).filter(Boolean);
+
+        const expiresAt = Timestamp.fromDate(new Date(Date.now() + 24 * 60 * 60 * 1000));
+
+        const updated: ServiceVersesData = {
+            sundayService: {
+                enabled: serviceVerses.sundayService.enabled,
+                verses: parseVerses(verseInput.sundayService),
+                expiresAt,
+            },
+            bibleStudy: {
+                enabled: serviceVerses.bibleStudy.enabled,
+                verses: parseVerses(verseInput.bibleStudy),
+                expiresAt,
+            },
+            sundaySchool: {
+                enabled: serviceVerses.sundaySchool.enabled,
+                verses: parseVerses(verseInput.sundaySchool),
+                expiresAt,
+            },
+        };
+
+        await ServiceVersesService.save(userData.churchId, user.uid, updated);
+        setServiceVerses(updated);
+        setVersesSaving(false);
+        setVersesSaved(true);
+        setTimeout(() => setVersesSaved(false), 2000);
+    };
 
     if (loading) {
         return (
@@ -85,8 +176,9 @@ export default function PastorCarePage() {
                 </header>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Main Workspace - Select Note for Pulpit */}
+                    {/* Main Workspace */}
                     <div className="lg:col-span-2 space-y-6">
+                        {/* Select Sermon Note */}
                         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                             <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
                                 <FileText className="w-5 h-5 mr-2 text-indigo-600" />
@@ -145,10 +237,110 @@ export default function PastorCarePage() {
                                 )}
                             </div>
                         </div>
+
+                        {/* Service Verses */}
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                            <h2 className="text-xl font-bold text-gray-900 mb-1 flex items-center">
+                                <BookMarked className="w-5 h-5 mr-2 text-indigo-600" />
+                                Service Verses
+                            </h2>
+                            <p className="text-sm text-gray-500 mb-5">
+                                Enter verses for today's service. They'll appear as tab groups in every member's Bible — active for 24 hours after saving.
+                            </p>
+
+                            {/* Session tabs */}
+                            <div className="flex gap-1 mb-5 border border-gray-200 rounded-lg p-1 bg-gray-50">
+                                {SESSION_KEYS.map((key) => (
+                                    <button
+                                        key={key}
+                                        onClick={() => setVersesTab(key)}
+                                        className={`flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                                            versesTab === key
+                                                ? 'bg-white shadow-sm text-gray-900'
+                                                : 'text-gray-500 hover:text-gray-700'
+                                        }`}
+                                    >
+                                        {SERVICE_VERSE_LABELS[key]}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Active session panel */}
+                            {SESSION_KEYS.map((key) => (
+                                <div key={key} className={versesTab === key ? 'block' : 'hidden'}>
+                                    <div className="flex items-center justify-between mb-3">
+                                        <label className="text-sm font-medium text-gray-700">
+                                            Verses
+                                        </label>
+                                        {/* Enabled toggle */}
+                                        <button
+                                            onClick={() =>
+                                                setServiceVerses(prev => ({
+                                                    ...prev,
+                                                    [key]: { ...prev[key], enabled: !prev[key].enabled },
+                                                }))
+                                            }
+                                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                                                serviceVerses[key].enabled ? 'bg-indigo-600' : 'bg-gray-200'
+                                            }`}
+                                        >
+                                            <span
+                                                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                                                    serviceVerses[key].enabled ? 'translate-x-6' : 'translate-x-1'
+                                                }`}
+                                            />
+                                        </button>
+                                    </div>
+                                    <textarea
+                                        rows={5}
+                                        placeholder={"e.g.\nJohn 3:16\nRomans 8:28-29\n1 Corinthians 13"}
+                                        value={verseInput[key]}
+                                        onChange={(e) =>
+                                            setVerseInput(prev => ({ ...prev, [key]: e.target.value }))
+                                        }
+                                        disabled={!serviceVerses[key].enabled}
+                                        className={`w-full px-3 py-2 text-sm border rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all resize-none ${
+                                            serviceVerses[key].enabled
+                                                ? 'bg-white border-gray-200 text-gray-900'
+                                                : 'bg-gray-50 border-gray-100 text-gray-400 cursor-not-allowed'
+                                        }`}
+                                    />
+                                    <p className="text-xs text-gray-400 mt-1.5">
+                                        One reference per line · e.g. John 3:16 &nbsp;·&nbsp; Romans 8:28-29 &nbsp;·&nbsp; 1 Corinthians 13
+                                    </p>
+                                </div>
+                            ))}
+
+                            {/* Save button */}
+                            <div className="mt-5 flex justify-end">
+                                <button
+                                    onClick={handleSaveVerses}
+                                    disabled={versesSaving}
+                                    className={`flex items-center px-5 py-2 rounded-lg text-sm font-semibold shadow-sm transition-all active:scale-95 ${
+                                        versesSaved
+                                            ? 'bg-emerald-600 text-white'
+                                            : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                                    }`}
+                                >
+                                    {versesSaving ? (
+                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    ) : versesSaved ? (
+                                        <Check className="w-4 h-4 mr-2" />
+                                    ) : (
+                                        <BookMarked className="w-4 h-4 mr-2" />
+                                    )}
+                                    {versesSaved ? 'Saved!' : versesSaving ? 'Saving…' : 'Save Verses'}
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
                     {/* Sidebar / Quick Actions */}
                     <div className="space-y-6">
+                        {/* Life Events */}
+                        <LifeEventsCard events={lifeEvents} loading={lifeEventsLoading} />
+
+                        {/* Quick Links */}
                         <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
                             <h2 className="text-base font-bold text-gray-900 mb-3 flex items-center">
                                 <BookOpen className="w-4 h-4 mr-2 text-blue-600" />

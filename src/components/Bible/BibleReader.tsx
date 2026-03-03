@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronLeft, ChevronRight, ChevronDown, Loader2, Copy, Edit3, Check, BookOpen, PenLine, X, Plus, Sparkles, Folder, Users } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, Loader2, Copy, Edit3, Check, BookOpen, PenLine, X, Plus, Sparkles, Folder, Users, Bookmark } from 'lucide-react';
 import { useBible, TabGroup, Tab } from '@/context/BibleContext';
 import { cn } from '@/lib/utils';
 
@@ -105,7 +105,9 @@ export default function BibleReader({ onInsertNote, onAskAi, onShareTabClick }: 
         collaborationId, setCollaborationId,
         activeNoteId,
         noteTitle,
-        closeNote
+        closeNote,
+        createTabGroup,
+        openMultipleTabs,
     } = useBible();
 
     const [text, setText] = useState<{ verse: number, text: string }[]>([]);
@@ -301,6 +303,12 @@ export default function BibleReader({ onInsertNote, onAskAi, onShareTabClick }: 
                             activeNoteId={activeNoteId}
                             noteTitle={noteTitle}
                             onOpenNote={onShareTabClick}
+                            onPinGroup={group.source === 'service' ? () => {
+                                const groupTabs = tabs.filter(t => t.groupId === group.id);
+                                if (groupTabs.length === 0) return;
+                                const newGroupId = createTabGroup(group.name + ' (Saved)', group.color);
+                                openMultipleTabs(groupTabs.map(t => t.reference), newGroupId);
+                            } : undefined}
                         />
                     ))}
 
@@ -568,9 +576,10 @@ interface GroupDropdownProps {
     activeNoteId?: string | null;
     noteTitle?: string;
     onOpenNote?: () => void;
+    onPinGroup?: () => void;
 }
 
-function GroupDropdown({ group, tabs, activeTabId, setActiveTab, closeGroup, closeTab, activeNoteId, noteTitle, onOpenNote }: Omit<GroupDropdownProps, 'toggleGroupCollapse'>) {
+function GroupDropdown({ group, tabs, activeTabId, setActiveTab, closeGroup, closeTab, activeNoteId, noteTitle, onOpenNote, onPinGroup }: Omit<GroupDropdownProps, 'toggleGroupCollapse'>) {
     const buttonRef = useRef<HTMLDivElement>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const [isOpen, setIsOpen] = useState(false);
@@ -653,6 +662,18 @@ function GroupDropdown({ group, tabs, activeTabId, setActiveTab, closeGroup, clo
                     )}>
                         {group.name}
                     </span>
+                    {group.source === 'service' && onPinGroup && (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onPinGroup();
+                            }}
+                            title="Save these verses to your personal tabs"
+                            className="ml-0.5 opacity-60 hover:opacity-100 text-gray-400 hover:text-indigo-500 transition-opacity"
+                        >
+                            <Bookmark className="w-3 h-3" />
+                        </button>
+                    )}
                     <button
                         onClick={(e) => {
                             e.stopPropagation();

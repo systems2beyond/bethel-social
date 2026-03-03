@@ -5,6 +5,12 @@ import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from './AuthContext';
 import { bibleSearch } from '@/lib/search/bible-index';
+import {
+    ServiceVersesService,
+    SessionKey,
+    SERVICE_VERSE_LABELS,
+    SERVICE_VERSE_COLORS,
+} from '@/lib/services/ServiceVersesService';
 
 export interface BibleReference {
     book: string;
@@ -26,6 +32,7 @@ export interface TabGroup {
     color: string;
     isCollapsed: boolean;
     createdAt: number;
+    source?: 'service';
 }
 
 export interface Tab {
@@ -112,6 +119,9 @@ export function BibleProvider({ children }: { children: ReactNode }) {
     // Only save when data actually differs from what's in Firestore
     const lastSavedStateRef = useRef<string | null>(null);
 
+    // Track service-verse group IDs so they are never persisted to Firestore
+    const serviceGroupIdsRef = useRef<Set<string>>(new Set());
+
     const [version, setVersion] = useState('kjv');
     const [searchVersion, setSearchVersion] = useState('kjv'); // Default to KJV
     const [onInsertNote, setOnInsertNote] = useState<((text: string) => void) | null>(null);
@@ -190,6 +200,7 @@ export function BibleProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const closeGroup = useCallback((groupId: string) => {
+        serviceGroupIdsRef.current.delete(groupId);
         setGroups(prev => prev.filter(g => g.id !== groupId));
         // Close all tabs in this group
         setTabs(prev => {
@@ -402,16 +413,22 @@ export function BibleProvider({ children }: { children: ReactNode }) {
         return () => unsubscribe();
     }, [user]);
 
-    // Save tabs/state
+    // Save tabs/state — exclude service-verse groups so they never pollute user's Firestore
     useEffect(() => {
         if (!user) return;
 
         const saveState = setTimeout(() => {
+            // Filter out ephemeral service-verse groups before persisting
+            const persistGroups = groups.filter(g => !serviceGroupIdsRef.current.has(g.id));
+            const persistTabs = tabs.filter(t =>
+                !t.groupId || !serviceGroupIdsRef.current.has(t.groupId)
+            );
+
             // Use the same normalization as the listener for consistent hash comparison
             const normalized = normalizeForHash({
-                tabs,
+                tabs: persistTabs,
                 activeTabId,
-                groups,
+                groups: persistGroups,
                 searchVersion
             });
 
@@ -440,6 +457,88 @@ export function BibleProvider({ children }: { children: ReactNode }) {
         }, 1000);
         return () => clearTimeout(saveState);
     }, [tabs, activeTabId, user, searchVersion, groups, normalizeForHash]);
+
+    // Subscribe to pastor-set service verses → create ephemeral tab groups for all church members
+    useEffect(() => {
+        const churchId = userData?.churchId;
+        if (!churchId) return;
+
+        const SESSION_KEYS: SessionKey[] = ['sundayService', 'bibleStudy', 'sundaySchool'];
+
+        const unsub = ServiceVersesService.subscribe(churchId, (data) => {
+            const now = Date.now();
+
+            SESSION_KEYS.forEach((key) => {
+                const session = data[key];
+                if (!session.enabled || session.verses.length === 0) return;
+
+                // Check expiry
+                if (session.expiresAt) {
+                    const exp = session.expiresAt.toDate
+                        ? session.expiresAt.toDate()
+                        : new Date(session.expiresAt);
+                    if (exp.getTime() < now) return;
+                }
+
+                // Parse verse strings into BibleReference objects
+                const refs = session.verses
+                    .map((verseStr: string) => {
+                        const match = verseStr.trim().match(/^(.+?)\s+(\d+)(?::(\d+)(?:-(\d+))?)?$/);
+                        if (!match) return null;
+                        return {
+                            book: match[1].trim(),
+                            chapter: parseInt(match[2]),
+                            verse: match[3] ? parseInt(match[3]) : undefined,
+                            endVerse: match[4] ? parseInt(match[4]) : undefined,
+                        };
+                    })
+                    .filter(Boolean) as BibleReference[];
+
+                if (refs.length === 0) return;
+
+                // Create an ephemeral group (source: 'service') — tracked in ref so it's never saved to Firestore
+                const groupId = `svc-${key}-${Date.now()}`;
+                serviceGroupIdsRef.current.add(groupId);
+
+                // Remove any previous service group for this session key before adding the new one
+                setGroups(prev => {
+                    const filtered = prev.filter(g => !(g.source === 'service' && g.name === SERVICE_VERSE_LABELS[key]));
+                    return [
+                        ...filtered,
+                        {
+                            id: groupId,
+                            name: SERVICE_VERSE_LABELS[key],
+                            color: SERVICE_VERSE_COLORS[key],
+                            isCollapsed: false,
+                            createdAt: Date.now(),
+                            source: 'service' as const,
+                        },
+                    ];
+                });
+
+                // Add tabs for each ref in the group
+                setTabs(prev => {
+                    // Remove old tabs belonging to a previous version of this service group
+                    const filtered = prev.filter(t => {
+                        if (!t.groupId) return true;
+                        const ownerGroup = t.groupId;
+                        // Keep if not a service group for this session
+                        return !(ownerGroup.startsWith(`svc-${key}-`) && ownerGroup !== groupId);
+                    });
+
+                    const newTabs = refs.map((ref, index) => ({
+                        id: `svc-tab-${key}-${index}-${Date.now()}`,
+                        reference: ref,
+                        groupId,
+                    }));
+
+                    return [...filtered, ...newTabs];
+                });
+            });
+        });
+
+        return () => unsub();
+    }, [userData?.churchId]); // Intentionally excludes setGroups/setTabs — they are stable React dispatchers
 
 
     const closeNote = useCallback(() => {
