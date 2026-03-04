@@ -391,9 +391,23 @@ export function BibleProvider({ children }: { children: ReactNode }) {
                 }));
                 lastSavedStateRef.current = stateHash;
 
-                if (data.tabs) setTabs(data.tabs);
+                // IMPORTANT: Preserve service-verse groups/tabs when loading from Firestore
+                // Service groups are ephemeral and not saved, so we must merge them back in
+                if (data.tabs) {
+                    setTabs(prev => {
+                        // Keep service tabs from current state, add Firestore tabs
+                        const serviceTabs = prev.filter(t => t.groupId && serviceGroupIdsRef.current.has(t.groupId));
+                        return [...(data.tabs || []), ...serviceTabs];
+                    });
+                }
                 if (data.activeTabId) setActiveTabId(data.activeTabId);
-                if (data.groups) setGroups(data.groups);
+                if (data.groups) {
+                    setGroups(prev => {
+                        // Keep service groups from current state, add Firestore groups
+                        const serviceGroups = prev.filter(g => serviceGroupIdsRef.current.has(g.id));
+                        return [...(data.groups || []), ...serviceGroups];
+                    });
+                }
                 // Also restore search version if saved
                 if (data.searchVersion) setSearchVersion(data.searchVersion);
                 // Restore collaboration ID if it exists
