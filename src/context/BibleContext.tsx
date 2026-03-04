@@ -459,6 +459,9 @@ export function BibleProvider({ children }: { children: ReactNode }) {
     }, [tabs, activeTabId, user, searchVersion, groups, normalizeForHash]);
 
     // Subscribe to pastor-set service verses → create ephemeral tab groups for all church members
+    // Use a ref to track which session keys we've already processed to prevent re-creation
+    const processedServiceVersesRef = useRef<Record<SessionKey, string>>({} as Record<SessionKey, string>);
+
     useEffect(() => {
         const churchId = userData?.churchId;
         if (!churchId) return;
@@ -470,14 +473,41 @@ export function BibleProvider({ children }: { children: ReactNode }) {
 
             SESSION_KEYS.forEach((key) => {
                 const session = data[key];
-                if (!session.enabled || session.verses.length === 0) return;
+
+                // Build a hash of the current verses to detect changes
+                const versesHash = session.enabled ? session.verses.join('|') : '';
+                const previousHash = processedServiceVersesRef.current[key];
+
+                // Check if disabled or empty - if so, remove any existing group
+                if (!session.enabled || session.verses.length === 0) {
+                    if (previousHash) {
+                        // Remove the group if it existed
+                        setGroups(prev => prev.filter(g => !(g.source === 'service' && g.name === SERVICE_VERSE_LABELS[key])));
+                        setTabs(prev => prev.filter(t => !t.groupId?.startsWith(`svc-${key}-`)));
+                        processedServiceVersesRef.current[key] = '';
+                    }
+                    return;
+                }
 
                 // Check expiry
                 if (session.expiresAt) {
                     const exp = session.expiresAt.toDate
                         ? session.expiresAt.toDate()
                         : new Date(session.expiresAt);
-                    if (exp.getTime() < now) return;
+                    if (exp.getTime() < now) {
+                        // Expired - remove if exists
+                        if (previousHash) {
+                            setGroups(prev => prev.filter(g => !(g.source === 'service' && g.name === SERVICE_VERSE_LABELS[key])));
+                            setTabs(prev => prev.filter(t => !t.groupId?.startsWith(`svc-${key}-`)));
+                            processedServiceVersesRef.current[key] = '';
+                        }
+                        return;
+                    }
+                }
+
+                // Skip if we've already processed these exact verses
+                if (versesHash === previousHash) {
+                    return;
                 }
 
                 // Parse verse strings into BibleReference objects
@@ -496,9 +526,12 @@ export function BibleProvider({ children }: { children: ReactNode }) {
 
                 if (refs.length === 0) return;
 
-                // Create an ephemeral group (source: 'service') — tracked in ref so it's never saved to Firestore
-                const groupId = `svc-${key}-${Date.now()}`;
+                // Use a deterministic group ID based on session key (not timestamp)
+                const groupId = `svc-${key}`;
                 serviceGroupIdsRef.current.add(groupId);
+
+                // Update the processed hash
+                processedServiceVersesRef.current[key] = versesHash;
 
                 // Remove any previous service group for this session key before adding the new one
                 setGroups(prev => {
@@ -518,16 +551,11 @@ export function BibleProvider({ children }: { children: ReactNode }) {
 
                 // Add tabs for each ref in the group
                 setTabs(prev => {
-                    // Remove old tabs belonging to a previous version of this service group
-                    const filtered = prev.filter(t => {
-                        if (!t.groupId) return true;
-                        const ownerGroup = t.groupId;
-                        // Keep if not a service group for this session
-                        return !(ownerGroup.startsWith(`svc-${key}-`) && ownerGroup !== groupId);
-                    });
+                    // Remove old tabs belonging to this service group
+                    const filtered = prev.filter(t => t.groupId !== groupId);
 
                     const newTabs = refs.map((ref, index) => ({
-                        id: `svc-tab-${key}-${index}-${Date.now()}`,
+                        id: `svc-tab-${key}-${index}`,
                         reference: ref,
                         groupId,
                     }));
