@@ -26,7 +26,7 @@ import { LifeEventService } from '@/lib/services/LifeEventService';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 import { serverTimestamp } from 'firebase/firestore';
-import { Search, X, User } from 'lucide-react';
+import { Search, X, User, CheckCircle } from 'lucide-react';
 
 interface LifeEventModalProps {
     isOpen: boolean;
@@ -34,6 +34,7 @@ interface LifeEventModalProps {
     memberId?: string;
     members?: FirestoreUser[];
     onSuccess?: () => void;
+    editEvent?: LifeEvent | null;
 }
 
 export const LifeEventModal: React.FC<LifeEventModalProps> = ({
@@ -41,7 +42,8 @@ export const LifeEventModal: React.FC<LifeEventModalProps> = ({
     onClose,
     memberId: initialMemberId,
     members,
-    onSuccess
+    onSuccess,
+    editEvent
 }) => {
     const { userData } = useAuth();
     const [loading, setLoading] = useState(false);
@@ -70,6 +72,27 @@ export const LifeEventModal: React.FC<LifeEventModalProps> = ({
     const selectedMember = members?.find(m => m.uid === selectedMemberId);
     const selectedMemberName = selectedMember?.displayName || selectedMember?.email || '';
 
+    // Populate form when editing an existing event
+    useEffect(() => {
+        if (editEvent && isOpen) {
+            setFormData({
+                eventType: editEvent.eventType,
+                priority: editEvent.priority,
+                description: editEvent.description || '',
+                requiresFollowUp: editEvent.requiresFollowUp ?? true,
+                assignedTo: editEvent.assignedTo || '',
+            });
+        } else if (!editEvent && !isOpen) {
+            setFormData({
+                eventType: 'other',
+                priority: 'normal',
+                description: '',
+                requiresFollowUp: true,
+                assignedTo: '',
+            });
+        }
+    }, [editEvent, isOpen]);
+
     // Handle click outside to close dropdown
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -94,9 +117,55 @@ export const LifeEventModal: React.FC<LifeEventModalProps> = ({
         setMemberSearch('');
     };
 
+    const handleResolve = async () => {
+        if (!editEvent?.id) return;
+        setLoading(true);
+        try {
+            await LifeEventService.resolveLifeEvent(
+                editEvent.id,
+                editEvent.memberId
+            );
+            toast.success('Life event resolved');
+            onSuccess?.();
+            onClose();
+        } catch (error) {
+            console.error('Failed to resolve life event:', error);
+            toast.error('Failed to resolve life event');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
+        // Edit mode — update existing event
+        if (editEvent?.id) {
+            setLoading(true);
+            try {
+                await LifeEventService.updateLifeEvent(
+                    editEvent.id,
+                    {
+                        eventType: formData.eventType as LifeEvent['eventType'],
+                        description: formData.description || '',
+                        priority: formData.priority as LifeEvent['priority'],
+                        requiresFollowUp: formData.requiresFollowUp ?? false,
+                        assignedTo: formData.assignedTo || undefined,
+                    },
+                );
+                toast.success('Life event updated');
+                onSuccess?.();
+                onClose();
+            } catch (error) {
+                console.error('Failed to update life event:', error);
+                toast.error('Failed to update life event');
+            } finally {
+                setLoading(false);
+            }
+            return;
+        }
+
+        // Create mode
         const targetMemberId = initialMemberId || selectedMemberId;
         if (!targetMemberId) {
             toast.error('Please select a member');
@@ -160,16 +229,27 @@ export const LifeEventModal: React.FC<LifeEventModalProps> = ({
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                             </svg>
                         </div>
-                        Log Life Event
+                        {editEvent ? `${editEvent.memberName} — Life Event` : 'Log Life Event'}
                     </DialogTitle>
                     <DialogDescription className="text-muted-foreground">
-                        Record a significant life event for pastoral care tracking
+                        {editEvent ? 'View or update the details of this life event' : 'Record a significant life event for pastoral care tracking'}
                     </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-5 py-4">
 
+                    {/* Edit mode: show member name read-only */}
+                    {editEvent && (
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label className="text-right font-medium text-muted-foreground">Member</Label>
+                            <div className="col-span-3 flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-50 dark:bg-zinc-800/50 border border-gray-200 dark:border-zinc-700">
+                                <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                <span className="text-sm font-medium">{editEvent.memberName}</span>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Member Selector (if not pre-selected) - Searchable Input */}
-                    {!initialMemberId && members && members.length > 0 && (
+                    {!editEvent && !initialMemberId && members && members.length > 0 && (
                         <div className="grid grid-cols-4 items-center gap-4">
                             <Label htmlFor="member" className="text-right font-medium text-muted-foreground">Member</Label>
                             <div className="col-span-3 relative" ref={memberSearchRef}>
@@ -337,8 +417,19 @@ export const LifeEventModal: React.FC<LifeEventModalProps> = ({
                         <Button type="button" variant="outline" onClick={onClose} className="rounded-xl">
                             Cancel
                         </Button>
+                        {editEvent && (
+                            <Button
+                                type="button"
+                                disabled={loading}
+                                onClick={handleResolve}
+                                className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-md"
+                            >
+                                <CheckCircle className="w-4 h-4 mr-1.5" />
+                                {loading ? 'Saving...' : 'Resolve'}
+                            </Button>
+                        )}
                         <Button type="submit" disabled={loading} className="rounded-xl bg-blue-600 hover:bg-blue-700 shadow-md hover:shadow-lg transition-all duration-200">
-                            {loading ? 'Saving...' : 'Save Event'}
+                            {loading ? 'Saving...' : editEvent ? 'Update Event' : 'Save Event'}
                         </Button>
                     </DialogFooter>
                 </form>

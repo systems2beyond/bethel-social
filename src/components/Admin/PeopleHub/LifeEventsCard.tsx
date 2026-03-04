@@ -1,7 +1,6 @@
+'use client';
 
-// Force update
 import React from 'react';
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
@@ -12,7 +11,11 @@ import {
     Home,
     AlertCircle,
     ArrowRight,
-    Sparkles
+    Plus,
+    Users,
+    Calendar,
+    ChevronRight,
+    Loader2
 } from "lucide-react";
 import { LifeEvent } from "@/types";
 import Link from 'next/link';
@@ -20,6 +23,7 @@ import Link from 'next/link';
 interface LifeEventsCardProps {
     events: LifeEvent[];
     loading?: boolean;
+    onSelectEvent?: (event: LifeEvent) => void;
 }
 
 const getEventIcon = (type: string) => {
@@ -27,23 +31,23 @@ const getEventIcon = (type: string) => {
         case 'hospitalized':
         case 'surgery':
         case 'serious_illness':
-            return { icon: AlertCircle, color: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' };
+            return { icon: AlertCircle, color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-500/10' };
         case 'baby_born':
         case 'pregnancy_announced':
-            return { icon: Baby, color: 'bg-pink-100 text-pink-600 dark:bg-pink-900/30 dark:text-pink-400' };
+            return { icon: Baby, color: 'text-pink-500', bg: 'bg-pink-50 dark:bg-pink-500/10' };
         case 'wedding':
         case 'engagement':
-            return { icon: Heart, color: 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400' };
+            return { icon: Heart, color: 'text-rose-500', bg: 'bg-rose-50 dark:bg-rose-500/10' };
         case 'job_loss':
         case 'new_job':
         case 'retirement':
-            return { icon: Briefcase, color: 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' };
+            return { icon: Briefcase, color: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-500/10' };
         case 'graduation':
-            return { icon: GraduationCap, color: 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400' };
+            return { icon: GraduationCap, color: 'text-purple-500', bg: 'bg-purple-50 dark:bg-purple-500/10' };
         case 'moved':
-            return { icon: Home, color: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400' };
+            return { icon: Home, color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-500/10' };
         default:
-            return { icon: Heart, color: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400' };
+            return { icon: Heart, color: 'text-gray-500', bg: 'bg-gray-50 dark:bg-gray-500/10' };
     }
 };
 
@@ -51,111 +55,164 @@ const formatEventType = (type: string) => {
     return type.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 };
 
-export const LifeEventsCard: React.FC<LifeEventsCardProps & { className?: string }> = ({ events, loading, className }) => {
+export const LifeEventsCard: React.FC<LifeEventsCardProps & { className?: string }> = ({ events, loading, className, onSelectEvent }) => {
     const urgentEvents = events.filter(e => e.priority === 'urgent' || e.priority === 'high');
-    const displayEvents = urgentEvents.length > 0 ? urgentEvents : events.slice(0, 5);
+    const displayEvents = urgentEvents.length > 0 ? urgentEvents.slice(0, 4) : events.slice(0, 4);
 
     return (
         <div className={cn(
-            "rounded-xl bg-white dark:bg-zinc-900 shadow-sm border border-gray-100 dark:border-zinc-800 overflow-hidden flex flex-col",
+            "bg-white dark:bg-zinc-900 rounded-2xl shadow-sm border border-gray-100 dark:border-zinc-800 overflow-hidden",
             className
         )}>
-            {/* Header with gradient accent */}
-            <div className="relative px-6 py-5 border-b border-gray-100 dark:border-zinc-800 bg-gray-50/50 dark:bg-zinc-800/30 flex-shrink-0">
-                <div className="relative flex items-center justify-between">
-                    <div>
-                        <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
-                            <Sparkles className="h-4 w-4 text-purple-500" />
-                            Pastoral Needs
-                            {urgentEvents.length > 0 && (
-                                <Badge className="ml-2 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-0">
-                                    {urgentEvents.length} Urgent
-                                </Badge>
-                            )}
-                        </h3>
-                        <p className="text-sm text-muted-foreground mt-0.5">
-                            Recent life events requiring attention
-                        </p>
+            {/* Header */}
+            <div className="px-5 py-4 border-b border-gray-100 dark:border-zinc-800">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-500 to-pink-600 flex items-center justify-center shadow-sm">
+                            <Heart className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                            <h3 className="text-base font-bold text-gray-900 dark:text-white">
+                                Pastoral Care
+                            </h3>
+                            <p className="text-xs text-gray-500 dark:text-zinc-400">
+                                {events.length > 0
+                                    ? `${events.length} active ${events.length === 1 ? 'need' : 'needs'}`
+                                    : 'Member life events'
+                                }
+                            </p>
+                        </div>
                     </div>
-                    <Button variant="ghost" size="sm" asChild className="text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 font-bold rounded-xl h-9">
-                        <Link href="/admin/people-hub/life-events">
-                            View All <ArrowRight className="ml-1 h-4 w-4" />
-                        </Link>
-                    </Button>
+                    {urgentEvents.length > 0 && (
+                        <Badge className="bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400 border-0 font-semibold">
+                            {urgentEvents.length} Urgent
+                        </Badge>
+                    )}
                 </div>
             </div>
 
             {/* Content */}
-            <div className="p-4 flex-1">
-                <div className="space-y-3">
-                    {loading ? (
-                        <div className="text-center py-8 text-muted-foreground">
-                            <div className="animate-pulse space-y-3">
-                                {[1, 2, 3].map(i => (
-                                    <div key={i} className="h-16 bg-gray-100 dark:bg-zinc-800 rounded-lg" />
-                                ))}
+            <div className="p-4">
+                {loading ? (
+                    <div className="flex items-center justify-center py-12">
+                        <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
+                    </div>
+                ) : displayEvents.length === 0 ? (
+                    /* Empty State - Professional & Actionable */
+                    <div className="py-8 px-4">
+                        <div className="text-center">
+                            <div className="mx-auto w-16 h-16 rounded-2xl bg-gradient-to-br from-gray-100 to-gray-50 dark:from-zinc-800 dark:to-zinc-900 flex items-center justify-center mb-4 border border-gray-200 dark:border-zinc-700">
+                                <Users className="w-7 h-7 text-gray-400 dark:text-zinc-500" />
                             </div>
+                            <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">
+                                No Active Needs
+                            </h4>
+                            <p className="text-xs text-gray-500 dark:text-zinc-400 mb-5 max-w-[200px] mx-auto">
+                                Track member life events like hospitalizations, births, and milestones
+                            </p>
+                            <Link
+                                href="/admin/people-hub/life-events"
+                                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-colors"
+                            >
+                                <Plus className="w-3.5 h-3.5" />
+                                Add Life Event
+                            </Link>
                         </div>
-                    ) : displayEvents.length === 0 ? (
-                        <div className="text-center py-10 px-4 h-full flex flex-col items-center justify-center">
-                            <div className="inline-flex p-4 rounded-full bg-purple-50 dark:bg-purple-900/20 mb-4">
-                                <Heart className="h-8 w-8 text-purple-400" />
-                            </div>
-                            <p className="text-muted-foreground font-medium">No active life events</p>
-                            <p className="text-sm text-muted-foreground mt-1">All caught up!</p>
-                        </div>
-                    ) : (
-                        displayEvents.map((event) => {
-                            const { icon: EventIcon, color } = getEventIcon(event.eventType);
-                            return (
-                                <div
-                                    key={event.id}
-                                    className={cn(
-                                        "group flex items-start gap-4 p-4 rounded-xl",
-                                        "bg-gray-50 dark:bg-zinc-800/50",
-                                        "hover:bg-gray-100 dark:hover:bg-zinc-800",
-                                        "transition-all duration-200 cursor-pointer"
-                                    )}
-                                >
-                                    {/* Icon */}
-                                    <div className={cn(
-                                        "flex-shrink-0 p-2.5 rounded-xl",
-                                        color
-                                    )}>
-                                        <EventIcon className="h-4 w-4" />
-                                    </div>
+                    </div>
+                ) : (
+                    /* Events List */
+                    <div className="space-y-2">
+                        {displayEvents.map((event) => {
+                            const { icon: EventIcon, color, bg } = getEventIcon(event.eventType);
+                            const eventDate = event.eventDate?.seconds
+                                ? new Date(event.eventDate.seconds * 1000)
+                                : new Date();
 
-                                    {/* Content */}
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center justify-between mb-1">
-                                            <p className="text-sm font-semibold text-foreground truncate">
-                                                {event.memberName}
-                                            </p>
-                                            <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
-                                                {new Date(event.eventDate.seconds * 1000).toLocaleDateString('en-US', {
-                                                    month: 'short',
-                                                    day: 'numeric'
-                                                })}
-                                            </span>
-                                        </div>
-                                        <p className="text-xs font-bold text-rose-500 dark:text-rose-400 mb-1 uppercase tracking-wider">
-                                            {formatEventType(event.eventType)}
-                                        </p>
-                                        <p className="text-xs text-gray-500 dark:text-zinc-400 line-clamp-2 leading-relaxed">
-                                            {event.description}
-                                        </p>
-                                        {event.assignedTo && (
-                                            <Badge variant="outline" className="mt-2 text-[10px] h-5 border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300">
-                                                Assigned: {event.assignedTo}
-                                            </Badge>
+                            return onSelectEvent ? (
+                                    <button
+                                        key={event.id}
+                                        type="button"
+                                        onClick={() => onSelectEvent(event)}
+                                        className={cn(
+                                            "group flex items-center gap-3 p-3 rounded-xl w-full text-left",
+                                            "hover:bg-gray-50 dark:hover:bg-zinc-800/50",
+                                            "transition-all duration-150 cursor-pointer"
                                         )}
-                                    </div>
-                                </div>
+                                    >
+                                        <div className={cn("flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center", bg)}>
+                                            <EventIcon className={cn("w-5 h-5", color)} />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 mb-0.5">
+                                                <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{event.memberName}</p>
+                                                {(event.priority === 'urgent' || event.priority === 'high') && (
+                                                    <span className={cn("flex-shrink-0 w-2 h-2 rounded-full", event.priority === 'urgent' ? 'bg-red-500' : 'bg-orange-500')} />
+                                                )}
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs font-medium text-gray-600 dark:text-zinc-400">{formatEventType(event.eventType)}</span>
+                                                <span className="text-gray-300 dark:text-zinc-600">•</span>
+                                                <span className="text-xs text-gray-500 dark:text-zinc-500 flex items-center gap-1">
+                                                    <Calendar className="w-3 h-3" />
+                                                    {eventDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <ChevronRight className="w-4 h-4 text-gray-300 dark:text-zinc-600 group-hover:text-gray-400 dark:group-hover:text-zinc-500 transition-colors" />
+                                    </button>
+                                ) : (
+                                    <Link
+                                        key={event.id}
+                                        href="/admin/people-hub/life-events"
+                                        className={cn(
+                                            "group flex items-center gap-3 p-3 rounded-xl",
+                                            "hover:bg-gray-50 dark:hover:bg-zinc-800/50",
+                                            "transition-all duration-150 cursor-pointer"
+                                        )}
+                                    >
+                                        <div className={cn("flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center", bg)}>
+                                            <EventIcon className={cn("w-5 h-5", color)} />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 mb-0.5">
+                                                <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{event.memberName}</p>
+                                                {(event.priority === 'urgent' || event.priority === 'high') && (
+                                                    <span className={cn("flex-shrink-0 w-2 h-2 rounded-full", event.priority === 'urgent' ? 'bg-red-500' : 'bg-orange-500')} />
+                                                )}
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs font-medium text-gray-600 dark:text-zinc-400">{formatEventType(event.eventType)}</span>
+                                                <span className="text-gray-300 dark:text-zinc-600">•</span>
+                                                <span className="text-xs text-gray-500 dark:text-zinc-500 flex items-center gap-1">
+                                                    <Calendar className="w-3 h-3" />
+                                                    {eventDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <ChevronRight className="w-4 h-4 text-gray-300 dark:text-zinc-600 group-hover:text-gray-400 dark:group-hover:text-zinc-500 transition-colors" />
+                                    </Link>
                             );
-                        })
-                    )}
-                </div>
+                        })}
+                    </div>
+                )}
             </div>
+
+            {/* Footer - View All */}
+            {(events.length > 0 || !loading) && (
+                <div className="px-4 py-3 border-t border-gray-100 dark:border-zinc-800 bg-gray-50/50 dark:bg-zinc-800/30">
+                    <Link
+                        href="/admin/people-hub/life-events"
+                        className="flex items-center justify-center gap-2 w-full py-2 text-sm font-semibold text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white rounded-lg hover:bg-white dark:hover:bg-zinc-800 transition-colors"
+                    >
+                        {events.length > 0 ? (
+                            <>View All {events.length} Events</>
+                        ) : (
+                            <>Manage Life Events</>
+                        )}
+                        <ArrowRight className="w-4 h-4" />
+                    </Link>
+                </div>
+            )}
         </div>
     );
 };

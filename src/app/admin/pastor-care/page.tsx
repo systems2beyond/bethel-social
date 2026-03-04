@@ -7,7 +7,7 @@ import { BookOpen, FileText, Upload, AlertCircle, Loader2, Search, MonitorPlay, 
 import Link from 'next/link';
 import { db } from '@/lib/firebase';
 import { safeTimestamp } from '@/lib/utils';
-import { collection, query, orderBy, onSnapshot, where, Timestamp } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, Timestamp } from 'firebase/firestore';
 import DocumentUploadModal from '@/components/Pulpit/DocumentUploadModal';
 import { LifeEventsCard } from '@/components/Admin/PeopleHub/LifeEventsCard';
 import { LifeEvent } from '@/types';
@@ -27,7 +27,7 @@ interface Note {
     updatedAt: any;
 }
 
-const SESSION_KEYS: SessionKey[] = ['sundayService', 'bibleStudy', 'sundaySchool'];
+const SESSION_KEYS: SessionKey[] = ['sundayService', 'sermon', 'bibleStudy', 'sundaySchool'];
 
 export default function PastorCarePage() {
     const { userData, user, loading } = useAuth();
@@ -46,6 +46,7 @@ export default function PastorCarePage() {
     const [versesTab, setVersesTab] = useState<SessionKey>('sundayService');
     const [verseInput, setVerseInput] = useState<Record<SessionKey, string>>({
         sundayService: '',
+        sermon: '',
         bibleStudy: '',
         sundaySchool: '',
     });
@@ -73,17 +74,15 @@ export default function PastorCarePage() {
         return () => unsubscribe();
     }, [user]);
 
-    // Life Events subscription
+    // Life Events subscription — mirrors the Life Events page (no compound query, filter client-side)
     useEffect(() => {
         if (!userData?.churchId) return;
-        const q = query(
-            collection(db, 'lifeEvents'),
-            where('churchId', '==', userData.churchId),
-            where('isActive', '==', true),
-            orderBy('createdAt', 'desc')
-        );
-        const unsub = onSnapshot(q, (snap) => {
-            setLifeEvents(snap.docs.map(d => ({ id: d.id, ...d.data() } as LifeEvent)));
+        const unsub = onSnapshot(collection(db, 'lifeEvents'), (snap) => {
+            const all = snap.docs.map(d => ({ id: d.id, ...d.data() } as LifeEvent));
+            setLifeEvents(all.filter(e => e.isActive));
+            setLifeEventsLoading(false);
+        }, (err) => {
+            console.error('[PastorCare] Life events error:', err);
             setLifeEventsLoading(false);
         });
         return () => unsub();
@@ -96,6 +95,7 @@ export default function PastorCarePage() {
             setServiceVerses(data);
             setVerseInput({
                 sundayService: data.sundayService.verses.join('\n'),
+                sermon: data.sermon.verses.join('\n'),
                 bibleStudy: data.bibleStudy.verses.join('\n'),
                 sundaySchool: data.sundaySchool.verses.join('\n'),
             });
@@ -115,6 +115,11 @@ export default function PastorCarePage() {
             sundayService: {
                 enabled: serviceVerses.sundayService.enabled,
                 verses: parseVerses(verseInput.sundayService),
+                expiresAt,
+            },
+            sermon: {
+                enabled: serviceVerses.sermon.enabled,
+                verses: parseVerses(verseInput.sermon),
                 expiresAt,
             },
             bibleStudy: {

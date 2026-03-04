@@ -22,6 +22,7 @@ export default function LifeEventsPage() {
     const [events, setEvents] = useState<LifeEvent[]>([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [selectedEvent, setSelectedEvent] = useState<LifeEvent | null>(null);
 
     useEffect(() => {
         if (authLoading) return;
@@ -119,14 +120,14 @@ export default function LifeEventsPage() {
 
                     <TabsContent value="active" className="mt-0 outline-none">
                         <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-gray-100 dark:border-zinc-800 shadow-sm overflow-hidden">
-                            <LifeEventsCard events={activeEvents} />
+                            <LifeEventsCard events={activeEvents} onSelectEvent={setSelectedEvent} />
                         </div>
                     </TabsContent>
 
                     <TabsContent value="resolved" className="mt-0 outline-none">
                         <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-gray-100 dark:border-zinc-800 shadow-sm overflow-hidden">
                             {resolvedEvents.length > 0 ? (
-                                <LifeEventsCard events={resolvedEvents} />
+                                <LifeEventsCard events={resolvedEvents} onSelectEvent={setSelectedEvent} />
                             ) : (
                                 <div className="p-20 text-center text-muted-foreground flex flex-col items-center gap-3">
                                     <div className="p-4 rounded-full bg-gray-50 dark:bg-zinc-800/50">
@@ -141,8 +142,9 @@ export default function LifeEventsPage() {
             </div>
 
             <LifeEventModal
-                isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
+                isOpen={isModalOpen || !!selectedEvent}
+                onClose={() => { setIsModalOpen(false); setSelectedEvent(null); }}
+                editEvent={selectedEvent}
             />
         </div>
     );
