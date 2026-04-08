@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { useChurch } from '@/context/ChurchContext';
 import Link from 'next/link';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -93,6 +94,7 @@ const LifeEventCard = ({ event, memberName, priority, onClick }: { event: any; m
 
 export default function DistrictCRMPage() {
     const { user, userData, loading: authLoading } = useAuth();
+    const { church } = useChurch();
     const [loading, setLoading] = useState(true);
     const [district, setDistrict] = useState<District | null>(null);
     const [availableDistricts, setAvailableDistricts] = useState<District[]>([]);
@@ -130,11 +132,17 @@ export default function DistrictCRMPage() {
     const userRole = userData?.role?.toLowerCase();
     const isAdmin = userRole === 'admin' || userRole === 'super_admin' || userRole === 'pastor_admin';
 
-    // Fetch all users once
+    // Fetch all users once, scoped to current church
     useEffect(() => {
         const fetchAllUsers = async () => {
+            const effectiveChurchId = church?.id || userData?.churchId;
+            if (!effectiveChurchId) return;
             try {
-                const usersSnapshot = await getDocs(collection(db, 'users'));
+                const usersQuery = query(
+                    collection(db, 'users'),
+                    where('churchId', '==', effectiveChurchId)
+                );
+                const usersSnapshot = await getDocs(usersQuery);
                 const users = usersSnapshot.docs.map(doc => ({
                     uid: doc.id,
                     ...doc.data()
@@ -145,7 +153,7 @@ export default function DistrictCRMPage() {
             }
         };
         fetchAllUsers();
-    }, []);
+    }, [userData?.churchId, church?.id]);
 
     // Fetch available districts and set initial selection
     useEffect(() => {
@@ -277,8 +285,14 @@ export default function DistrictCRMPage() {
 
     const refreshData = async () => {
         if (!district) return;
-        // Re-fetch all users
-        const usersSnapshot = await getDocs(collection(db, 'users'));
+        const effectiveChurchId = church?.id || userData?.churchId;
+        if (!effectiveChurchId) return;
+        // Re-fetch all users scoped to current church
+        const usersQuery = query(
+            collection(db, 'users'),
+            where('churchId', '==', effectiveChurchId)
+        );
+        const usersSnapshot = await getDocs(usersQuery);
         const users = usersSnapshot.docs.map(doc => ({
             uid: doc.id,
             ...doc.data()

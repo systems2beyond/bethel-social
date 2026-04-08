@@ -11,6 +11,7 @@ import { Post } from '@/types';
 import VerseLink from '../Bible/VerseLink';
 
 import { useSearchParams, useRouter } from 'next/navigation';
+import { useChurch } from '@/context/ChurchContext';
 
 export function ChatInterface() {
     const { messages, isLoading, sendMessage } = useChat();
@@ -18,6 +19,7 @@ export function ChatInterface() {
     const searchParams = useSearchParams();
     const router = useRouter();
     const { user } = useAuth();
+    const { church } = useChurch();
     const hasInitialized = useRef(false);
     const [activePost, setActivePost] = useState<Post | null>(null);
 
@@ -241,7 +243,7 @@ export function ChatInterface() {
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                             <span className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider">Context</span>
-                            <span className="text-xs text-gray-500 dark:text-gray-400">• {activePost.author?.name || 'Bethel Metropolitan'}</span>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">• {activePost.author?.name || church?.name || 'Church'}</span>
                         </div>
                         <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-2 font-medium">
                             {activePost.content}

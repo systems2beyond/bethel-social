@@ -9,6 +9,7 @@ import { EmailComposer } from './EmailComposer';
 import { db } from '@/lib/firebase';
 import { useFeed } from '@/context/FeedContext';
 import { useAuth } from '@/context/AuthContext';
+import { useChurch } from '@/context/ChurchContext';
 
 interface PostOptionsMenuProps {
     post: Post;
@@ -22,6 +23,7 @@ export const PostOptionsMenu: React.FC<PostOptionsMenuProps> = ({ post }) => {
     const menuRef = useRef<HTMLDivElement>(null);
     const { triggerRefresh } = useFeed();
     const { user, userData } = useAuth();
+    const { church } = useChurch();
 
     // Close menu when clicking outside
     useEffect(() => {
@@ -88,7 +90,7 @@ export const PostOptionsMenu: React.FC<PostOptionsMenuProps> = ({ post }) => {
 
     // Share Logic
     const shareUrl = typeof window !== 'undefined' ? `${window.location.origin}/post/${post.id}` : '';
-    const shareText = `Check out this post by ${post.author?.name || 'Bethel Metropolitan'}: ${post.content?.substring(0, 100)}... ${shareUrl}`;
+    const shareText = `Check out this post by ${post.author?.name || church?.name || 'Church'}: ${post.content?.substring(0, 100)}... ${shareUrl}`;
 
     const handleCopyLink = () => {
         navigator.clipboard.writeText(shareUrl);
@@ -103,7 +105,7 @@ export const PostOptionsMenu: React.FC<PostOptionsMenuProps> = ({ post }) => {
     };
 
     const handleCalendar = () => {
-        const title = encodeURIComponent(`Post by ${post.author?.name || 'Bethel Metropolitan'}`);
+        const title = encodeURIComponent(`Post by ${post.author?.name || church?.name || 'Church'}`);
         const details = encodeURIComponent(`${post.content?.substring(0, 1000)}\n\nLink: ${shareUrl}`);
         const now = new Date();
         const start = now.toISOString().replace(/-|:|\.\d\d\d/g, '');
@@ -268,7 +270,7 @@ export const PostOptionsMenu: React.FC<PostOptionsMenuProps> = ({ post }) => {
             <EmailComposer
                 isOpen={showEmailComposer}
                 onClose={() => setShowEmailComposer(false)}
-                defaultSubject={`Check out this post from Bethel Metropolitan`}
+                defaultSubject={`Check out this post from ${church?.name || 'Church'}`}
                 defaultBody={shareText}
             />
         </div>

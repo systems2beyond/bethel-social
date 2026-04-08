@@ -3,11 +3,12 @@
 import React, { useState, useEffect } from 'react';
 import { X, Search, UserPlus, Video, Loader2, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { collection, query, limit, getDocs } from 'firebase/firestore';
+import { collection, query, limit, getDocs, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { cn } from '@/lib/utils';
 
 import { useAuth } from '@/context/AuthContext';
+import { useChurch } from '@/context/ChurchContext';
 
 interface VideoCallInviteModalProps {
     isOpen: boolean;
@@ -17,7 +18,8 @@ interface VideoCallInviteModalProps {
 }
 
 export function VideoCallInviteModal({ isOpen, onClose, currentParticipants, onSendInvite }: VideoCallInviteModalProps) {
-    const { googleAccessToken, signInWithGoogle } = useAuth();
+    const { googleAccessToken, signInWithGoogle, userData } = useAuth();
+    const { church } = useChurch();
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
@@ -41,7 +43,10 @@ export function VideoCallInviteModal({ isOpen, onClose, currentParticipants, onS
         const timer = setTimeout(async () => {
             setIsSearching(true);
             try {
-                const q = query(collection(db, 'users'), limit(10));
+                const churchId = userData?.churchId;
+                const q = churchId
+                    ? query(collection(db, 'users'), where('churchId', '==', churchId), limit(10))
+                    : query(collection(db, 'users'), limit(10));
                 const snap = await getDocs(q);
                 let results = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
 
@@ -84,7 +89,7 @@ export function VideoCallInviteModal({ isOpen, onClose, currentParticipants, onS
 
             const eventBody = {
                 summary: 'Video Call Invitation',
-                description: 'Instant video call invite from Bethel Social.',
+                description: `Instant video call invite from Living Water.`,
                 start: { dateTime: startTime.toISOString() },
                 end: { dateTime: endTime.toISOString() },
                 conferenceData: {

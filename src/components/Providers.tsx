@@ -8,6 +8,7 @@ import { LightboxProvider } from '@/context/LightboxContext';
 import { AuthProvider } from '@/context/AuthContext';
 import { ActivityProvider } from '@/context/ActivityContext';
 import { BibleProvider } from '@/context/BibleContext';
+import { ChurchProvider } from '@/context/ChurchContext';
 
 export function Providers({ children }: { children: React.ReactNode }) {
     return (
@@ -24,6 +25,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
             storageKey="church-theme-preference-v10"
         >
             <AuthProvider>
+                <ChurchProvider>
                 <ActivityProvider>
                     <FeedProvider>
                         <LightboxProvider>
@@ -35,6 +37,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
                         </LightboxProvider>
                     </FeedProvider>
                 </ActivityProvider>
+                </ChurchProvider>
             </AuthProvider>
         </ThemeProvider>
     );

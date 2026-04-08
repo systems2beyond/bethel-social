@@ -6,6 +6,7 @@ import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { uploadMedia } from '@/lib/storage';
 import { useAuth } from '@/context/AuthContext';
+import { useChurch } from '@/context/ChurchContext';
 import Image from 'next/image';
 
 interface Attachment {
@@ -17,6 +18,7 @@ interface Attachment {
 
 export default function AnnouncementWidget() {
     const { user, userData } = useAuth();
+    const { church } = useChurch();
     const [content, setContent] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [postStatus, setPostStatus] = useState<'idle' | 'success' | 'error'>('idle');
@@ -77,7 +79,7 @@ export default function AnnouncementWidget() {
                 timestamp: Date.now(),
                 pinned: false,
                 author: {
-                    name: userData?.displayName || user?.displayName || 'Bethel Admin',
+                    name: userData?.displayName || user?.displayName || `${church?.name || 'Church'} Admin`,
                     avatarUrl: userData?.photoURL || user?.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=Admin'
                 },
                 createdAt: serverTimestamp(),
@@ -108,7 +110,7 @@ export default function AnnouncementWidget() {
                     <textarea
                         value={content}
                         onChange={(e) => setContent(e.target.value)}
-                        placeholder="What's happening at Bethel?"
+                        placeholder={`What's happening at ${church?.name || 'church'}?`}
                         className="w-full h-32 p-4 rounded-xl bg-white/10 border border-white/20 placeholder-blue-100 text-white focus:ring-2 focus:ring-white/50 focus:border-transparent resize-none text-sm transition-all focus:bg-white/20 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent"
                         disabled={isSubmitting}
                     />

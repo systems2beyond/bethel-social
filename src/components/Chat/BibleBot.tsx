@@ -6,6 +6,7 @@ import { functions } from '@/lib/firebase';
 import { Send, User, Bot, Loader2, Phone } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
+import { useChurch } from '@/context/ChurchContext';
 
 interface Message {
     id: string;
@@ -16,9 +17,11 @@ interface Message {
 
 export const BibleBot: React.FC = () => {
     const { user, userData } = useAuth();
+    const { church } = useChurch();
     const [isOpen, setIsOpen] = useState(false);
+    const botName = church?.botName || 'Bible Bot';
     const [messages, setMessages] = useState<Message[]>([
-        { id: '0', role: 'bot', content: 'Hello! I am the Bethel Bible Bot. Ask me anything about our sermons or the Bible.' }
+        { id: '0', role: 'bot', content: `Hello! I am the ${botName}. Ask me anything about our sermons or the Bible.` }
     ]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);

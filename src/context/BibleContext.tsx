@@ -410,16 +410,10 @@ export function BibleProvider({ children }: { children: ReactNode }) {
                 }
                 // Also restore search version if saved
                 if (data.searchVersion) setSearchVersion(data.searchVersion);
-                // Restore collaboration ID if it exists
-                if (data.activeCollaborationId) {
-                    _setCollaborationId(data.activeCollaborationId);
-                    // State is restored but study modal stays closed - user opens it explicitly
-                }
-                if (data.activeNoteId) {
-                    setActiveNoteId(data.activeNoteId);
-                    if (data.noteTitle) setNoteTitle(data.noteTitle);
-                    // State is restored but study modal stays closed - user opens it explicitly
-                }
+                // NOTE: We intentionally do NOT restore activeCollaborationId, activeNoteId,
+                // or noteTitle here. These are session-level states that should start fresh
+                // on each page load. Restoring them was causing the "stuck" behavior where
+                // the same note/verse always reappeared and couldn't be dismissed.
             }
         }, (err) => {
             console.error('[BibleContext] Bible tabs listener error:', err);
@@ -470,7 +464,7 @@ export function BibleProvider({ children }: { children: ReactNode }) {
             }, { merge: true }).catch(err => console.error('Error saving bible tabs:', err));
         }, 1000);
         return () => clearTimeout(saveState);
-    }, [tabs, activeTabId, user, searchVersion, groups, normalizeForHash]);
+    }, [tabs, activeTabId, user, searchVersion, groups, normalizeForHash, collaborationId, activeNoteId, noteTitle]);
 
     // Subscribe to pastor-set service verses → create ephemeral tab groups for all church members
     // Use a ref to track which session keys we've already processed to prevent re-creation
@@ -480,7 +474,7 @@ export function BibleProvider({ children }: { children: ReactNode }) {
         const churchId = userData?.churchId;
         if (!churchId) return;
 
-        const SESSION_KEYS: SessionKey[] = ['sundayService', 'bibleStudy', 'sundaySchool'];
+        const SESSION_KEYS: SessionKey[] = ['sundayService', 'sermon', 'bibleStudy', 'sundaySchool'];
 
         const unsub = ServiceVersesService.subscribe(churchId, (data) => {
             const now = Date.now();

@@ -1,7 +1,7 @@
 import { TaskAttachment, TaskAttachmentSource } from '@/types';
 import { serverTimestamp } from 'firebase/firestore';
 
-const APP_FOLDER_NAME = 'Bethel Social Tasks';
+const DEFAULT_APP_FOLDER_NAME = 'Church Social Tasks';
 
 export interface DriveUploadResult {
     fileId: string;
@@ -29,7 +29,8 @@ export class GoogleDriveUploadService {
     static async uploadToUserDrive(
         file: File,
         accessToken: string,
-        onProgress?: (percent: number) => void
+        onProgress?: (percent: number) => void,
+        appName?: string
     ): Promise<DriveUploadResult> {
         if (!accessToken) {
             throw new Error('Google access token required. Please sign in with Google.');
@@ -37,7 +38,8 @@ export class GoogleDriveUploadService {
 
         try {
             // 1. Get or create app folder
-            const folderId = await this.getOrCreateAppFolder(accessToken);
+            const folderName = appName ? `${appName} Tasks` : DEFAULT_APP_FOLDER_NAME;
+            const folderId = await this.getOrCreateAppFolder(accessToken, folderName);
 
             // 2. Initiate resumable upload
             const uploadUrl = await this.initiateResumableUpload(
@@ -72,9 +74,9 @@ export class GoogleDriveUploadService {
     /**
      * Get or create the app folder in user's Drive
      */
-    static async getOrCreateAppFolder(accessToken: string): Promise<string> {
+    static async getOrCreateAppFolder(accessToken: string, folderName: string = DEFAULT_APP_FOLDER_NAME): Promise<string> {
         // Search for existing folder
-        const searchUrl = `https://www.googleapis.com/drive/v3/files?q=name='${APP_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id,name)`;
+        const searchUrl = `https://www.googleapis.com/drive/v3/files?q=name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id,name)`;
 
         const searchResponse = await fetch(searchUrl, {
             headers: {
@@ -104,7 +106,7 @@ export class GoogleDriveUploadService {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                name: APP_FOLDER_NAME,
+                name: folderName,
                 mimeType: 'application/vnd.google-apps.folder'
             })
         });

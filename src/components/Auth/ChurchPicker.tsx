@@ -26,7 +26,7 @@ export function ChurchPicker({ onSelect, selectedId }: ChurchPickerProps) {
                     return {
                         id: doc.id,
                         ...data,
-                        name: data.name || (doc.id === 'default_church' ? 'Bethel Metropolitan' : 'Unnamed Church'),
+                        name: data.name || (doc.id === 'default_church' ? 'Church' : 'Unnamed Church'),
                         subdomain: data.subdomain || (doc.id === 'default_church' ? 'bethel-metro' : 'unknown')
                     } as Church;
                 }).sort((a, b) => a.name.localeCompare(b.name));

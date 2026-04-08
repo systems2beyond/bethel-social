@@ -13,7 +13,7 @@ export const DEFAULT_COMMUNICATION_SETTINGS: CommunicationSettings = {
     port: 587,
     user: '',
     pass: '',
-    fromName: 'Bethel Social',
+    fromName: '',
     fromEmail: '',
     secure: false,
 };

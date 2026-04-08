@@ -44,7 +44,7 @@ export async function POST(request: Request) {
 
         // 2. Invoke Cloud Function for AI Response
         // We proxy the call via server to avoid client-side blocking
-        const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'bethel-metro-social';
+        const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || 'default-project';
         const region = 'us-central1'; // Default for Firebase Functions
         const functionUrl = `https://${region}-${projectId}.cloudfunctions.net/chat`;
 

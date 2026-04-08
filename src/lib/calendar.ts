@@ -22,18 +22,19 @@ export const generateGoogleCalendarUrl = (event: Event): string => {
     return `https://calendar.google.com/calendar/render?${params.toString()}`;
 };
 
-export const downloadIcsFile = (event: Event) => {
+export const downloadIcsFile = (event: Event, appName: string = 'Church Social') => {
     const startDate = safeTimestamp(event.startDate) || new Date();
     const endDate = safeTimestamp(event.endDate) || new Date(startDate.getTime() + 60 * 60 * 1000);
 
     const formatDate = (date: Date) => date.toISOString().replace(/-|:|\.\d\d\d/g, "");
 
+    const prodId = appName.replace(/\s+/g, '-').toLowerCase();
     const icsContent = [
         'BEGIN:VCALENDAR',
         'VERSION:2.0',
-        'PRODID:-//Bethel Social//Church Calendar//EN',
+        `PRODID:-//${appName}//Church Calendar//EN`,
         'BEGIN:VEVENT',
-        `UID:${event.id}@bethel.social`,
+        `UID:${event.id}@${prodId}.app`,
         `DTSTAMP:${formatDate(new Date())}`,
         `DTSTART:${formatDate(startDate)}`,
         `DTEND:${formatDate(endDate)}`,

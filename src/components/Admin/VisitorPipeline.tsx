@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { collection, query, orderBy, onSnapshot, updateDoc, doc, deleteDoc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, updateDoc, doc, deleteDoc, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { cn } from '@/lib/utils';
 import { Visitor, PipelineBoard, PipelineStage, Event } from '@/types';
@@ -16,6 +16,7 @@ import Link from 'next/link';
 import { updatePipelineStage, bulkUpdatePipelineStage } from '@/lib/crm';
 import { subscribeToPipelineBoards, initializeDefaultBoard, DEFAULT_STAGES } from '@/lib/pipeline-boards';
 import { useAuth } from '@/context/AuthContext';
+import { useChurch } from '@/context/ChurchContext';
 import { Button } from '@/components/ui/button';
 import VisitorDetailModal from '@/components/CRM/VisitorDetailModal';
 import BoardSelector from '@/components/CRM/BoardSelector';
@@ -241,6 +242,7 @@ export default function VisitorPipeline({
     }, []);
 
     const { user, userData } = useAuth();
+    const { church } = useChurch();
 
     // Initialize Boards & Subscribe
     useEffect(() => {
@@ -303,9 +305,16 @@ export default function VisitorPipeline({
         }
     }, [selectedBoard?.linkedEventId]);
 
-    // Fetch Visitors
+    // Fetch Visitors scoped to current church
     useEffect(() => {
-        const q = query(collection(db, 'visitors'), orderBy('createdAt', 'desc'));
+        const effectiveChurchId = church?.id || userData?.churchId;
+        if (!effectiveChurchId) return;
+
+        const q = query(
+            collection(db, 'visitors'),
+            where('churchId', '==', effectiveChurchId),
+            orderBy('createdAt', 'desc')
+        );
 
         // Safety timeout to ensure loading spinner doesn't stay forever
         const timeoutId = setTimeout(() => {
@@ -807,6 +816,7 @@ export default function VisitorPipeline({
 
 // QR Code Panel Component
 function QRCodePanel({ churchId, onClose }: { churchId: string; onClose: () => void }) {
+    const { church } = useChurch();
     const connectUrl = typeof window !== 'undefined'
         ? `${window.location.origin}/connect/${churchId}`
         : `https://bethel-metro-social.netlify.app/connect/${churchId}`;
@@ -889,7 +899,7 @@ function QRCodePanel({ churchId, onClose }: { churchId: string; onClose: () => v
                 </head>
                 <body>
                     <div class="container">
-                        <h1>Bethel Metropolitan</h1>
+                        <h1>${church?.name || 'Church'}</h1>
                         <p>Scan to connect with us</p>
                         <div class="qr-container">
                             ${svgData}

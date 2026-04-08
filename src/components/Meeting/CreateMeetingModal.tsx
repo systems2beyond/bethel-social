@@ -20,10 +20,12 @@ interface CreateMeetingModalProps {
 }
 
 import { useBible } from '@/context/BibleContext';
+import { useChurch } from '@/context/ChurchContext';
 
 export default function CreateMeetingModal({ isOpen, onClose, initialTopic = '', initialDate, initialDescription = '' }: CreateMeetingModalProps) {
     const { googleAccessToken, user, signInWithGoogle, clearGmailToken } = useAuth();
     const { openCollaboration } = useBible();
+    const { church } = useChurch();
     const [topic, setTopic] = useState(initialTopic);
     const [startTime, setStartTime] = useState('');
     const [description, setDescription] = useState(initialDescription); // Added state
@@ -176,7 +178,7 @@ export default function CreateMeetingModal({ isOpen, onClose, initialTopic = '',
 
                     // Construct MIME message
                     const emailLines = [];
-                    emailLines.push(`From: "Bethel Social" <${user?.email}>`);
+                    emailLines.push(`From: "Living Water" <${user?.email}>`);
                     emailLines.push(`To: ${attendees.join(', ')}`);
                     emailLines.push(`Subject: ${subject}`);
                     emailLines.push("Content-Type: text/plain; charset=utf-8");

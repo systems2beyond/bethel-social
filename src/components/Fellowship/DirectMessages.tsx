@@ -186,7 +186,10 @@ export function DirectMessages() {
                 // for the directory, but we can also use unified results if we wanted.
                 // Keeping existing user search logic for directory consistency but adding message search.
 
-                const q = query(collection(db, 'users'), limit(50));
+                const churchId = userData?.churchId;
+                const q = churchId
+                    ? query(collection(db, 'users'), where('churchId', '==', churchId), limit(50))
+                    : query(collection(db, 'users'), limit(50));
                 const snap = await getDocs(q);
 
                 let uResults = snap.docs.map(d => ({ uid: d.id, ...d.data() }));

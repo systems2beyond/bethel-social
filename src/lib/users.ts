@@ -15,7 +15,7 @@ export const UsersService = {
      * Note: Firestore text search is limited. We use startAt/endAt for prefix matching.
      * Case sensitivity depends on how data is stored.
      */
-    searchUsers: async (searchTerm: string): Promise<UserProfile[]> => {
+    searchUsers: async (searchTerm: string, churchId?: string): Promise<UserProfile[]> => {
         if (!searchTerm || searchTerm.length < 2) return [];
 
         const usersRef = collection(db, 'users');
@@ -26,13 +26,14 @@ export const UsersService = {
         // We'll perform a prefix search on the email field.
         const emailPromise = (async () => {
             if (searchTerm.includes('@')) {
-                const q = query(
-                    usersRef,
+                const constraints = [
+                    ...(churchId ? [where('churchId', '==', churchId)] : []),
                     orderBy('email'),
                     startAt(searchTerm),
                     endAt(searchTerm + '\uf8ff'),
                     limit(5)
-                );
+                ];
+                const q = query(usersRef, ...constraints);
                 const snapshot = await getDocs(q);
                 snapshot.docs.forEach(doc => {
                     results.set(doc.id, {
@@ -53,13 +54,14 @@ export const UsersService = {
         const namePromise = (async () => {
             // Helper to fetch and add to results
             const runQuery = async (term: string) => {
-                const q = query(
-                    usersRef,
+                const constraints = [
+                    ...(churchId ? [where('churchId', '==', churchId)] : []),
                     orderBy('displayName'),
                     startAt(term),
                     endAt(term + '\uf8ff'),
                     limit(5)
-                );
+                ];
+                const q = query(usersRef, ...constraints);
                 const snapshot = await getDocs(q);
                 snapshot.docs.forEach(doc => {
                     if (!results.has(doc.id)) {

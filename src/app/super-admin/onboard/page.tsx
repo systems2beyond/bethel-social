@@ -19,6 +19,12 @@ export default function OnboardChurchPage() {
         subdomain: '',
         primaryColor: '#3b82f6',
         logoUrl: '',
+        // Branding (optional — auto-fallback from name if empty)
+        tagline: '',
+        appName: '',
+        description: '',
+        botName: '',
+        botGreeting: '',
         // Integrations
         fbPageId: '',
         fbAccessToken: '',
@@ -80,10 +86,16 @@ export default function OnboardChurchPage() {
             batch.set(churchRef, {
                 name: formData.name,
                 subdomain: formData.subdomain,
+                tagline: formData.tagline || null,
+                appName: formData.appName || null,
+                description: formData.description || null,
+                botName: formData.botName || null,
+                botGreeting: formData.botGreeting || null,
                 theme: {
                     primaryColor: formData.primaryColor,
                     logoUrl: formData.logoUrl || null
                 },
+                connectedChurchIds: [],
                 createdAt: serverTimestamp(),
                 createdBy: user?.uid
             });
@@ -124,6 +136,7 @@ export default function OnboardChurchPage() {
             // Reset
             setFormData({
                 name: '', subdomain: '', primaryColor: '#3b82f6', logoUrl: '',
+                tagline: '', appName: '', description: '', botName: '', botGreeting: '',
                 fbPageId: '', fbAccessToken: '', ytApiKey: '', ytChannelId: '', adminEmail: ''
             });
 
@@ -160,7 +173,7 @@ export default function OnboardChurchPage() {
                                 type="text"
                                 value={formData.name}
                                 onChange={e => setFormData({ ...formData, name: e.target.value })}
-                                placeholder="e.g. Bethel Metro"
+                                placeholder="e.g. Trinity Presbyterian"
                                 className="w-full px-4 py-2 bg-gray-50 dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                             />
                         </div>
@@ -176,7 +189,7 @@ export default function OnboardChurchPage() {
                                     type="text"
                                     value={formData.subdomain}
                                     onChange={e => setFormData({ ...formData, subdomain: e.target.value.toLowerCase() })}
-                                    placeholder="bethel-metro"
+                                    placeholder="trinity-pres"
                                     className="flex-1 px-4 py-2 bg-gray-50 dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                                 />
                                 <span className="text-gray-400">.myapp.com</span>
@@ -203,6 +216,67 @@ export default function OnboardChurchPage() {
                                         onChange={e => setFormData({ ...formData, primaryColor: e.target.value })}
                                         className="flex-1 px-4 py-2 bg-gray-50 dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                                     />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Branding (Optional) */}
+                        <div className="pt-4 border-t border-gray-100 dark:border-zinc-800">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Branding</h3>
+                            <p className="text-xs text-gray-400 mb-4">Optional — leave blank to auto-generate from church name.</p>
+
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Tagline</label>
+                                    <input
+                                        type="text"
+                                        value={formData.tagline}
+                                        onChange={e => setFormData({ ...formData, tagline: e.target.value })}
+                                        placeholder={formData.name ? `Stay connected with ${formData.name}` : 'Stay connected with...'}
+                                        className="w-full px-4 py-2 bg-gray-50 dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">App Name</label>
+                                    <input
+                                        type="text"
+                                        value={formData.appName}
+                                        onChange={e => setFormData({ ...formData, appName: e.target.value })}
+                                        placeholder={formData.name ? `${formData.name} Social` : 'Church Social'}
+                                        className="w-full px-4 py-2 bg-gray-50 dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
+                                    <textarea
+                                        value={formData.description}
+                                        onChange={e => setFormData({ ...formData, description: e.target.value })}
+                                        placeholder="A brief description for about/legal pages"
+                                        rows={2}
+                                        className="w-full px-4 py-2 bg-gray-50 dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                                    />
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Bot Name</label>
+                                        <input
+                                            type="text"
+                                            value={formData.botName}
+                                            onChange={e => setFormData({ ...formData, botName: e.target.value })}
+                                            placeholder={formData.name ? `${formData.name} Assistant` : 'Church Assistant'}
+                                            className="w-full px-4 py-2 bg-gray-50 dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Bot Greeting</label>
+                                        <input
+                                            type="text"
+                                            value={formData.botGreeting}
+                                            onChange={e => setFormData({ ...formData, botGreeting: e.target.value })}
+                                            placeholder={formData.name ? `Hello! I'm your ${formData.name} Assistant...` : "Hello! I'm your Church Assistant..."}
+                                            className="w-full px-4 py-2 bg-gray-50 dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                        />
+                                    </div>
                                 </div>
                             </div>
                         </div>

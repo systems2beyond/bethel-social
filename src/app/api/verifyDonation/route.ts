@@ -9,7 +9,8 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Missing Authorization header' }, { status: 401 });
         }
 
-        const upstreamUrl = 'https://us-central1-bethel-metro-social.cloudfunctions.net/verifyDonationStatus';
+        const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || 'default-project';
+        const upstreamUrl = `https://us-central1-${projectId}.cloudfunctions.net/verifyDonationStatus`;
         console.log(`Proxying to: ${upstreamUrl}`);
 
         const response = await fetch(upstreamUrl, {

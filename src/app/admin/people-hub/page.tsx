@@ -33,6 +33,7 @@ import { useRouter } from 'next/navigation';
 import { collection, query, where, getDocs, orderBy, limit, getCountFromServer } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
+import { useChurch } from '@/context/ChurchContext';
 import { LifeEvent } from "@/types";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -100,7 +101,9 @@ const QuickActionCard = ({
 
 export default function PeopleHubDashboard() {
     const router = useRouter();
-    const { user } = useAuth();
+    const { user, userData } = useAuth();
+    const { church } = useChurch();
+    const effectiveChurchId = church?.id || userData?.churchId;
     const [loading, setLoading] = useState(true);
     const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
     const [showAllActions, setShowAllActions] = useState(false);
@@ -117,10 +120,13 @@ export default function PeopleHubDashboard() {
 
     useEffect(() => {
         const fetchDashboardData = async () => {
+            if (!effectiveChurchId) return;
             try {
-                // Simulating realistic delays for smooth loading state
-                // In production, these would be Promise.all
-                const membersColl = collection(db, 'users');
+                // Members count scoped to current church
+                const membersColl = query(
+                    collection(db, 'users'),
+                    where('churchId', '==', effectiveChurchId)
+                );
                 const snapshot = await getCountFromServer(membersColl);
                 const total = snapshot.data().count;
 
@@ -134,9 +140,10 @@ export default function PeopleHubDashboard() {
                     attendanceTrend: "+2.1%"
                 });
 
-                // Fetch Life Events
+                // Fetch Life Events scoped to current church
                 const eventsQuery = query(
                     collection(db, 'life_events'),
+                    where('churchId', '==', effectiveChurchId),
                     orderBy('createdAt', 'desc'),
                     limit(5)
                 );
@@ -155,7 +162,7 @@ export default function PeopleHubDashboard() {
         };
 
         fetchDashboardData();
-    }, [user]);
+    }, [user, effectiveChurchId]);
 
     const handleSearch = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'Enter') {

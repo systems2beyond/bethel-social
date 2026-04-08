@@ -10,8 +10,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { toast } from 'sonner';
 import { Loader2, Mail, Save, Lock } from 'lucide-react';
 import { CommunicationSettings, DEFAULT_COMMUNICATION_SETTINGS } from '@/types/settings';
+import { useChurch } from '@/context/ChurchContext';
 
 export default function CommunicationSettingsPage() {
+    const { church } = useChurch();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [settings, setSettings] = useState<CommunicationSettings>(DEFAULT_COMMUNICATION_SETTINGS);
@@ -141,7 +143,7 @@ export default function CommunicationSettingsPage() {
                             <Label htmlFor="fromName">Sender Name</Label>
                             <Input
                                 id="fromName"
-                                placeholder="Bethel Church"
+                                placeholder={church?.name || 'Church'}
                                 value={settings.fromName}
                                 onChange={(e) => setSettings({ ...settings, fromName: e.target.value })}
                                 required

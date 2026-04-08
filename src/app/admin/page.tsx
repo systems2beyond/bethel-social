@@ -7,6 +7,7 @@ import { httpsCallable } from 'firebase/functions';
 import { Loader2, Send, Users, Flag, Pin, LayoutDashboard, AlertCircle, AlertTriangle, CheckCircle, Trash2, ExternalLink, Settings, DollarSign, Plus, CreditCard, ArrowUpRight, Search, Calendar, ChevronDown, Download, Ticket, PlayCircle, Heart } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
+import { useChurch } from '@/context/ChurchContext';
 import Image from 'next/image';
 import { GroupsService } from '@/lib/groups';
 import { Group, PulpitSession } from '@/types';
@@ -56,6 +57,9 @@ interface PinnedPost {
 
 export default function AdminPage() {
     const { userData, loading: authLoading } = useAuth();
+    const { church } = useChurch();
+    // Use church context's ID (respects super admin override) over userData.churchId
+    const effectiveChurchId = church?.id || userData?.churchId;
     const [activeTab, setActiveTab] = useState<'overview' | 'reports' | 'pinned' | 'groups' | 'giving' | 'config' | 'sermons'>('overview');
 
     // Urgent Messages popup state
@@ -64,12 +68,12 @@ export default function AdminPage() {
 
     // Stream Active Pulpit Session
     useEffect(() => {
-        if (!userData?.churchId) return;
+        if (!effectiveChurchId) return;
 
         // Simplified active session check: Status 'live' or 'scheduled' for today
         const q = query(
             collection(db, 'pulpit_sessions'),
-            where('churchId', '==', userData.churchId),
+            where('churchId', '==', effectiveChurchId),
             where('status', 'in', ['live', 'scheduled']),
             orderBy('createdAt', 'desc'),
             limit(1)
@@ -84,7 +88,7 @@ export default function AdminPage() {
         });
 
         return () => unsubscribe();
-    }, [userData?.churchId]);
+    }, [effectiveChurchId]);
 
     // Overview State
     // Overview State
@@ -105,7 +109,7 @@ export default function AdminPage() {
                 console.log("DEBUG: fetchStats userData", userData);
 
                 const isSuperAdmin = userData?.role === 'super_admin';
-                const churchId = userData?.churchId;
+                const churchId = effectiveChurchId;
 
                 // Safety check: Regular admins MUST have a churchId to query restricted collections
                 if (!isSuperAdmin && !churchId) {
@@ -180,7 +184,7 @@ export default function AdminPage() {
             };
             fetchStats();
         }
-    }, [activeTab, userData, authLoading]);
+    }, [activeTab, userData, authLoading, effectiveChurchId]);
 
     // Reports State
     const [reports, setReports] = useState<Report[]>([]);
@@ -198,9 +202,9 @@ export default function AdminPage() {
     useEffect(() => {
         if (activeTab === 'reports') {
             let q = query(collection(db, 'reports'), orderBy('timestamp', 'desc'));
-            if (userData?.churchId) {
+            if (effectiveChurchId) {
                 // Compound query requires index: churchId ASC, timestamp DESC
-                q = query(collection(db, 'reports'), where('churchId', '==', userData.churchId), orderBy('timestamp', 'desc'));
+                q = query(collection(db, 'reports'), where('churchId', '==', effectiveChurchId), orderBy('timestamp', 'desc'));
             }
             const unsubscribe = onSnapshot(q, (snapshot) => {
                 setReports(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Report)));
@@ -208,14 +212,14 @@ export default function AdminPage() {
             });
             return () => unsubscribe();
         }
-    }, [activeTab, userData]);
+    }, [activeTab, userData, effectiveChurchId]);
 
     // Fetch Pinned Posts
     useEffect(() => {
         if (activeTab === 'pinned') {
             let q = query(collection(db, 'posts'), where('pinned', '==', true));
-            if (userData?.churchId) {
-                q = query(q, where('churchId', '==', userData.churchId));
+            if (effectiveChurchId) {
+                q = query(q, where('churchId', '==', effectiveChurchId));
             }
             const unsubscribe = onSnapshot(q, (snapshot) => {
                 setPinnedPosts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PinnedPost)));
@@ -223,7 +227,7 @@ export default function AdminPage() {
             });
             return () => unsubscribe();
         }
-    }, [activeTab, userData]);
+    }, [activeTab, userData, effectiveChurchId]);
 
     // Fetch Pending Groups
     useEffect(() => {
@@ -235,7 +239,7 @@ export default function AdminPage() {
     const loadPendingGroups = async () => {
         setLoadingGroups(true);
         try {
-            const data = await GroupsService.getPendingGroups(userData?.churchId);
+            const data = await GroupsService.getPendingGroups(effectiveChurchId);
             setPendingGroups(data);
         } catch (e) {
             console.error(e);
@@ -799,6 +803,8 @@ export default function AdminPage() {
 
 function ConfigurationTab() {
     const { userData } = useAuth();
+    const { church } = useChurch();
+    const effectiveChurchId = church?.id || userData?.churchId;
     const [config, setConfig] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
@@ -810,8 +816,8 @@ function ConfigurationTab() {
     const [stripeLoading, setStripeLoading] = useState(false);
 
     useEffect(() => {
-        if (!userData?.churchId) return;
-        const unsub = onSnapshot(doc(db, 'churches', userData.churchId), (doc) => {
+        if (!effectiveChurchId) return;
+        const unsub = onSnapshot(doc(db, 'churches', effectiveChurchId), (doc) => {
             if (doc.exists()) {
                 const data = doc.data();
                 setConfig(data);
@@ -820,12 +826,12 @@ function ConfigurationTab() {
             setLoading(false);
         });
         return () => unsub();
-    }, [userData?.churchId]);
+    }, [effectiveChurchId]);
 
     const toggleFeature = async (feature: string, currentValue: boolean) => {
-        if (!userData?.churchId) return;
+        if (!effectiveChurchId) return;
         try {
-            await setDoc(doc(db, 'churches', userData.churchId), {
+            await setDoc(doc(db, 'churches', effectiveChurchId), {
                 features: {
                     [feature]: !currentValue
                 }
@@ -837,10 +843,10 @@ function ConfigurationTab() {
     };
 
     const handleSaveWebhook = async () => {
-        if (!userData?.churchId) return;
+        if (!effectiveChurchId) return;
         setIsSavingWebhook(true);
         try {
-            await setDoc(doc(db, 'churches', userData.churchId), {
+            await setDoc(doc(db, 'churches', effectiveChurchId), {
                 webhookUrl: webhookUrl.trim()
             }, { merge: true });
             // Show success momentarily?
@@ -853,12 +859,12 @@ function ConfigurationTab() {
     };
 
     const handleConnectStripe = async () => {
-        if (!userData?.churchId) return;
+        if (!effectiveChurchId) return;
         setStripeLoading(true);
         try {
             const createExpressAccount = httpsCallable(functions, 'createExpressAccount');
             const result = await createExpressAccount({
-                churchId: userData.churchId,
+                churchId: effectiveChurchId,
                 redirectUrl: window.location.origin
             });
             const { url } = result.data as any;
@@ -876,11 +882,11 @@ function ConfigurationTab() {
     };
 
     const handleStripeDashboard = async () => {
-        if (!userData?.churchId) return;
+        if (!effectiveChurchId) return;
         setStripeLoading(true);
         try {
             const getLoginLink = httpsCallable(functions, 'getStripeLoginLink');
-            const result = await getLoginLink({ churchId: userData.churchId });
+            const result = await getLoginLink({ churchId: effectiveChurchId });
             const { url } = result.data as any;
             window.open(url, '_blank');
             setStripeLoading(false);

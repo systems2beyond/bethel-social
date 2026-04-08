@@ -5,10 +5,15 @@ import { getAuth } from 'firebase-admin/auth';
 // Initialize Firebase Admin
 // We use getApps() to avoid initializing twice in development hot-reloading
 if (getApps().length === 0) {
-    // If GOOGLE_APPLICATION_CREDENTIALS is set, applicationDefault() is used automatically by initializeApp()
-    // If not, we might fall back to other methods, but for now we assume standard environment setup.
-    // If we have a specific serviceAccount JSON in env, we could parse it, but standard practice is env var path.
-    initializeApp();
+    const base64 = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64;
+    if (base64) {
+        // Netlify / production: decode service account from env var
+        const serviceAccount = JSON.parse(Buffer.from(base64, 'base64').toString('utf-8'));
+        initializeApp({ credential: cert(serviceAccount) });
+    } else {
+        // Local dev: uses Application Default Credentials (gcloud auth)
+        initializeApp();
+    }
 }
 
 export const adminDb = getFirestore();

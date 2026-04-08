@@ -7,6 +7,12 @@ export interface Church {
     id: string; // e.g. "bethel-metro"
     name: string;
     subdomain: string; // e.g. "bethel"
+    // Optional branding fields (auto-fallback from name if not set)
+    tagline?: string;       // e.g. "Growing together in faith" — fallback: "Stay connected with {name}"
+    appName?: string;       // e.g. "Trinity Connect" — fallback: "{name} Social"
+    description?: string;   // Long-form for legal/about pages
+    botName?: string;       // e.g. "Grace" — fallback: "{name} Assistant"
+    botGreeting?: string;   // Custom welcome — fallback: "Hello! I'm your {name} Assistant..."
     theme: {
         primaryColor: string; // Hex code
         logoUrl: string;
@@ -17,6 +23,29 @@ export interface Church {
         stripeAccountId?: string;
     };
     connectedChurchIds: string[]; // Federation
+    createdAt: any;
+}
+
+// [MULTI-CHURCH] Resolved church profile — all branding fields guaranteed present after fallback
+export interface ChurchProfile {
+    id: string;
+    name: string;
+    subdomain: string;
+    tagline: string;
+    appName: string;
+    description: string;
+    botName: string;
+    botGreeting: string;
+    theme: {
+        primaryColor: string;
+        logoUrl: string;
+    };
+    config: {
+        googleMapsApiKey?: string;
+        facebookAppId?: string;
+        stripeAccountId?: string;
+    };
+    connectedChurchIds: string[];
     createdAt: any;
 }
 

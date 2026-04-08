@@ -27,6 +27,7 @@ interface PostCardProps {
 import { useFeed } from '@/context/FeedContext';
 import { useLightbox } from '@/context/LightboxContext';
 import { useBible } from '@/context/BibleContext';
+import { useChurch } from '@/context/ChurchContext';
 import { TaskStatusUpdateModal } from '@/components/Groups/TaskStatusUpdateModal';
 
 
@@ -178,6 +179,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
     const { registerPost, unregisterPost, reportVisibility, triggerRefresh } = useFeed();
     const { openLightbox } = useLightbox();
     const { openVideo } = useBible();
+    const { church } = useChurch();
     const router = useRouter();
     const containerRef = React.useRef<HTMLDivElement>(null);
     const videoPlayerRef = React.useRef<VideoPlayerRef>(null);
@@ -348,7 +350,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
                         )}
                     </div>
                     <div>
-                        <h3 className="font-semibold text-gray-900 dark:text-gray-100 tracking-tight">{post.author?.name || 'Bethel Metropolitan'}</h3>
+                        <h3 className="font-semibold text-gray-900 dark:text-gray-100 tracking-tight">{post.author?.name || church?.name || 'Church'}</h3>
                         <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">{formatDate(post.timestamp)}</p>
                     </div>
                 </div>

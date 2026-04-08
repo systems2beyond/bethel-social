@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, Suspense } from 'react';
-import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/lib/firebase';
 import { useAuth } from '@/context/AuthContext';
@@ -287,7 +287,14 @@ function DirectoryTab({ searchQuery }: { searchQuery?: string }) {
     const [updating, setUpdating] = useState<string | null>(null);
 
     useEffect(() => {
-        const q = query(collection(db, 'users'), orderBy('email', 'asc'));
+        const effectiveChurchId = userData?.churchId;
+        if (!effectiveChurchId) return;
+
+        const q = query(
+            collection(db, 'users'),
+            where('churchId', '==', effectiveChurchId),
+            orderBy('email', 'asc')
+        );
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const usersData = snapshot.docs.map(doc => ({
                 uid: doc.id,
@@ -298,7 +305,7 @@ function DirectoryTab({ searchQuery }: { searchQuery?: string }) {
         });
 
         return () => unsubscribe();
-    }, []);
+    }, [userData?.churchId]);
 
     const handleRoleChange = async (targetUid: string, newRole: string) => {
         if (!confirm(`Are you sure you want to change this user's role to ${newRole}?`)) return;

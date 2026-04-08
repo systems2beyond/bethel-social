@@ -636,7 +636,14 @@ function GroupDropdown({ group, tabs, activeTabId, setActiveTab, closeGroup, clo
                 onClick={() => {
                     if (isNoteGroup && onOpenNote) {
                         onOpenNote();
+                    } else if (group.source === 'service') {
+                        // Service groups (shared by pastor): just open dropdown so user can choose
+                        setIsOpen(!isOpen);
                     } else {
+                        // Other groups: activate first tab when opening for quick access
+                        if (!isOpen && tabs.length > 0) {
+                            setActiveTab(tabs[0].id);
+                        }
                         setIsOpen(!isOpen);
                     }
                 }}

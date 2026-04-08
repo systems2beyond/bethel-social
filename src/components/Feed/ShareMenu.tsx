@@ -5,6 +5,7 @@ import { Share2, Mail, MessageSquare, Calendar, Link as LinkIcon, Check } from '
 import { motion, AnimatePresence } from 'framer-motion';
 import { Post, Comment } from '@/types';
 import { EmailComposer } from './EmailComposer';
+import { useChurch } from '@/context/ChurchContext';
 
 interface ShareMenuProps {
     post: Post;
@@ -15,6 +16,7 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({ post, comment }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [showEmailComposer, setShowEmailComposer] = useState(false);
     const [copied, setCopied] = useState(false);
+    const { church } = useChurch();
     const menuRef = useRef<HTMLDivElement>(null);
 
     // Close menu when clicking outside
@@ -32,7 +34,7 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({ post, comment }) => {
 
     // Customize text based on whether we are sharing the post or a specific comment
     const contentToShare = comment ? comment.content : post.content;
-    const authorName = comment ? comment.author.name : (post.author?.name || 'Bethel Metropolitan');
+    const authorName = comment ? comment.author.name : (post.author?.name || church?.name || 'Church');
     const typeLabel = comment ? 'comment' : 'post';
 
     const shareText = `Check out this ${typeLabel} by ${authorName}: ${contentToShare.substring(0, 100)}... ${shareUrl}`;
@@ -121,7 +123,7 @@ export const ShareMenu: React.FC<ShareMenuProps> = ({ post, comment }) => {
             <EmailComposer
                 isOpen={showEmailComposer}
                 onClose={() => setShowEmailComposer(false)}
-                defaultSubject={`Check out this post from Bethel Metropolitan`}
+                defaultSubject={`Check out this post from ${church?.name || 'Church'}`}
                 defaultBody={shareText}
             />
         </div>

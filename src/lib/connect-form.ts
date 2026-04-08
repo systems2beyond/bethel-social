@@ -65,7 +65,7 @@ export const DEFAULT_FIELDS: ConnectFormField[] = [
 export const getDefaultConfig = (churchId: string): Omit<ConnectFormConfig, 'id' | 'updatedAt' | 'updatedBy'> => ({
     churchId,
     branding: {
-        churchName: 'Bethel Metropolitan',
+        churchName: 'Our Church',
         tagline: "We're so glad you're here today.",
         primaryColor: '#2563eb', // blue-600
         backgroundColor: '#09090b' // zinc-950

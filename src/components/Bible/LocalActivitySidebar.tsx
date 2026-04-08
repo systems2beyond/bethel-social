@@ -633,7 +633,7 @@ export function LocalActivitySidebar({ className }: { className?: string }) {
                                                             e.stopPropagation();
                                                             togglePin(pin);
                                                         }}
-                                                        className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-500 transition-all"
+                                                        className="opacity-40 hover:opacity-100 p-1 text-slate-400 hover:text-red-500 transition-all"
                                                     >
                                                         <Trash2 className="w-3 h-3" />
                                                     </button>

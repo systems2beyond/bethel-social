@@ -8,6 +8,7 @@ import confetti from 'canvas-confetti';
 import { Loader2, QrCode, Heart } from 'lucide-react';
 import Image from 'next/image';
 import { resolveChurchIdFromHostname } from '@/lib/tenant';
+import { useChurch } from '@/context/ChurchContext';
 
 interface Donation {
     id: string;
@@ -32,6 +33,7 @@ const AnimatedNumber = ({ value }: { value: number }) => {
 };
 
 export default function GalaGivingPage() {
+    const { church } = useChurch();
     const [totalRaised, setTotalRaised] = useState(0);
     const [recentDonations, setRecentDonations] = useState<Donation[]>([]);
     const [loading, setLoading] = useState(true);
@@ -162,7 +164,7 @@ export default function GalaGivingPage() {
                         <div className="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center">
                             <Heart className="w-6 h-6 text-white" />
                         </div>
-                        <span className="text-xl font-bold tracking-tight">Bethel Gala</span>
+                        <span className="text-xl font-bold tracking-tight">{church?.name || 'Church'} Gala</span>
                     </div>
                     <div className="text-sm text-gray-400">Live Giving Dashboard</div>
                 </header>

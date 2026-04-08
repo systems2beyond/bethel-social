@@ -50,9 +50,7 @@ service cloud.firestore {
     // 2. Users Collection (Private & Nested Data)
     // ---------------------------------------------------------
     match /users/{userId} {
-      // [DEBUG] PUBLIC to test AdBlock Auth issue
-      allow read: if true; 
-      // allow read: if isAuthenticated();
+      allow read: if isAuthenticated();
       allow create: if isAuthenticated() && request.auth.uid == userId; 
       allow update: if isAuthenticated() && request.auth.uid == userId;
       
@@ -212,17 +210,13 @@ service cloud.firestore {
     }
 
     match /direct_messages/{connId} {
-        // [DEBUG] PUBLIC ACCESS to rule out Auth Token missing
-        allow read, write: if true;
-        
-        // Original Strict Rules (Commented out for debug)
-        // allow list: if request.auth != null && request.auth.uid in resource.data.participants;
-        // allow get: if request.auth != null && request.auth.uid in resource.data.participants;
-        // allow create: if request.auth != null && request.auth.uid in request.resource.data.participants;
-        // allow update: if request.auth != null && request.auth.uid in resource.data.participants;
+        allow list: if request.auth != null && request.auth.uid in resource.data.participants;
+        allow get: if request.auth != null && request.auth.uid in resource.data.participants;
+        allow create: if request.auth != null && request.auth.uid in request.resource.data.participants;
+        allow update: if request.auth != null && request.auth.uid in resource.data.participants;
 
         match /messages/{messageId} {
-             allow read, write: if true;
+             allow read, write: if request.auth != null && request.auth.uid in get(/databases/$(database)/documents/direct_messages/$(connId)).data.participants;
         }
     }
 
@@ -233,11 +227,9 @@ service cloud.firestore {
     // Visitors Collection - Staff/Admin can manage, public can create (via /connect form)
     // Visitors Collection - Staff/Admin can manage, public can create (via /connect form)
     match /visitors/{visitorId} {
-      // [DEBUG] Allow public access for development
-      allow read, write: if true;
-      // allow read: if isAuthenticated() && (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'staff']);
-      // allow create: if true; // Public can submit via connection card
-      // allow update, delete: if isAuthenticated() && (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'staff']);
+      allow read: if isAuthenticated() && (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'staff']);
+      allow create: if true; // Public can submit via connection card
+      allow update, delete: if isAuthenticated() && (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'staff']);
     }
 
     // Tags Collection - Staff/Admin can manage
@@ -270,10 +262,8 @@ service cloud.firestore {
     // Pipeline Boards - Staff/Admin can manage
     // Pipeline Boards - Staff/Admin can manage
     match /pipeline_boards/{boardId} {
-      // [DEBUG] Allow public access for development
-      allow read, write: if true;
-      // allow read: if isAuthenticated() && (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'staff']);
-      // allow create, update, delete: if isAuthenticated() && (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'staff']);
+      allow read: if isAuthenticated() && (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'staff']);
+      allow create, update, delete: if isAuthenticated() && (isSuperAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'staff']);
     }
 
     // Connect Form Config - Public read, admin write
@@ -321,8 +311,7 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------
-    // [DEBUG] GLOBAL FALLBACK - ALLOWS ALL FOR DEBUGGING
+    // GLOBAL FALLBACK REMOVED — All collections must have explicit rules
     // ---------------------------------------------------------
-    match /{document=**} { allow read, write: if true; }
   }
 }

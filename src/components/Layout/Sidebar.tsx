@@ -21,6 +21,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useMediaQuery } from '@/lib/hooks/useMediaQuery';
 import { Menu, GripVertical, DollarSign } from 'lucide-react';
 import { useChurchConfig } from '@/hooks/useChurchConfig';
+import { useChurch } from '@/context/ChurchContext';
 
 // Public routes that don't need sidebar
 // Public routes that don't need sidebar
@@ -54,6 +55,7 @@ export function Sidebar() {
         setMounted(true);
     }, []);
 
+    const { church } = useChurch();
     const { config } = useChurchConfig();
     const isAdmin = userData?.role === 'admin' || userData?.role === 'super_admin' || userData?.role === 'pastor_admin' || userData?.role === 'media_admin';
 
@@ -130,9 +132,23 @@ export function Sidebar() {
                         >
                             {/* Logo */}
                             <div className="p-6 flex items-center justify-between">
-                                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                                    Bethel Social
-                                </h1>
+                                <div className="flex flex-col leading-none">
+                                    <span
+                                        className="text-[1.65rem] tracking-tight bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-600 bg-clip-text text-transparent"
+                                        style={{ fontFamily: 'var(--font-playfair)', fontWeight: 900 }}
+                                    >
+                                        Living Water
+                                    </span>
+                                    <span
+                                        className="text-[1.3rem] bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent -mt-1.5 ml-0.5"
+                                        style={{ fontFamily: 'var(--font-dancing)', fontWeight: 500 }}
+                                    >
+                                        Social
+                                    </span>
+                                    <span className="text-[0.55rem] uppercase tracking-[0.25em] text-blue-400/50 mt-1 ml-0.5">
+                                        Come and See
+                                    </span>
+                                </div>
                                 {isMobileOrTabletPortrait && (
                                     <button onClick={() => setIsOpen(false)} className="md:hidden">
                                         <Menu className="w-5 h-5 text-gray-500" />

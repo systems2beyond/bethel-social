@@ -3,10 +3,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { useChurch } from '@/context/ChurchContext';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { canAccessPeopleHub } from '@/lib/permissions';
-import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, deleteDoc, doc, query, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -68,6 +69,7 @@ const StatCard = ({ label, value, color }: { label: string; value: number; color
 
 export default function MembersDirectoryPage() {
     const { userData, loading: authLoading } = useAuth();
+    const { church } = useChurch();
     const router = useRouter();
     const [loading, setLoading] = useState(true);
     const [members, setMembers] = useState<FirestoreUser[]>([]);
@@ -118,10 +120,19 @@ export default function MembersDirectoryPage() {
         }
     };
 
-    // Fetch real members from Firestore
+    // Fetch real members from Firestore scoped to current church
     const fetchMembers = async () => {
+        const effectiveChurchId = church?.id || userData?.churchId;
+        if (!effectiveChurchId) {
+            setLoading(false);
+            return;
+        }
         try {
-            const usersSnapshot = await getDocs(collection(db, 'users'));
+            const usersQuery = query(
+                collection(db, 'users'),
+                where('churchId', '==', effectiveChurchId)
+            );
+            const usersSnapshot = await getDocs(usersQuery);
             const usersData = usersSnapshot.docs.map(doc => ({
                 uid: doc.id,
                 ...doc.data()

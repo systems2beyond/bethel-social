@@ -56,6 +56,7 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
         closeVideo,
         pendingNoteContent,
         setPendingNoteContent,
+        closeNote,
     } = useBible();
     const [personalEditor, setPersonalEditor] = useState<any>(null);
     const [fellowshipEditor, setFellowshipEditor] = useState<any>(null);
@@ -334,9 +335,8 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 if (data.content && data.content !== notes) {
-                    // Only set if we don't have an editor instance OR if we are switching docs
-                    // If editor exists, we rely on it, unless we just switched activeNoteId
-                    if (!personalEditor || activeNoteId) setNotes(data.content);
+                    // Load content from Firestore when switching docs or on initial mount
+                    setNotes(data.content);
                 }
                 if (data.title && !contextNoteTitle) setNoteTitle(data.title);
             } else {
@@ -409,6 +409,9 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
             await handleSaveNotes(personalEditor.getHTML(), noteTitle);
         }
 
+        // Clear the active note ID so we start fresh (prevents "stuck" note behavior)
+        closeNote();
+
         // Clear the editor and title for a fresh note
         const newTitle = `Note - ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
         setNoteTitle(newTitle);
@@ -439,6 +442,17 @@ export default function BibleStudyModal({ onClose }: BibleStudyModalProps) {
     const handleNoteChange = (content: string) => {
         setNotes(content);
     };
+
+    // Debounced auto-save: persist note content to Firestore 1.5s after last change
+    useEffect(() => {
+        if (!user || !notes || collaborationId) return; // Skip if no user, empty, or collaborating (Yjs handles it)
+
+        const saveTimer = setTimeout(() => {
+            handleSaveNotes(notes);
+        }, 1500);
+
+        return () => clearTimeout(saveTimer);
+    }, [notes]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Refs
     const modalContainerRef = useRef<HTMLDivElement>(null);

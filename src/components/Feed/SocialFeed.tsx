@@ -8,12 +8,14 @@ import { useAuth } from '@/context/AuthContext';
 import { collection, query, orderBy, limit, getDocs, startAfter, where, QueryConstraint } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { LiveStreamBanner } from './LiveStreamBanner';
+import { useChurch } from '@/context/ChurchContext';
 import MeetingInviteCard from '../Meeting/MeetingInviteCard';
 import MeetingLobby from '../Meeting/MeetingLobby';
 import { Meeting } from '@/types';
 
 export const SocialFeed: React.FC = () => {
     const { userData } = useAuth();
+    const { church } = useChurch();
     const [posts, setPosts] = useState<Post[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
@@ -220,7 +222,7 @@ export const SocialFeed: React.FC = () => {
                 {!userData?.churchId ? (
                     <p className="text-blue-600 dark:text-blue-400 font-medium animate-pulse">Please sign in or select your home church to see the feed</p>
                 ) : (
-                    <p className="text-gray-500 dark:text-gray-400">Stay connected with Bethel Metropolitan</p>
+                    <p className="text-gray-500 dark:text-gray-400">{church?.tagline || 'Stay connected'}</p>
                 )}
             </div>
 

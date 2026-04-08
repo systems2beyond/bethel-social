@@ -7,10 +7,12 @@ import { ConnectFormService, getDefaultConfig } from '@/lib/connect-form';
 import { PulpitService } from '@/lib/services/PulpitService';
 import { ConnectFormConfig, ConnectFormField } from '@/types';
 import { Loader2 } from 'lucide-react';
+import { useChurch } from '@/context/ChurchContext';
 
 export default function ConnectPage() {
     const params = useParams();
     const churchId = params.churchId as string;
+    const { church } = useChurch();
 
     const [config, setConfig] = useState<ConnectFormConfig | null>(null);
     const [loading, setLoading] = useState(true);
@@ -244,7 +246,7 @@ export default function ConnectPage() {
                 </form>
 
                 <div className="text-center mt-8 text-zinc-600 text-sm">
-                    Protected by Bethel Secure &bull; Privacy Policy
+                    Protected by {church?.name || 'Church'} Secure &bull; Privacy Policy
                 </div>
             </motion.div>
         </div>

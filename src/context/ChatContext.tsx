@@ -5,6 +5,7 @@ import { httpsCallable } from 'firebase/functions';
 import { functions, db } from '@/lib/firebase';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
+import { useChurch } from '@/context/ChurchContext';
 import { usePlatformContext } from '@/hooks/usePlatformContext';
 import {
     collection,
@@ -43,15 +44,28 @@ const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
 export function ChatProvider({ children }: { children: ReactNode }) {
     const { user, userData } = useAuth();
+    const { church } = useChurch();
     const { contextString } = usePlatformContext();
+    const defaultGreeting = 'Hello! How can I help you today?';
     const [messages, setMessages] = useState<Message[]>([
         {
             id: 'welcome',
             role: 'assistant',
-            content: 'Hello! I am Matthew, your Bethel Assistant. How can I help you today?',
+            content: defaultGreeting,
             timestamp: Date.now(),
         }
     ]);
+
+    // Update welcome message when church data loads
+    useEffect(() => {
+        if (church?.botGreeting) {
+            setMessages(prev => prev.map(m =>
+                m.id === 'welcome'
+                    ? { ...m, content: church.botGreeting }
+                    : m
+            ));
+        }
+    }, [church?.botGreeting]);
     const [isLoading, setIsLoading] = useState(false);
     const [currentChatId, setCurrentChatId] = useState<string | null>(null);
     const [contextHandler, setContextHandler] = useState<((message: string) => void) | null>(null);
@@ -196,7 +210,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         const WELCOME_MESSAGE: Message = {
             id: 'welcome_' + Date.now(),
             role: 'assistant',
-            content: 'Hello! I am Matthew, your Bethel Assistant. How can I help you today?',
+            content: church?.botGreeting || defaultGreeting,
             timestamp: Date.now(),
         };
 
@@ -226,7 +240,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 setMessages([WELCOME_MESSAGE]);
             }
         }
-    }, [user]);
+    }, [user, church?.botGreeting]);
 
     // Helper for timing out promises (fail fast for AdBlock)
     const withTimeout = async <T,>(promise: Promise<T>, ms: number = 10000): Promise<T> => {
@@ -353,7 +367,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 const WELCOME_MESSAGE: Message = {
                     id: 'welcome_' + Date.now(),
                     role: 'assistant',
-                    content: 'Hello! I am Matthew, your Bethel Assistant. How can I help you today?',
+                    content: church?.botGreeting || defaultGreeting,
                     timestamp: Date.now(),
                 };
                 const storageKey = `chat_history_${user.uid}_${chatId}`;

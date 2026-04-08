@@ -13,12 +13,14 @@ import {
     Plus, Trash2, Search, User, X, AlertCircle
 } from 'lucide-react';
 import AddressAutocompleteInput, { ParsedAddress } from '@/components/Shared/AddressAutocompleteInput';
+import { useChurch } from '@/context/ChurchContext';
 
 type Step = 'info' | 'family' | 'ministry' | 'review';
 
 export default function MemberRegistrationPage() {
     const params = useParams();
     const churchId = params.churchId as string;
+    const { church } = useChurch();
 
     const [config, setConfig] = useState<MemberRegistrationFormConfig | null>(null);
     const [loading, setLoading] = useState(true);
@@ -872,7 +874,7 @@ export default function MemberRegistrationPage() {
                 </div>
 
                 <div className="text-center mt-8 text-zinc-600 text-sm">
-                    Protected by Bethel Secure
+                    Protected by {church?.name || 'Church'} Secure
                 </div>
             </motion.div>
         </div>

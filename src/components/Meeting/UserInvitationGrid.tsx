@@ -22,7 +22,7 @@ interface UserInvitationGridProps {
 }
 
 export default function UserInvitationGrid({ selectedUsers, onSelectionChange }: UserInvitationGridProps) {
-    const { user } = useAuth();
+    const { user, userData } = useAuth();
     const [users, setUsers] = useState<PublicUser[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -38,24 +38,25 @@ export default function UserInvitationGrid({ selectedUsers, onSelectionChange }:
 
     useEffect(() => {
         setLoading(true);
+        const churchId = userData?.churchId;
         let q;
 
         // "True" DB Search if input is sufficient length
         if (debouncedSearch.length >= 2) {
-            // Note: This is case-sensitive. Ideally use a lowercase 'searchName' field in DB.
-            // For now, assume standard capitalization or exact match attempts.
-            q = query(
-                collection(db, 'users'),
+            const constraints = [
+                ...(churchId ? [where('churchId', '==', churchId)] : []),
                 where('displayName', '>=', debouncedSearch),
                 where('displayName', '<=', debouncedSearch + '\uf8ff'),
                 limit(20)
-            );
+            ];
+            q = query(collection(db, 'users'), ...constraints);
         } else {
             // Default load (increased to 100)
-            q = query(
-                collection(db, 'users'),
+            const constraints = [
+                ...(churchId ? [where('churchId', '==', churchId)] : []),
                 limit(100)
-            );
+            ];
+            q = query(collection(db, 'users'), ...constraints);
         }
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
